@@ -11,7 +11,7 @@ if (!url || !name) {
 	process.exit(1);
 }
 
-const outDir = fileURLToPath(new URL('../../../fixtures/viewer-scenes/', import.meta.url));
+const outDir = fileURLToPath(new URL('../../../dev/viewer-scenes/', import.meta.url));
 await mkdir(outDir, { recursive: true });
 
 // Each solve announces `binaryBatchCount`, then sends that many mesh frames, so the frames after

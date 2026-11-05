@@ -86,6 +86,12 @@ public enum InboundKind
     /// <summary>`draftLayout` with where the editor's unsaved draft places each param, or null once it matches the saved schema.</summary>
     DraftLayout,
 
+    /// <summary>`readLayout` with a request id: the form as a layout spec, params named by nickname.</summary>
+    ReadLayout,
+
+    /// <summary>`applyLayout` with a request id and a layout spec: lays the form out by nickname.</summary>
+    ApplyLayout,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -139,6 +145,9 @@ public sealed class InboundMessage
 
     /// <summary>`requestInitialData` from a page that only reads the schema: no outputs or display data follow.</summary>
     public bool SchemaOnly { get; init; }
+
+    /// <summary>`applyLayout`: the layout spec as JSON text, as SchemaLayout takes it.</summary>
+    public string LayoutSpec { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

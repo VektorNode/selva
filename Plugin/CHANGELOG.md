@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The UI Bridge answers `readLayout` and `applyLayout`: scripts and agents read and lay out the form by parameter nickname over the bridge's WebSocket, without the canvas. Player sessions can only read.
+- A finished local solve reports its five slowest components in `solveEnded`, by nickname and milliseconds.
+- Plastic presets in Material Preset: glossy, satin, matte, textured, soft-touch, clear and frosted. Wire one into a Three Material's Base and set its Color. Textured carries a moulded grain, the new Molded finish, which Finish Strength deepens; soft-touch has a soft glow at grazing angles.
+- Wood presets in Material Preset: Oak, oiled; Maple, lacquered; Wenge, oiled. Matching Oak, Maple and Wenge finishes on Three Material. Every wood finish now draws growth rings with the arched figure of a flat-sawn board, in rings a few mm apart, with open pores on oak and wenge.
+- Three Material has Thickness and Tint inputs for glass. With a Thickness the glass refracts what is behind it and takes on the Tint through its depth.
+
+### Changed
+
+- Glass without a Thickness (the Glass preset included) renders as a thin pane: panes behind panes now show, reflections stay at full strength, and the viewer no longer draws the scene twice a frame for it. Glass no longer casts a black shadow, darkens what is behind it with ambient occlusion, or gets outlined like a solid.
+- Rough glass and clear plastic (roughness 0.2 and up) render frosted, blurring what is behind them. Frosting redraws the scene a second time each frame, as glass with a Thickness does.
+- Part mapping measures V around curved faces instead of projecting it, so wood grain and brushed or rolled metal no longer jump at every facet of a tube, a turned leg or a bent panel. On a face cut across the grain, U now follows the part's widest direction instead of an arbitrary one.
+- Metal sheet keeps its colour at every angle. A standing panel no longer turns brass olive or copper brown, and a sheet lying face-up no longer clips to white in the sun.
+
+### Fixed
+
+- A Drawing View with dimensions, leaders or text prints at the size and scale it was given. Their offsets and text sizes are paper millimetres but were measured as model units: in a model drawn in metres, a Length 170 plan printed at 52 mm, and in a millimetre model the dimensions hung outside the view.
+- A Title Block inside a Grid, Stack or Frame, on the page or in a header or footer, fills in `{page}`, `{pages}`, `{date}` and `{scale}`. It printed the tokens as written, and `{scale}` ignored the views in a Grid.
+
+### Obsolete components
+
+- **Three Material** (`8313D290` → `938B5C95`): appends optional `Thickness` and `Tint` inputs, hidden until asked for. Old definitions upgrade on request with every wire and value kept.
+
+### Upgraders
+
+- `GH_ThreeMaterialUpgrader_To_0_24_2`: `8313D290` → `938B5C95` (appends two optional inputs).
+
 ## [0.24.2-beta.5] - 2026-11-04
 
 ### Changed

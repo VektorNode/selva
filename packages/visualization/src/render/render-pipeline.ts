@@ -8,6 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
+import { hideGlass } from '../shared/index.js';
 import type { BloomOptions } from '../shared/types.js';
 
 import { EdgeDetectionPass, type EdgeDetectionOptions } from './edge-detection-pass';
@@ -157,6 +158,23 @@ function msaaSamplesFor(pixelRatio: number): number {
 	return pixelRatio >= 2 ? 0 : 4;
 }
 
+// GTAOPass hides points and lines from its depth/normal prepass through this hook; glass joins
+// them, or it would occlude, and darken, everything seen through it.
+function skipGlass(pass: GTAOPass): void {
+	const hooks = pass as unknown as { _overrideVisibility(): void; _restoreVisibility(): void };
+	const overrideVisibility = hooks._overrideVisibility.bind(pass);
+	const restoreVisibility = hooks._restoreVisibility.bind(pass);
+	let showGlass = () => {};
+	hooks._overrideVisibility = () => {
+		overrideVisibility();
+		showGlass = hideGlass(pass.scene);
+	};
+	hooks._restoreVisibility = () => {
+		showGlass();
+		restoreVisibility();
+	};
+}
+
 export function createRenderPipeline(
 	renderer: THREE.WebGLRenderer,
 	scene: THREE.Scene,
@@ -188,6 +206,7 @@ export function createRenderPipeline(
 		gtaoPass = new GTAOPass(scene, camera, width, height);
 		gtaoPass.blendIntensity = options.aoIntensity ?? 1;
 		gtaoPass.updateGtaoMaterial({ screenSpaceRadius: true });
+		skipGlass(gtaoPass);
 		composer.addPass(gtaoPass);
 	}
 

@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readWorkspacePackages } from './publishable-packages.mjs';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // ============================================================================
 // Shared detection

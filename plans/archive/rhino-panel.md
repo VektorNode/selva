@@ -278,7 +278,7 @@ why.
 
 - **`Plugin/Selva.Panel/`**: same TFMs as `Selva.GH`, references `RhinoCommon` only (Eto comes
   with it), no ILRepack, no third-party packages.
-- **`scripts/build-production.js`** stages `Selva.Panel.rhp` beside `Selva.gha` in each TFM
+- **`scripts/plugin/build-production.js`** stages `Selva.Panel.rhp` beside `Selva.gha` in each TFM
   folder. Yak supports a `.rhp` and a `.gha` side by side in one multi-target package; the manifest
   doesn't change.
 - **`Selva.PluginVerifier`** loads the `.rhp` as well as the `.gha`.

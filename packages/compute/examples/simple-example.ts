@@ -10,11 +10,11 @@ import {
  * Prerequisites: a Rhino Compute instance (default http://localhost:6500), and an API key if it
  * requires one.
  *
- * Run: npx tsx examples/simple_example.ts
+ * Run: npx tsx examples/simple-example.ts
  */
 async function main() {
 	// Configuration
-	const DEFINITION_FILE = new URL('./files/simple_api_test.gh', import.meta.url);
+	const DEFINITION_FILE = new URL('./data/simple-api-test.gh', import.meta.url);
 	const COMPUTE_SERVER = 'http://localhost:6500';
 
 	const config: GrasshopperComputeConfig = {

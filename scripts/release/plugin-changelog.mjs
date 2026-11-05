@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 const changelogPath = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	'..',
+	'..',
 	'Plugin',
 	'CHANGELOG.md'
 );

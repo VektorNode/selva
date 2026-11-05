@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json.Linq;
 using Selva.Schema.Models;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.SolveRuntime.Services;
@@ -57,6 +58,13 @@ public static class OutboundEnvelopes
 
     // The host-file replies go only to the Rhino panel socket that asked. `error` is shown to the
     // user and is null unless the outcome is `failed`.
+
+    /// <summary>
+    ///     The answer to a `readLayout` or `applyLayout`: SchemaLayout's JSON result, which carries
+    ///     `ok` and `errors` when it refused, the spec when read, and `unplaced` params.
+    /// </summary>
+    public static object LayoutResult(string sessionId, string requestId, JToken result) =>
+        new { type = "layoutResult", sessionId, requestId, result };
 
     public static object HostSaveFileResult(string sessionId, string requestId, PromptOutcome outcome, string error) =>
         new { type = "hostSaveFileResult", sessionId, requestId, outcome = outcome.WireName(), error };

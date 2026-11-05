@@ -6,7 +6,7 @@ Two independent release tracks: **npm packages** (changesets) and **Grasshopper 
 
 `@selvajs/selva` and `@selvajs/cli` share a version (changeset `fixed` group) so their MAJOR stays aligned. All other packages version independently.
 
-`node scripts/publishable-packages.mjs --list` prints what ships: every workspace package without `"private": true`. The release workflow iterates the same list, so a new publishable package needs no workflow edit. Package roles are in [architecture.md](../architecture.md).
+`node scripts/release/publishable-packages.mjs --list` prints what ships: every workspace package without `"private": true`. The release workflow iterates the same list, so a new publishable package needs no workflow edit. Package roles are in [architecture.md](../architecture.md).
 
 ## npm release flow
 
@@ -19,7 +19,7 @@ git push --follow-tags
 
 **Never use `npm publish`**: it ships literal `workspace:*` strings. Always use `pnpm publish` or `changeset publish`.
 
-Two gates run before anything reaches npm. `prepack` runs `publint --strict` (export-map sanity) in every publishable package except `@selvajs/cli`, `@selvajs/selva` and `@selvajs/visualization`. `pnpm release` also runs `scripts/verify-pack.mjs` (standalone: `pnpm test:pack`, after a build) to check what the tarballs actually ship. The `selva-source` export condition is the one deliberate dangler: it serves the monorepo dev loop (vitest/vite resolve raw workspace TypeScript through it) and its `src/` targets are intentionally absent from published tarballs; being namespaced, no consumer resolves it by accident.
+Two gates run before anything reaches npm. `prepack` runs `publint --strict` (export-map sanity) in every publishable package except `@selvajs/cli`, `@selvajs/selva` and `@selvajs/visualization`. `pnpm release` also runs `scripts/release/verify-pack.mjs` (standalone: `pnpm test:pack`, after a build) to check what the tarballs actually ship. The `selva-source` export condition is the one deliberate dangler: it serves the monorepo dev loop (vitest/vite resolve raw workspace TypeScript through it) and its `src/` targets are intentionally absent from published tarballs; being namespaced, no consumer resolves it by accident.
 
 ## Automated releases (CI)
 

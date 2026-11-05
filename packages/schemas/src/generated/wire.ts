@@ -155,6 +155,20 @@ export interface SolveOutcome {
 export interface SolveStartedPayload {}
 export interface SolveEndedPayload {
 	kind: SolveEndedKind;
+	/**
+	 * The slowest components that ran in this solve, slowest first, at most five. Local solves only.
+	 */
+	slowest?: SlowComponent[];
+}
+export interface SlowComponent {
+	/**
+	 * The component's nickname.
+	 */
+	source: string;
+	/**
+	 * Milliseconds it spent in this solve.
+	 */
+	ms: number;
 }
 export interface ProgressPayload {
 	/**

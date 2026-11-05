@@ -21,7 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // SELVA_FAKE_CHANGESET_PUBLISH swaps in a stand-in for tests. Unset in CI.
 const fake = process.env.SELVA_FAKE_CHANGESET_PUBLISH;

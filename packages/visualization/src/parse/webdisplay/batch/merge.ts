@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { isGlass } from '../../../shared/index.js';
+
 import { finishGeometry, type FinishedGeometry } from '../mesh-assembly.js';
 
 import { indexOutOfWindow } from './metadata.js';
@@ -191,7 +193,7 @@ export function finalizeMergedMesh(
 	const firstMesh = group.meshes[0];
 	const meshNames = group.meshes.map((m) => m.name).filter((name) => name && name.length > 0);
 	threeMesh.name = meshNames.length > 0 ? meshNames[0]! : `merged_material_${group.materialId}`;
-	threeMesh.castShadow = true;
+	threeMesh.castShadow = !isGlass(material);
 	threeMesh.receiveShadow = true;
 
 	threeMesh.userData = {
@@ -289,7 +291,7 @@ export function finalizeSingleMesh(
 		trackingKey: meshMeta.id,
 		metadata: meshMeta.metadata ?? {}
 	};
-	mesh.castShadow = true;
+	mesh.castShadow = !isGlass(material);
 	mesh.receiveShadow = true;
 	return mesh;
 }

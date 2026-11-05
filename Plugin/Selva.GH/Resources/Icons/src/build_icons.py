@@ -491,6 +491,13 @@ def main():
         img = Image.open(os.path.join(OUT, base + ".png")).convert("RGBA")
         img.alpha_composite(render(svg))
         img.save(os.path.join(OUT, name + ".png"))
+    if not only or "ParamThreeMaterial" in only:
+        # The material sphere inside the parameter hexagon.
+        img = render(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">{param()}</svg>')
+        sphere = Image.open(os.path.join(OUT, "ThreeMaterial.png")).convert("RGBA")
+        sphere = sphere.crop(sphere.getbbox()).resize((12, 12), Image.LANCZOS)
+        img.alpha_composite(sphere, (6, 6))
+        img.save(os.path.join(OUT, "ParamThreeMaterial.png"))
 
 
 if __name__ == "__main__":

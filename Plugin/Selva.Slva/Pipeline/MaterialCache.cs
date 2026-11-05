@@ -67,6 +67,11 @@ public class MaterialCache
         private readonly double? _finishStrength;
         private readonly double? _transmission;
         private readonly double? _ior;
+        private readonly double? _thickness;
+        private readonly string _attenuationColor;
+        private readonly double? _sheen;
+        private readonly string _sheenColor;
+        private readonly double? _sheenRoughness;
 
         public MaterialKey(ThreeMaterial material)
         {
@@ -91,6 +96,11 @@ public class MaterialCache
             _finishStrength = Round(material.FinishStrength);
             _transmission = Round(material.Transmission);
             _ior = Round(material.Ior);
+            _thickness = Round(material.Thickness);
+            _attenuationColor = material.AttenuationColor;
+            _sheen = Round(material.Sheen);
+            _sheenColor = material.SheenColor;
+            _sheenRoughness = Round(material.SheenRoughness);
         }
 
         private static double? Round(double? value)
@@ -120,7 +130,12 @@ public class MaterialCache
                    && string.Equals(_finish, other._finish, StringComparison.Ordinal)
                    && _finishStrength == other._finishStrength
                    && _transmission == other._transmission
-                   && _ior == other._ior;
+                   && _ior == other._ior
+                   && _thickness == other._thickness
+                   && string.Equals(_attenuationColor, other._attenuationColor, StringComparison.Ordinal)
+                   && _sheen == other._sheen
+                   && string.Equals(_sheenColor, other._sheenColor, StringComparison.Ordinal)
+                   && _sheenRoughness == other._sheenRoughness;
         }
 
         public override bool Equals(object obj)
@@ -153,6 +168,11 @@ public class MaterialCache
                 hash = hash * 397 ^ _finishStrength.GetHashCode();
                 hash = hash * 397 ^ _transmission.GetHashCode();
                 hash = hash * 397 ^ _ior.GetHashCode();
+                hash = hash * 397 ^ _thickness.GetHashCode();
+                hash = hash * 397 ^ (_attenuationColor != null ? StringComparer.Ordinal.GetHashCode(_attenuationColor) : 0);
+                hash = hash * 397 ^ _sheen.GetHashCode();
+                hash = hash * 397 ^ (_sheenColor != null ? StringComparer.Ordinal.GetHashCode(_sheenColor) : 0);
+                hash = hash * 397 ^ _sheenRoughness.GetHashCode();
                 return hash;
             }
         }

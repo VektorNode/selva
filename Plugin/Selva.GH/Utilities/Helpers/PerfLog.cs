@@ -12,7 +12,7 @@ namespace Selva.GH.Utilities.Helpers;
 ///     Opt-in timing log, one JSON object per line, for deciding what to optimize from measured
 ///     solves instead of guesses. On when the <c>SELVA_PERF_LOG</c> environment variable names a
 ///     file, in a desktop Rhino or a Rhino.Compute child alike. Read once per process: set it
-///     before Rhino or the compute service starts. <c>scripts/perf-report.mjs</c> summarizes a log.
+///     before Rhino or the compute service starts. <c>scripts/plugin/perf-report.mjs</c> summarizes a log.
 /// </summary>
 public static class PerfLog
 {

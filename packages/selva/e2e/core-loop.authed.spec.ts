@@ -15,7 +15,9 @@ import { meshCountForInput, startFakeCompute, type FakeCompute } from './helpers
 // "Rendered" is asserted through the viewer canvas's `data-mesh-count` — the live
 // count of decoded meshes in the scene — plus a visible, non-zero-sized canvas.
 
-const GH_FIXTURE = fileURLToPath(new URL('./fixtures/bench-display.gh', import.meta.url));
+const GH_FIXTURE = fileURLToPath(
+	new URL('../../schemas/fixtures/definitions/bench-display.gh', import.meta.url)
+);
 
 const REAL_COMPUTE_URL = process.env.E2E_COMPUTE_URL ?? process.env.RHINO_COMPUTE_URL;
 const REAL_COMPUTE_KEY = process.env.E2E_COMPUTE_KEY ?? process.env.RHINO_COMPUTE_KEY;

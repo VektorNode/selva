@@ -18,7 +18,7 @@ import {
 } from '@/render/index.js';
 import { getThreeObjectsFromComputeResponse } from '@/parse/index.js';
 
-import responseUrl from '../shared/samples/compute-response.json?url';
+import responseUrl from '../data/compute-response.json?url';
 
 // ============================================================================
 // 1. BUILD THE VIEWER

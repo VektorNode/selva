@@ -93,7 +93,7 @@ more were listed at paths that no longer exist. All are now accounted for:
   grep the two known downstream consumers for the five removed symbols (`processInputs` and `getValues` are the
   weakest-evidence cuts, and neither repo is in this monorepo's CI), and diff the published
   `3.1.1` tarball rather than a local build. Both are cross-repo and unverifiable from here — close
-  them explicitly or they will read as done forever. Minor residue: `examples/simple_example.ts`
+  them explicitly or they will read as done forever. Minor residue: `examples/simple-example.ts`
   still imports `../src/grasshopper` rather than the package name, and the changeset the plan
   points at was consumed by a release — the removed-symbol record is now in
   `packages/compute/CHANGELOG.md`.

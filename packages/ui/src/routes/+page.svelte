@@ -4,9 +4,9 @@
 	import { FileDown } from '@lucide/svelte';
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
 	import AppLayout from '#lib/components/compute/AppLayout.svelte';
-	import exampleSchema from '../demo/example-schema.json';
+	import exampleSchema from '../../dev/example-schema.json';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
-	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
+	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../../dev/dummy-output-values';
 	import { APP_DEFAULTS } from '#lib/constants.js';
 	import { createSolvingIndicator } from '#lib/compute/solving.svelte.js';
 	import type { ActionButton } from '#lib/types/actionButton.js';

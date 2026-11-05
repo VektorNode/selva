@@ -33,4 +33,4 @@ The viewer is a preview, not a photometric simulation. Light spreads evenly from
 - **Three sources at most cast light,** the strongest first. Each one costs rendering time, so a street of lamps should glow instead.
 - **Phones get a lighter Night:** one source casts light, with no bloom or contact shading, at a lower resolution. Check a design with several lamps on a phone.
 
-[`studio_task_lamp.gh`](https://github.com/vektornode/selva/tree/main/examples/definitions) and `block_massing_studio.gh` show both patterns.
+[`studio-task-lamp.gh`](https://github.com/vektornode/selva/tree/main/examples/definitions) and `block-massing-studio.gh` show both patterns.

@@ -32,19 +32,24 @@ jobs:
 
       # Publish coverage, bundle-only selva, cli/selva fixed-group.
       - name: Check publish invariants
-        run: node scripts/publishable-packages.mjs --check
+        run: node scripts/release/publishable-packages.mjs --check
 
       # Released Grasshopper components bind wires by parameter index — a
       # changed param list on an existing GUID silently rewires saved
       # definitions. Structural changes must go through the OBSOLETE +
       # upgrader procedure (STRUCTURE.md) with a new GUID.
       - name: Check component signatures
-        run: node scripts/check-component-signatures.mjs --check
+        run: node scripts/plugin/check-component-signatures.mjs --check
+
+      # Test fixtures, examples and dev scenes: allowed folders, kebab-case
+      # names, and the dev/ and examples/ inventories (STRUCTURE.md).
+      - name: Check fixtures
+        run: node scripts/develop/check-fixtures.mjs
 
       # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
       # the release job after the test gate has already passed.
       - name: Validate changeset contents
-        run: node scripts/validate-changesets.mjs
+        run: node scripts/release/validate-changesets.mjs
 
       # Releases are changeset-driven: a publishable-package change without a
       # changeset never ships. `pnpm changeset --empty` is the opt-out.
@@ -55,7 +60,7 @@ jobs:
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
-          node scripts/check-changesets.mjs --base FETCH_HEAD
+          node scripts/release/check-changesets.mjs --base FETCH_HEAD
 
       # --prod excludes devDeps, so this gates only what actually ships.
       - name: Audit production dependencies

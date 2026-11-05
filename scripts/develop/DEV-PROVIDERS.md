@@ -39,7 +39,7 @@ three headers exercises byte-for-byte the same code as Entra + oauth2-proxy.
 `pnpm dev:header` starts that Caddy on `:8080` and the app on `:5273` — **open
 :8080**, not :5273, or you arrive with no identity at all.
 
-The generated `scripts/.dev-caddyfile` keeps production's directive order: strip
+The generated `scripts/develop/.dev-caddyfile` keeps production's directive order: strip
 inbound `SELVA-*` at site scope, then inject. That ordering is itself a
 production footgun (Caddy reorders `request_header` inside a `handle` block), so
 the dev config validates it too.
@@ -63,8 +63,8 @@ No admin rights needed: the dev config binds `:8080`, and only ports below 1024
 are privileged. Nothing is installed as a service and no certificate is issued —
 plain HTTP, no ACME, because the dev site is a bare `:8080` with no hostname.
 
-You don't write the Caddyfile. `scripts/dev-provider.mjs` generates
-`scripts/.dev-caddyfile` from the chosen persona each run, so editing a persona
+You don't write the Caddyfile. `scripts/develop/dev-provider.mjs` generates
+`scripts/develop/.dev-caddyfile` from the chosen persona each run, so editing a persona
 is the way to change the injected headers.
 
 ### Without Caddy
@@ -93,10 +93,10 @@ pnpm --filter @selvajs/selva exec vite dev --mode dev-header --port 5273
 
 ## Personas
 
-Identities live in `scripts/dev-personas.json`; pick one with `--persona`:
+Identities live in `scripts/develop/dev-personas.json`; pick one with `--persona`:
 
 ```bash
-node scripts/dev-provider.mjs header --persona member
+node scripts/develop/dev-provider.mjs header --persona member
 ```
 
 `member` has a UPN that differs from its email (`member@dev.onmicrosoft.com` vs

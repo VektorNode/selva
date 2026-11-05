@@ -9,3 +9,4 @@ Schema 2.19.0: host-aware inputs, value-list media, picked-object tracking and a
 - 2.18.0: `localOptions.trackPickedObjects` keeps picked geometry following its Rhino objects in the local preview.
 - 2.19.0: `viewerOptions.look` sets the opening look, including the new `night` look.
 - `MAX_TAGS` and `MAX_CATEGORY_LENGTH` export the limits Selva applies to `tags` and `category`. `enableLocal` / `enableRemote` document which host reads them.
+- Wire: `SolveEndedPayload.slowest` lists a finished local solve's five slowest components (`SlowComponent`: `source`, `ms`).

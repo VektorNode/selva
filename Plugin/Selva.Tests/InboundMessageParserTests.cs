@@ -84,6 +84,38 @@ public class InboundMessageParserTests
     }
 
     // -------------------------------------------------------------------------
+    // readLayout / applyLayout
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ReadLayout_CarriesTheRequestId()
+    {
+        var msg = Parse(@"{ ""type"": ""readLayout"", ""sessionId"": ""session-1"", ""requestId"": ""r1"" }");
+
+        Assert.Equal(InboundKind.ReadLayout, msg.Kind);
+        Assert.Equal("r1", msg.RequestId);
+    }
+
+    [Fact]
+    public void ApplyLayout_PassesTheSpecOnAsJson()
+    {
+        var msg = Parse(@"{ ""type"": ""applyLayout"", ""sessionId"": ""session-1"", ""requestId"": ""r2"",
+                           ""spec"": { ""name"": ""Tower"", ""tabs"": [] } }");
+
+        Assert.Equal(InboundKind.ApplyLayout, msg.Kind);
+        Assert.Equal("r2", msg.RequestId);
+        Assert.Equal(@"{""name"":""Tower"",""tabs"":[]}", msg.LayoutSpec);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""applyLayout"", ""sessionId"": ""session-1"" }")]
+    [InlineData(@"{ ""type"": ""applyLayout"", ""sessionId"": ""session-1"", ""spec"": ""{}"" }")]
+    public void ApplyLayout_WithoutASpecObject_IsMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
+
+    // -------------------------------------------------------------------------
     // requestCurrentValues / requestInitialData
     // -------------------------------------------------------------------------
 

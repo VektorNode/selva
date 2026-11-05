@@ -280,8 +280,7 @@ as a function of the received `valueUpdate`:
 
 ### Fixture — as built
 
-[`fixtures/grasshopper/fixture_dynamic_value_list.ghx`](../../fixtures/grasshopper/fixture_dynamic_value_list.ghx),
-recipe at [`recipes/fixture_dynamic_value_list.json`](../../fixtures/grasshopper/recipes/fixture_dynamic_value_list.json).
+[`dev/grasshopper/dynamic-value-list.ghx`](../../dev/grasshopper/dynamic-value-list.ghx).
 **22 objects, 4 Context Bakes**, 3 groups, 0 runtime errors; read back through Rhino MCP against a
 live Grasshopper, verified surviving a close/reopen cycle.
 

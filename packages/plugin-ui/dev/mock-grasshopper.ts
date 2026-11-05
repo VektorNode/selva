@@ -681,9 +681,7 @@ const values: Record<string, unknown> = Object.fromEntries(
 // The same DisplayBatch @selvajs/ui's own demo page renders directly — here it goes through
 // the real wire instead: compressedData decodes to the binary mesh frame the client expects
 // after outputs' binaryBatchCount, items ride as outputs.displayItems JSON.
-const exampleMeshPath = fileURLToPath(
-	new URL('../../ui/src/demo/example-mesh.json', import.meta.url)
-);
+const exampleMeshPath = fileURLToPath(new URL('../../ui/dev/example-mesh.json', import.meta.url));
 const exampleMesh = JSON.parse(readFileSync(exampleMeshPath, 'utf-8')) as {
 	compressedData: string;
 	items?: unknown[];
@@ -700,7 +698,7 @@ if (sceneName !== undefined && !SCENES.includes(sceneName)) {
 }
 const sceneFrame = sceneName
 	? readFileSync(
-			fileURLToPath(new URL(`../../../fixtures/viewer-scenes/${sceneName}.slvm`, import.meta.url))
+			fileURLToPath(new URL(`../../../dev/viewer-scenes/${sceneName}.slvm`, import.meta.url))
 		)
 	: undefined;
 const meshFrame = sceneFrame ?? Buffer.from(exampleMesh.compressedData, 'base64');

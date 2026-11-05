@@ -18,16 +18,23 @@ function patched(finish: Parameters<typeof finishPatch>[0], strength = 1) {
 }
 
 describe('surface finishes', () => {
-	it.each(['wood', 'concrete', 'plaster', 'brick', 'corten'] as const)(
-		'%s drives colour, roughness and relief',
-		(finish) => {
-			const source = patched(finish);
-			expect(source).toContain('diffuseColor.rgb *=');
-			expect(source).toContain('roughnessFactor =');
-			expect(source).toContain('normal = normalize');
-			expect(source).not.toContain('#include <common>\n\n#include');
-		}
-	);
+	it.each([
+		'wood',
+		'oak',
+		'maple',
+		'wenge',
+		'concrete',
+		'plaster',
+		'brick',
+		'corten',
+		'molded'
+	] as const)('%s drives colour, roughness and relief', (finish) => {
+		const source = patched(finish);
+		expect(source).toContain('diffuseColor.rgb *=');
+		expect(source).toContain('roughnessFactor =');
+		expect(source).toContain('normal = normalize');
+		expect(source).not.toContain('#include <common>\n\n#include');
+	});
 
 	it('keeps relief recessed on the back of a double-sided surface', () => {
 		expect(patched('brick')).toContain('dot( dx, r1 ) * faceDirection');

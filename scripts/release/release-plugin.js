@@ -44,7 +44,7 @@ import { fileURLToPath } from 'url';
 import { cutRelease } from './plugin-changelog.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, '..');
+const projectRoot = path.resolve(__dirname, '..', '..');
 const csprojPath = path.join(projectRoot, 'Plugin', 'Selva.GH', 'Selva.GH.csproj');
 
 const args = process.argv.slice(2);

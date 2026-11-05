@@ -294,6 +294,11 @@ public class SlvmDocumentTests
         m.Finish = "brushed";
         m.Transmission = 1.0;
         m.Ior = 1.52;
+        m.Thickness = 12.0;
+        m.AttenuationColor = "#6FB7A4";
+        m.Sheen = 1.0;
+        m.SheenColor = "#8A8D90";
+        m.SheenRoughness = 0.6;
 
         var decoded = RoundTrip(batch).Materials[0];
 
@@ -308,6 +313,11 @@ public class SlvmDocumentTests
         Assert.Equal("brushed", decoded.Finish);
         Assert.Equal(1.0, decoded.Transmission);
         Assert.Equal(1.52, decoded.Ior);
+        Assert.Equal(12.0, decoded.Thickness);
+        Assert.Equal("#6FB7A4", decoded.AttenuationColor);
+        Assert.Equal(1.0, decoded.Sheen);
+        Assert.Equal("#8A8D90", decoded.SheenColor);
+        Assert.Equal(0.6, decoded.SheenRoughness);
 
         var plain = JsonConvert.SerializeObject(new SerializableMaterial { Color = "#FFFFFF" });
         Assert.DoesNotContain("emissive", plain);
@@ -318,6 +328,9 @@ public class SlvmDocumentTests
         Assert.DoesNotContain("finish", plain);
         Assert.DoesNotContain("transmission", plain);
         Assert.DoesNotContain("ior", plain);
+        Assert.DoesNotContain("thickness", plain);
+        Assert.DoesNotContain("attenuationColor", plain);
+        Assert.DoesNotContain("sheen", plain);
     }
 
     // ============================================================================

@@ -27,7 +27,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWorkspacePackages } from './publishable-packages.mjs';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const changesetDir = join(repoRoot, '.changeset');
 
 function readChangesetFiles() {

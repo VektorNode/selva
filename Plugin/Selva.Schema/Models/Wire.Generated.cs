@@ -235,6 +235,28 @@ namespace Selva.Schema.Models
 
         [JsonProperty("kind")]
         public string Kind { get; set; }
+
+/// <summary>
+/// The slowest components that ran in this solve, slowest first, at most five. Local solves only.
+/// </summary>
+        [JsonProperty("slowest")]
+        public List<SlowComponent> Slowest { get; set; } = new List<SlowComponent>();
+    }
+
+    public class SlowComponent
+    {
+
+/// <summary>
+/// The component's nickname.
+/// </summary>
+        [JsonProperty("source")]
+        public string Source { get; set; }
+
+/// <summary>
+/// Milliseconds it spent in this solve.
+/// </summary>
+        [JsonProperty("ms")]
+        public double Ms { get; set; }
     }
 
     public class ProgressPayload

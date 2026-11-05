@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const rootDir = path.resolve(__dirname, '..');
+const rootDir = path.resolve(__dirname, '..', '..');
 const packagesDir = path.join(rootDir, 'packages');
 
 const DRY_RUN = process.argv.includes('--dry-run');

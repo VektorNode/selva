@@ -178,7 +178,7 @@ resulting token shows up.
 Anthropic ranks evals first, and every step above is a guess without them.
 
 - **Where.** A script under `packages/mcp/evals/`, run by hand against a local instance
-  (`pnpm dev:local`) seeded with the definitions in `fixtures/grasshopper/`. Not in CI: it needs
+  (`pnpm dev:local`) seeded with the definitions in `dev/grasshopper/`. Not in CI: it needs
   Rhino.Compute and spends API credit.
 - **Tasks.** Fifteen to twenty prompts a Selva user would actually type, each needing several
   calls ("Which bracket thickness keeps the flat pattern under 300 mm?"). Each has a verifiable

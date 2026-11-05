@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 import {
 	EMISSIVE_LIGHT,
+	GLASS,
 	OWN_EMISSIVE,
 	OWN_ENV_MAP_INTENSITY,
 	lookEnvMapIntensity,
@@ -28,10 +29,23 @@ interface MaterialOptions {
 	closed?: boolean;
 }
 
-// Transparent solids keep both sides: their far wall is meant to show through the near one.
+// Transparent solids keep both sides: their far wall is meant to show through the near one. A
+// closed glass pane culls its far face anyway: drawn, the pane reflects twice and goes milky.
 function cullsBackFaces(matData: SerializableMaterial, options?: MaterialOptions): boolean {
 	if (options?.appearance?.cullBackfaces) return true;
 	return (options?.closed ?? false) && !matData.transparent && matData.opacity >= 1;
+}
+
+// Above this roughness, glass and clear plastic read as frosted. Frosting blurs what is behind, and
+// only transmission can do that; blending shows it sharp.
+const FROSTED = 0.2;
+
+function isPane(matData: SerializableMaterial): boolean {
+	return (
+		(matData.transmission ?? 0) > 0 &&
+		!((matData.thickness ?? 0) > 0) &&
+		matData.roughness < FROSTED
+	);
 }
 
 /**
@@ -103,6 +117,12 @@ export function createMaterial(
 		material.clearcoatRoughness = matData.clearcoatRoughness ?? 0;
 	}
 
+	if (matData.sheen != null && matData.sheen > 0) {
+		material.sheen = matData.sheen;
+		material.sheenColor.set(matData.sheenColor ?? '#ffffff');
+		material.sheenRoughness = matData.sheenRoughness ?? 0.5;
+	}
+
 	// The anisotropy tangent comes from the UVs; without them three normalizes a zero vector and the
 	// mesh renders NaN-black.
 	if (matData.anisotropy != null && matData.anisotropy > 0 && options?.hasUvs) {
@@ -110,12 +130,10 @@ export function createMaterial(
 		material.anisotropyRotation = matData.anisotropyRotation ?? 0;
 	}
 
-	if (matData.transmission != null) {
-		material.transmission = matData.transmission;
-		// A pane, not a lens: no thickness, so nothing behind it refracts sideways.
-		material.thickness = 0;
-	}
 	if (matData.ior != null) material.ior = matData.ior;
+	if (matData.transmission != null && matData.transmission > 0) applyGlass(material, matData);
+
+	if (matData.metalness > 0) dimSunOnMetal(material);
 
 	if (vertexColors) {
 		applyVertexColorSRGBDecode(material);
@@ -138,6 +156,90 @@ export function createMaterial(
 	if (matData.normalMap) applyTexture(material, matData.normalMap, 'normalMap', mapSize);
 
 	return material;
+}
+
+// The sun's highlight on fully metallic surfaces, as a share of its own. A metal shows the studio
+// probe's softboxes as its highlights already; the sun's on top spreads over a whole flat sheet facing
+// it and clips it to white, taking the metal's colour with it.
+const SUN_ON_METAL = 0.1;
+
+// Where the directional lights (the sun) start and stop in three's light loop.
+const SUN_BEGIN = '#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )';
+const SUN_END = '#if ( NUM_RECT_AREA_LIGHTS > 0 ) && defined( RE_Direct_RectArea )';
+
+/** Scales the directional lights' specular by metalness; point lights keep theirs. */
+export function dimSunOnMetal(material: THREE.Material): void {
+	addShaderPatch(material, 'sun-on-metal', (shader) => {
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <lights_fragment_begin>',
+			THREE.ShaderChunk.lights_fragment_begin
+				.replace(
+					SUN_BEGIN,
+					`vec3 specularBeforeSun = reflectedLight.directSpecular;
+${SUN_BEGIN}`
+				)
+				.replace(
+					SUN_END,
+					`reflectedLight.directSpecular = specularBeforeSun + ( reflectedLight.directSpecular - specularBeforeSun ) * mix( 1.0, ${SUN_ON_METAL.toFixed(2)}, metalnessFactor );
+${SUN_END}`
+				)
+		);
+	});
+}
+
+// The share of light a fully transmissive pane holds back: its own colour and haze, not reflection.
+const PANE_BODY = 0.04;
+
+/**
+ * three's transmission draws every opaque object a second time into its own buffer each frame, and
+ * that buffer never holds other glass: one pane seen through another vanishes. So only glass that
+ * needs it gets it: with a thickness, to refract and tint, or frosted, to blur. A pane blends
+ * instead: cheap, and panes stack.
+ */
+function applyGlass(material: THREE.MeshPhysicalMaterial, matData: SerializableMaterial): void {
+	const transmission = Math.min(1, matData.transmission!);
+	material.userData[GLASS] = true;
+
+	if (!isPane(matData)) {
+		const thickness = matData.thickness ?? 0;
+		material.transmission = transmission;
+		material.thickness = thickness;
+		// Frosted glass with no thickness has no depth to tint through.
+		if (matData.attenuationColor && thickness > 0) {
+			material.attenuationColor.set(matData.attenuationColor);
+			// The colour is what light has become after crossing the whole thickness.
+			material.attenuationDistance = thickness;
+			// three scales the ray through the glass to world units but not this distance, so a
+			// model in mm, scaled to metres, would never tint. Scale it the same way.
+			addShaderPatch(material, 'glass-attenuation', (shader) => {
+				shader.fragmentShader = shader.fragmentShader.replace(
+					'#include <transmission_fragment>',
+					THREE.ShaderChunk.transmission_fragment.replace(
+						'material.attenuationDistance = attenuationDistance;',
+						'material.attenuationDistance = attenuationDistance * length( modelMatrix[ 0 ].xyz );'
+					)
+				);
+			});
+		}
+		return;
+	}
+
+	material.transparent = true;
+	material.opacity = matData.opacity * (1 - transmission * (1 - PANE_BODY));
+	// Panes sort back to front; writing depth would hide a pane behind another one.
+	material.depthWrite = false;
+	// Plain alpha blending scales reflections by opacity too, leaving a pane with none. Blending
+	// premultiplied, with only the body scaled, keeps them at full strength.
+	material.blending = THREE.CustomBlending;
+	material.blendSrc = THREE.OneFactor;
+	material.blendDst = THREE.OneMinusSrcAlphaFactor;
+	addShaderPatch(material, 'glass-pane', (shader) => {
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <opaque_fragment>',
+			`vec3 paneSpecular = reflectedLight.directSpecular + reflectedLight.indirectSpecular;
+			gl_FragColor = vec4( ( outgoingLight - paneSpecular ) * diffuseColor.a + paneSpecular, diffuseColor.a );`
+		);
+	});
 }
 
 /**

@@ -8,7 +8,7 @@ name: Release
 #
 # Setup this depends on:
 # - npm Trusted Publisher entry per package (repo VektorNode/selva + release.yml),
-#   for EVERY package in `node scripts/publishable-packages.mjs --list`. Missing
+#   for EVERY package in `node scripts/release/publishable-packages.mjs --list`. Missing
 #   entries fail with a misleading 404.
 # - `id-token: write`, or the OIDC exchange is anonymous and 404s.
 # - npm >= 11.5.1 (upgraded below); the Node 20 bundle can't do OIDC.
@@ -55,7 +55,7 @@ jobs:
       # and before the ~5min test gate. A mixed changeset otherwise fails in
       # `changeset version`, after everything expensive has already passed.
       - name: Validate changesets
-        run: node scripts/validate-changesets.mjs
+        run: node scripts/release/validate-changesets.mjs
 
       # Outputs: should_run, is_beta, needs_version.
       - name: Check for pending release work
@@ -71,7 +71,7 @@ jobs:
             # In pre mode `changeset version` does NOT delete a consumed .md —
             # it moves it to `.changeset/pre/`. See the script for why this is
             # not read out of pre.json.
-            unconsumed=$(node scripts/unconsumed-changesets.mjs | grep -c . || true)
+            unconsumed=$(node scripts/release/unconsumed-changesets.mjs | grep -c . || true)
             if [ "$unconsumed" -gt 0 ]; then
               echo "Found $unconsumed unconsumed changeset(s) — version + publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -86,7 +86,7 @@ jobs:
                 echo "needs_version=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            done < <(node scripts/publishable-packages.mjs --list)
+            done < <(node scripts/release/publishable-packages.mjs --list)
             echo "No unconsumed changesets and all beta versions match npm — skipping."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -121,7 +121,7 @@ jobs:
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-          done < <(node scripts/publishable-packages.mjs --list)
+          done < <(node scripts/release/publishable-packages.mjs --list)
           echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
@@ -241,7 +241,7 @@ jobs:
             [ -n "$name" ] || continue
             echo "::error::Changeset '$name' is still unconsumed after the release."
             leftover=$((leftover + 1))
-          done < <(node scripts/unconsumed-changesets.mjs)
+          done < <(node scripts/release/unconsumed-changesets.mjs)
           if [ "$leftover" -gt 0 ]; then
             echo "::error::$leftover changeset(s) were not released. The run checked out \
           $(git rev-parse --short HEAD); if newer commits exist on beta, re-run against the tip."

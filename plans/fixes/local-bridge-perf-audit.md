@@ -10,7 +10,7 @@ code, not triggered), **plausible** (mechanism visible, trigger not reproduced).
 
 ## How it was measured
 
-- **External driver.** `~/.claude/skills/rhino-mcp/bridge-drive.mjs` takes the
+- **External driver.** `scripts/plugin/bridge-drive.mjs` takes the
   UI Bridge's URL output, sends the page's `Origin` and the fragment secret, then scripted
   `valueUpdate` / `cancelSolve` frames, and logs every frame with ms since the last send. Driving from
   outside matters: any `run_csharp` call runs on Rhino's UI thread and releases whatever was queued.

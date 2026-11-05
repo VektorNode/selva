@@ -30,7 +30,7 @@ const COMPUTE_URL = process.env.COMPUTE_LIVE_URL;
 const API_KEY = process.env.COMPUTE_LIVE_KEY;
 
 // A definition carrying a real embedded Selva schema.
-const FIXTURE = resolve(__dirname, '../fixtures/bench-display.gh');
+const FIXTURE = resolve(__dirname, '../../../schemas/fixtures/definitions/bench-display.gh');
 
 async function postSchema(): Promise<unknown> {
 	const form = new FormData();

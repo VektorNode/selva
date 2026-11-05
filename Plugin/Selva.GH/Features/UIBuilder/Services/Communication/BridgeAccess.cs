@@ -165,8 +165,9 @@ internal static class BridgeAccess
     }
 
     /// <summary>
-    ///     The messages a role may not send. Only these write the schema (`requestSyncPreview` only
-    ///     reads), `draftLayout` speaks for the builder's draft, and the Selva commands upload it.
+    ///     The messages a role may not send. Only these write the schema (`requestSyncPreview` and
+    ///     `readLayout` only read), `draftLayout` speaks for the builder's draft, and the Selva
+    ///     commands upload it.
     ///     The player commands mean nothing to an author.
     /// </summary>
     public static bool IsRefused(InboundKind kind, BridgeRole role)
@@ -174,6 +175,7 @@ internal static class BridgeAccess
         switch (kind)
         {
             case InboundKind.SaveSchema:
+            case InboundKind.ApplyLayout:
             case InboundKind.ApplySyncChanges:
             case InboundKind.DraftLayout:
             case InboundKind.SelvaGetAccount:

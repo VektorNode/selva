@@ -18,7 +18,7 @@
 
 	<PropertyGroup>
 		<!-- Rhino-coupled projects only. net8.0 is Rhino 8, net10.0 Rhino 9. No net48, so no
-		     Rhino 8 .NET Framework mode. Both TFMs build on every OS; scripts/build-production.js
+		     Rhino 8 .NET Framework mode. Both TFMs build on every OS; scripts/plugin/build-production.js
 		     reads these two elements by regex, so keep them literal. -->
 		<SelvaRhino9TargetFramework>net10.0</SelvaRhino9TargetFramework>
 		<SelvaTargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>

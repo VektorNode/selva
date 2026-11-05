@@ -2,7 +2,7 @@
 
 **Feeds #216.** Found 2026-10-07 by driving a local Selva (`felix/api-token`, local provider) with
 a real `selva_` key: list, read, edit and solve a definition, evaluate the files in
-`fixtures/grasshopper/`, then create a project and upload the valid ones with metadata written from
+`dev/grasshopper/`, then create a project and upload the valid ones with metadata written from
 their schemas. Everything below was observed on the wire unless marked _unverified_.
 
 ## Answer
@@ -50,16 +50,16 @@ response is) and in text encoding on upload.
 
 `POST /compute/schema?projectId=<id>` sends a `.gh`/`.ghx` to Compute and returns its UI schemas.
 Nothing is created, so an MCP tool can tell the model what a file's inputs and outputs are before
-anyone uploads it. Run against `fixtures/grasshopper/*.ghx`:
+anyone uploads it. Run against `dev/grasshopper/*.ghx`:
 
-| File                             | Result                                     |
-| -------------------------------- | ------------------------------------------ |
-| `live_solve_showcase.ghx`        | 200 in 0.14 s: 6 inputs, 3 outputs         |
-| `fixture_dynamic_value_list.ghx` | 200 in 0.20 s: 4 inputs, 3 outputs         |
-| `ui_bridge_minimal.ghx`          | 200 in 0.04 s: 4 inputs, 5 outputs         |
-| `sheet_metal_bracket.ghx`        | 200 in 0.15 s: 10 inputs, 4 outputs        |
-| `csharp_scrip_component.ghx`     | 422 `UNPROCESSABLE`: no UI Builder in file |
-| `display_pipeline_debug.ghx`     | 422 `UNPROCESSABLE`: no UI Builder in file |
+| File                          | Result                                     |
+| ----------------------------- | ------------------------------------------ |
+| `live-solve-showcase.ghx`     | 200 in 0.14 s: 6 inputs, 3 outputs         |
+| `dynamic-value-list.ghx`      | 200 in 0.20 s: 4 inputs, 3 outputs         |
+| `ui-bridge-minimal.ghx`       | 200 in 0.04 s: 4 inputs, 5 outputs         |
+| `sheet-metal-bracket.ghx`     | 200 in 0.15 s: 10 inputs, 4 outputs        |
+| `csharp-script-component.ghx` | 422 `UNPROCESSABLE`: no UI Builder in file |
+| `display-pipeline-debug.ghx`  | 422 `UNPROCESSABLE`: no UI Builder in file |
 
 - **Request:** multipart, field `file`. `projectId` is required even though nothing is stored: the
   route gates on being allowed to create a definition in that project. `computeServerId` is
@@ -75,7 +75,7 @@ anyone uploads it. Run against `fixtures/grasshopper/*.ghx`:
   before the body is read.
 - **Dynamic value lists show no real options.** Their options come from a solve, and only an
   uploaded definition can be solved, so this tool reports that a list exists, not what it holds.
-  `fixture_dynamic_value_list.ghx` returns three such inputs with no options at all.
+  `dynamic-value-list.ghx` returns three such inputs with no options at all.
 
 Open questions for the API itself, not the MCP server:
 
@@ -255,7 +255,7 @@ What an agent can write on its own from a schema, and what it can't:
 
 The second run started with no file: build a sheet-metal bracket in Grasshopper through the Rhino
 MCP, wire it for Selva, save it, then evaluate, upload and solve it through the API. Result:
-`sheet_metal_bracket.ghx`, 45 objects, built with the SheepMetal plugin.
+`sheet-metal-bracket.ghx`, 45 objects, built with the SheepMetal plugin.
 
 1. **Build the geometry.** Polyline To Sheet → Unroller → Reroll (cut the holes) → Manifold To
    Sheet → Sheet Properties → Unroller + Sheet Info, plus three small C# scripts for the profile,

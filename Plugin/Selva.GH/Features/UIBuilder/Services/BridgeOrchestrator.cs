@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
+using Newtonsoft.Json.Linq;
 using Rhino.DocObjects;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
@@ -84,6 +85,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
         _webSocketTransport.OnClientConnected -= HandleClientConnected;
         _webSocketTransport.OnSchemaSaveRequested -= HandleSchemaSave;
+        _webSocketTransport.OnLayoutRequested -= HandleLayoutRequest;
         _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
@@ -116,6 +118,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCurrentValuesRequested += HandleCurrentValuesRequest;
         _webSocketTransport.OnClientConnected += HandleClientConnected;
         _webSocketTransport.OnSchemaSaveRequested += HandleSchemaSave;
+        _webSocketTransport.OnLayoutRequested += HandleLayoutRequest;
         _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
@@ -502,6 +505,27 @@ public class BridgeOrchestrator : IDisposable
             Logger.Error($"[BridgeOrchestrator] Error sending initial data: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
         }
+    }
+
+    // The form by param nickname, for scripts and agents outside Rhino; the page itself writes
+    // through saveSchema. Apply commits like a save, so open pages get the new schema.
+    private void HandleLayoutRequest(object sender, WebSocketTransport.LayoutRequest request)
+    {
+        string json;
+        try
+        {
+            var document = _component.OnPingDocument();
+            json = request.Message.Kind == InboundKind.ApplyLayout
+                ? SchemaLayout.Apply(document, request.Message.LayoutSpec)
+                : SchemaLayout.Read(document);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] {request.Message.MessageType} failed: {ex.Message}");
+            json = new JObject { ["ok"] = false, ["errors"] = new JArray(ex.Message) }.ToString();
+        }
+
+        _ = request.Reply(OutboundEnvelopes.LayoutResult(_sessionId, request.Message.RequestId, JToken.Parse(json)));
     }
 
     private void HandleSchemaSave(object sender, SchemaSaveRequest request)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Rhino.Geometry;
+using static Selva.GH.Features.Display.Services.GrainUvMath;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -8,7 +9,9 @@ namespace Selva.GH.Features.Display.Services;
 ///     UVs in millimetres whose U runs along a part's grain and V across it: the <c>Part</c> mapping.
 ///     Brep surface parameters point U whichever way each surface happened to be built, so two
 ///     identical strips side by side came out brushed along and across and reflected differently.
-///     Exact on flat faces; on a rolled face V is a projection, not the unrolled length.
+///     V is unrolled over the surface, so it is the real distance across a rolled face too. On a face
+///     cut across the grain U follows the part's widest direction, so end grain lines up with the
+///     faces beside it.
 /// </summary>
 public static class GrainUvs
 {
@@ -50,33 +53,106 @@ public static class GrainUvs
     public static void Apply(Mesh mesh, double mmPerUnit, Point2d offset)
     {
         var (grain, centre) = Grain(mesh);
+        var wide = WideAxis(mesh, grain, centre);
         var count = mesh.Vertices.Count;
         var (pieceOf, pieceGrains) = PieceGrains(mesh, grain);
         var hasNormals = mesh.Normals.Count == count;
-        var uvs = new Point2f[count];
+        var positions = new V3[count];
+        var acrossDirections = new V3[count];
+        var u = new double[count];
         for (var i = 0; i < count; i++)
         {
-            var p = (Point3d)mesh.Vertices[i] - centre;
+            var p = ((Point3d)mesh.Vertices[i] - centre) * mmPerUnit;
             var n = hasNormals ? (Vector3d)mesh.Normals[i] : Vector3d.ZAxis;
             var pieceGrain = pieceGrains[pieceOf[i]];
             // Projected into the face, or U shrinks by the sine of the grain's angle to the normal.
             var along = pieceGrain - pieceGrain * n * n;
             if (along.Length < EdgeOnSine)
             {
-                along = pieceGrain;
-                along.PerpendicularTo(n);
+                along = wide - wide * n * n;
+                if (along.Length < EdgeOnSine)
+                {
+                    along = pieceGrain;
+                    along.PerpendicularTo(n);
+                }
             }
 
             along.Unitize();
             var across = Vector3d.CrossProduct(n, along);
             across.Unitize();
-            uvs[i] = new Point2f(
-                (float)(p * along * mmPerUnit + offset.X),
-                (float)(p * across * mmPerUnit + offset.Y));
+            positions[i] = ToV3(p);
+            acrossDirections[i] = ToV3(across);
+            u[i] = p * along;
+        }
+
+        var v = UnrolledAcross(positions, acrossDirections, Neighbours(mesh));
+
+        var uvs = new Point2f[count];
+        for (var i = 0; i < count; i++)
+        {
+            uvs[i] = new Point2f((float)(u[i] + offset.X), (float)(v[i] + offset.Y));
         }
 
         mesh.TextureCoordinates.Clear();
         mesh.TextureCoordinates.SetTextureCoordinates(uvs);
+    }
+
+    // The part's widest direction across the grain: a board's width, never its thickness.
+    private static Vector3d WideAxis(Mesh mesh, Vector3d grain, Point3d centre)
+    {
+        var covariance = new double[3, 3];
+        foreach (var vertex in mesh.Vertices)
+        {
+            var p = (Point3d)vertex - centre;
+            var q = p - grain * (p * grain);
+            for (var r = 0; r < 3; r++)
+            {
+                for (var k = 0; k < 3; k++)
+                {
+                    covariance[r, k] += q[r] * q[k];
+                }
+            }
+        }
+
+        var (_, axes) = Eigen(covariance);
+        return axes[2];
+    }
+
+    private static List<int>[] Neighbours(Mesh mesh)
+    {
+        var neighbours = new List<int>[mesh.Vertices.Count];
+        for (var i = 0; i < neighbours.Length; i++)
+        {
+            neighbours[i] = new List<int>();
+        }
+
+        void Link(int a, int b)
+        {
+            neighbours[a].Add(b);
+            neighbours[b].Add(a);
+        }
+
+        foreach (var face in mesh.Faces)
+        {
+            Link(face.A, face.B);
+            Link(face.B, face.C);
+            if (face.IsQuad)
+            {
+                Link(face.C, face.D);
+                Link(face.D, face.A);
+            }
+            else
+            {
+                Link(face.C, face.A);
+            }
+        }
+
+        return neighbours;
+    }
+
+    private static V3 ToV3(Vector3d v)
+    {
+        return new V3(v.X, v.Y, v.Z);
     }
 
     /// <summary>

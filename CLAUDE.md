@@ -181,7 +181,7 @@ pnpm dev:plugin:mock        # same, against a fake Grasshopper (no Rhino)
 pnpm dev:selva              # Selva app, your own .env and .selva-data
 
 # Same app pinned to one auth provider, each on throwaway data:
-# for testing provider behaviour, not for daily work. scripts/DEV-PROVIDERS.md
+# for testing provider behaviour, not for daily work. scripts/develop/DEV-PROVIDERS.md
 pnpm dev:local              # local provider (filesystem + password)
 pnpm dev:supabase           # Supabase CLI stack (Docker)
 pnpm dev:header             # forward-auth, the path Entra reaches (Caddy)
@@ -221,7 +221,9 @@ Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build`
 
 Rhino 9 on Windows is the primary platform: develop, debug and test against it first. Rhino 8 stays supported and must not regress.
 
-Copy the whole TFM folder: `Selva.Panel.rhp` and the dependencies sit beside `Selva.gha`.
+`pnpm install:plugin` builds the production plugin and installs it into Rhino 8's and 9's package folders, where a released install lives (`--skip-build` reinstalls the last build). Close Rhino first: it locks `Selva.gha`.
+
+To load a build from the Libraries folder instead, uninstall the package first, or Grasshopper loads both. Copy the whole TFM folder: `Selva.Panel.rhp` and the dependencies sit beside `Selva.gha`.
 
 ```bash
 # Windows (Rhino 9)

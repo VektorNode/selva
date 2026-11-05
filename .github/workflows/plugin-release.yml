@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0 # the stable-from-main check needs main's history
 
-      # Backstop for scripts/release-plugin.js: a hand-pushed tag skips its checks. A stable
+      # Backstop for scripts/release/release-plugin.js: a hand-pushed tag skips its checks. A stable
       # version (no -suffix) must sit on main, so nothing on beta can publish one.
       - name: Stable releases only from main
         shell: pwsh
@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: |
           $ver = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
-          node scripts/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
+          node scripts/release/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - uses: actions/setup-dotnet@v6
@@ -107,7 +107,7 @@ jobs:
             turbo-plugin-
 
       # Standalone download (no Rhino required). Must be on PATH so
-      # scripts/build-production.js can shell out to `yak build`.
+      # scripts/plugin/build-production.js can shell out to `yak build`.
       # Pinned: tools/latest/ is frozen at 0.12.20, which throws a
       # NullReferenceException in GetInspector on Selva.Panel.rhp. 0.19.1 runs on
       # .NET 10 (installed above). Versions: developer.rhino3d.com/guides/yak/yak-cli-reference

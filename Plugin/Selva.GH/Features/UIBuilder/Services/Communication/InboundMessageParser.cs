@@ -296,6 +296,20 @@ public sealed class InboundMessageParser
                             : new InboundMessage { Kind = InboundKind.DraftLayout, MessageType = msgType, DraftLocations = locations };
                     }
 
+                case "readLayout":
+                    return new InboundMessage { Kind = InboundKind.ReadLayout, MessageType = msgType, RequestId = RequestIdOf(jObj) };
+
+                case "applyLayout":
+                    return jObj["spec"] is JObject spec
+                        ? new InboundMessage
+                        {
+                            Kind = InboundKind.ApplyLayout,
+                            MessageType = msgType,
+                            RequestId = RequestIdOf(jObj),
+                            LayoutSpec = spec.ToString(Formatting.None)
+                        }
+                        : InboundMessage.Of(InboundKind.MissingField, msgType);
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }

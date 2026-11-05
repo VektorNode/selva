@@ -99,7 +99,7 @@ own target. Changes:
   array. `OutputPayloadBuilder.Classify` stays first-wins, since a contract test pins it;
   the hotspot path gets its own collect-all method, and `GooView` gets a field for it.
 - `SchemaOutputCanonicalizer.BakeOutputTypes` and its pinning test.
-- `component-signatures.json` via `node scripts/check-component-signatures.mjs --update`.
+- `component-signatures.json` via `node scripts/plugin/check-component-signatures.mjs --update`.
 
 Authoring rule for the docs: wire hotspots **straight into** their bake (several wires are
 fine). Detection by component type does not tunnel through Merge or Entwine.
@@ -198,7 +198,7 @@ From code, all four seams:
 - **N goos on one bake.** In Cloud they arrive as an array. Plugin mode currently sends only
   the first, hence the collect-all path above.
 
-Live in Rhino 8, against `fixtures/grasshopper/sheet_metal_bracket.ghx` (not saved):
+Live in Rhino 8, against `dev/grasshopper/sheet-metal-bracket.ghx` (not saved):
 
 - **All ten inputs resolved.** Each schema input resolved to a `GetNumberParameter` or
   `GetValueListParameter` whose sources were the slider or value list. The document is in

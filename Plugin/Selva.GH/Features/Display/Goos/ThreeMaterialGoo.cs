@@ -147,6 +147,9 @@ public class ThreeMaterialGoo : IGH_Goo
         if (Value.Clearcoat != null) text += $", clearcoat={Value.Clearcoat}";
         if (Value.Anisotropy != null) text += $", anisotropy={Value.Anisotropy}";
         if (Value.Transmission != null) text += $", transmission={Value.Transmission}";
+        if (Value.Thickness != null) text += $", thickness={Value.Thickness}";
+        if (Value.AttenuationColor != null) text += $", tint={Value.AttenuationColor}";
+        if (Value.Sheen != null) text += $", sheen={Value.Sheen}";
         return text;
     }
 

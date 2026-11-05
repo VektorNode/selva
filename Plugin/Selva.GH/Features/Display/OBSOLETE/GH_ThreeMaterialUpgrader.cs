@@ -7,7 +7,18 @@ using Selva.GH.Utilities;
 namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
-///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_23_0 (31100A9A) to GH_ThreeMaterial (8313D290), which hides
+///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_24_1 (8313D290) to GH_ThreeMaterial (938B5C95), which
+///     appends Thickness and Tint. Both start hidden and empty, so the material is unchanged.
+/// </summary>
+public class GH_ThreeMaterialUpgrader_To_0_24_2 : SelvaZuiUpgrader
+{
+    public override DateTime Version => new DateTime(2026, 11, 5);
+    public override Guid UpgradeFrom => new Guid("8313D290-839F-489C-A86D-DD2A2ED3237B");
+    public override Guid UpgradeTo => new Guid("938B5C95-9C45-4541-966F-848910E4C154");
+}
+
+/// <summary>
+///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_23_0 (31100A9A) to the v0.24 Three Material (8313D290), which hides
 ///     rarely used inputs. Every input keeps its index; the unused ones hide.
 /// </summary>
 public class GH_ThreeMaterialUpgrader_To_0_24 : SelvaZuiUpgrader

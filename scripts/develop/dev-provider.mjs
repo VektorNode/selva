@@ -2,9 +2,9 @@
 
 // Run the Selva app against one auth provider without provisioning anything.
 //
-//   node scripts/dev-provider.mjs local
-//   node scripts/dev-provider.mjs supabase
-//   node scripts/dev-provider.mjs header [--persona member]
+//   node scripts/develop/dev-provider.mjs local
+//   node scripts/develop/dev-provider.mjs supabase
+//   node scripts/develop/dev-provider.mjs header [--persona member]
 //
 // Each provider maps to a vite `--mode`, so vite loads packages/selva/.env.<mode>
 // on top of the base .env. Provider-specific backing services are started first:
@@ -16,9 +16,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const supabaseDir = path.join(rootDir, 'packages', 'providers', 'supabase');
-const caddyfilePath = path.join(rootDir, 'scripts', '.dev-caddyfile');
+const caddyfilePath = path.join(rootDir, 'scripts', 'develop', '.dev-caddyfile');
 
 // Deliberately off vite's default 5173: this harness is meant to run alongside
 // whatever else you already have open, and every vite project claims 5173. The
@@ -41,13 +41,13 @@ const provider = argv[0];
 
 if (!PROVIDERS.has(provider)) {
 	console.error(
-		`Usage: node scripts/dev-provider.mjs <${[...PROVIDERS].join('|')}> [--persona <name>]`
+		`Usage: node scripts/develop/dev-provider.mjs <${[...PROVIDERS].join('|')}> [--persona <name>]`
 	);
 	process.exit(1);
 }
 
 const personasFile = JSON.parse(
-	fs.readFileSync(path.join(rootDir, 'scripts', 'dev-personas.json'), 'utf-8')
+	fs.readFileSync(path.join(rootDir, 'scripts', 'develop', 'dev-personas.json'), 'utf-8')
 );
 const personaIndex = argv.indexOf('--persona');
 const personaName = personaIndex === -1 ? personasFile.default : argv[personaIndex + 1];

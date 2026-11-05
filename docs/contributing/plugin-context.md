@@ -273,7 +273,7 @@ wiring. `WireDefaultNeighbors` writes the nickname and `FindWiredContextBake` an
 the `{file, chart, dynamicValueList}` output-type set, but they run without a Grasshopper runtime,
 so they cannot see topology.
 
-## Worked example: `fixtures/grasshopper/fixture_dynamic_value_list.ghx`
+## Worked example: `dev/grasshopper/dynamic-value-list.ghx`
 
 23 objects (20 excluding groups) and 4 ContextBakes: `Context Bake` (input `Schema`) carries the UI
 Bridge `Schema` output and nothing else, and `Bake steady`, `Bake convergent` and `Bake oscillate`

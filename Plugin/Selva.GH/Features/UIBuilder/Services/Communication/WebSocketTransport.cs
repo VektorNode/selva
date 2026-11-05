@@ -165,6 +165,18 @@ public class WebSocketTransport : IDisposable
     // only that one leaving clears it.
     private WebSocket _draftClient;
 
+    /// <summary>
+    ///     `readLayout` and `applyLayout`, on the UI thread. The handler answers the socket that
+    ///     asked through <see cref="LayoutRequest.Reply" />.
+    /// </summary>
+    public event EventHandler<LayoutRequest> OnLayoutRequested;
+
+    public sealed class LayoutRequest
+    {
+        public InboundMessage Message { get; init; }
+        public Func<object, Task> Reply { get; init; }
+    }
+
     /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
     public event EventHandler<InboundMessage> OnPickGeometryRequested;
 
@@ -837,6 +849,18 @@ public class WebSocketTransport : IDisposable
                     Volatile.Write(ref _draftClient, inbound.DraftLocations != null ? frame.Client : null);
                     MarshalToMainThread(() => OnDraftLayout?.Invoke(this, inbound.DraftLocations));
                     break;
+
+                case InboundKind.ReadLayout:
+                case InboundKind.ApplyLayout:
+                    {
+                        var request = new LayoutRequest
+                        {
+                            Message = inbound,
+                            Reply = new SocketReply(this, frame.Client).SendAsync
+                        };
+                        MarshalToMainThread(() => OnLayoutRequested?.Invoke(this, request));
+                        break;
+                    }
 
                 case InboundKind.SessionMismatch:
                     Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");

@@ -375,7 +375,7 @@ label?: string }`. A null `fraction` means indeterminate.
 ## Testing it live
 
 Both halves run against the showcase fixture,
-[`live_solve_showcase.ghx`](../../fixtures/grasshopper/live_solve_showcase.ghx). Its **Solve
+[`live-solve-showcase.ghx`](../../dev/grasshopper/live-solve-showcase.ghx). Its **Solve
 behaviour** group adds four slow stages (abort lands between them; progress will hook in there) and
 an incidental-message switch next to the existing remark, warning, blocking and Notify=Log cases.
 

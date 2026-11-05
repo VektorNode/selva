@@ -71,7 +71,7 @@ pnpm dev:supabase    # starts the Supabase CLI stack first
 pnpm dev:header      # local Caddy fakes the SSO headers
 ```
 
-Details in [scripts/DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/main/scripts/DEV-PROVIDERS.md). Provider concepts: [Providers](../providers/overview.md).
+Details in [scripts/develop/DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/main/scripts/DEV-PROVIDERS.md). Provider concepts: [Providers](../providers/overview.md).
 
 ## Troubleshooting
 

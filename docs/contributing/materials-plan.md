@@ -96,8 +96,8 @@ need real scans: CC0 sets (ambientCG, Poly Haven) shipped as plugin assets.
   metalness (`lookEnvMapIntensity`).
 - `disposeMaterial` skips `envMap`: the probe is shared, and every solve disposes its materials.
 - `clearcoat` on the wire is the only coat; the viewer adds none to metals.
-- Repro strips: `packages/visualization/examples/fixtures/repro_*.slvm`, written from Rhino through the
-  real `GrainUvs` and SLVM writer. View them in the example viewer, technical and studio looks.
+- Repro strips: `dev/viewer-scenes/repro-*.slvm`, written from Rhino through the
+  real `GrainUvs` and SLVM writer. View them in the viewer lab (`pnpm lab`, `?scene=repro-sheets`), technical and studio looks.
 - Open: one HDR per look for dielectrics, overcast outdoor for site context.
 - Neutral tone mapping keeps RAL colours true. ACES (studio, showcase, night) shifts saturated
   colours, so a RAL swatch will not match the chart there.

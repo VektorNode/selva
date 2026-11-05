@@ -13,7 +13,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
-const projectRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..');
+const projectRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const yakStagingRoot = join(projectRoot, 'Plugin/Selva.GH/bin/Yak');
 
 const packagesRoot =

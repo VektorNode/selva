@@ -10,7 +10,7 @@ import { getThreeObjectsFromComputeResponse } from '@/parse/index.js';
 import { LOOKS, type Look } from '@/render/index.js';
 
 import { createPlayground } from '../shared/playground';
-import responseUrl from '../shared/samples/compute-response.json?url';
+import responseUrl from '../data/compute-response.json?url';
 
 const pg = createPlayground({ title: 'Display Items' });
 

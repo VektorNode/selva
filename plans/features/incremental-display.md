@@ -98,7 +98,7 @@ an exported UV or colour differs. A uniform recolour leaves the weld identical, 
 the same and only the colour stream moves. A change that moves a seam changes positions too, and
 both are sent. No special casing, but the weld must be deterministic. Rhino's `CombineIdentical`
 does it and neither test project loads Rhino, so pin it in Rhino, on
-[display_pipeline_debug.ghx](../../fixtures/grasshopper/display_pipeline_debug.ghx), before relying
+[display-pipeline-debug.ghx](../../dev/grasshopper/display-pipeline-debug.ghx), before relying
 on it.
 
 **Stream order must not depend on materials.** `MeshBatchAssembler` writes meshes in input order,

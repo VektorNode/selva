@@ -57,9 +57,9 @@
 		"**/*.css"
 	],
 	"scripts": {
-		"predev": "node ../../scripts/sync-shared-assets.js",
+		"predev": "node ../../scripts/develop/sync-shared-assets.js",
 		"dev": "vite dev",
-		"prebuild": "node ../../scripts/sync-shared-assets.js",
+		"prebuild": "node ../../scripts/develop/sync-shared-assets.js",
 		"build": "rimraf dist && pnpm prepack",
 		"build:fast": "svelte-kit sync && svelte-package",
 		"build:watch": "svelte-kit sync && svelte-package --watch",

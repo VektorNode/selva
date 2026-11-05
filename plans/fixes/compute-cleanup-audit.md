@@ -93,7 +93,7 @@ Fix (additive): export `disposeRhinoObjects`, `isRhinoDecodeError` and `RhinoDec
 
 - `README.md:90` `cache: { ttlMs: 60_000 }` fails type-check (`maxBytes` is required) and at
   runtime leaves the cache off (`solve-scheduler.ts:236-239`). Use `cache: { maxBytes: 64 * 1024 * 1024 }`.
-- `src/grasshopper/README.md:24-25, 67-72`, `examples/simple_example.ts:84-88` call
+- `src/grasshopper/README.md:24-25, 67-72`, `examples/simple-example.ts:84-88` call
   `TreeBuilder.replaceTreeValue(...)` and discard the result. It is copy-on-write, so the solve
   uses the defaults. Assign the result. The example also matches on `name`; trees are keyed by
   `nickname`.
@@ -102,14 +102,14 @@ Fix (additive): export `disposeRhinoObjects`, `isRhinoDecodeError` and `RhinoDec
   URL or `new Uint8Array(await readFile(...))`.
 - `data-tree/README.md:63-70` doesn't compile (`{ ...input, default: 25 }` widens the union).
 - `README.md:154` `curl …/healthcheck`: the proxy has no such route; the probe is `GET /`.
-- Port 5000 in `src/grasshopper/README.md:14`, `simple_example.ts:20, 29, 36`,
+- Port 5000 in `src/grasshopper/README.md:14`, `simple-example.ts:20, 29, 36`,
   `validate-server-url.ts:58`; everything else uses the proxy default 6500.
 - `src/grasshopper/README.md:92-106` checks `result.errors` after `client.solve`, which throws
   `COMPUTATION_ERROR` when `errors` is present (`grasshopper-client.ts:274-295`). That branch never
   runs. `scheduler.solve` resolves instead.
 - `README.md:76-77` filters cancellations by regex on the message; the contract is
   `err.code === ErrorCodes.SUPERSEDED || err.code === ErrorCodes.ABORTED`.
-- `simple_example.ts:123` calls `process.exit(1)` inside `catch`, so `finally` never disposes the
+- `simple-example.ts:123` calls `process.exit(1)` inside `catch`, so `finally` never disposes the
   client. Use `process.exitCode = 1`.
 - JSDoc examples that don't type-check: `grasshopper-client.ts:107` (`client.solve(url, { x: 1 })`),
   `data-tree.ts:268-273, 357-363` (treat the solve result as `DataTree[]`),
@@ -464,7 +464,7 @@ timeoutMs)` plus `tryParseJson`. Keep `getVersion`'s non-JSON fallback, JSON `nu
 | `src/grasshopper/README.md`           | 131   | Delete. Its one useful fact (the error contract) moves to `README.md`.                                                                                                                                                                                                                              |
 | `src/grasshopper/data-tree/README.md` | 78    | Delete. Its two gotchas move to `README.md`.                                                                                                                                                                                                                                                        |
 | `src/grasshopper/io/input/README.md`  | 164   | Move to `docs/contributing/compute-contributing.md` § "Adding an input param type", ~50 lines, plus the missing step "export the new type from `grasshopper/index.ts`". `STRUCTURE.md` puts package developer notes in `docs/contributing/`.                                                        |
-| `examples/simple_example.ts`          | 138   | Keep. Apply D8, load the `.gh` with `readFile`, and add `examples/` to type-check and lint.                                                                                                                                                                                                         |
+| `examples/simple-example.ts`          | 138   | Keep. Apply D8, load the `.gh` with `readFile`, and add `examples/` to type-check and lint.                                                                                                                                                                                                         |
 
 README details beyond D8: delete the TypeScript-version badge (nothing enforces it), the
 duplicated "behind your own queue" paragraph (`:29-31`), the "every solve goes through a

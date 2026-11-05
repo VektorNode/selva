@@ -65,6 +65,7 @@
 		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\GrainUvMath.cs" Link="Linked\GrainUvMath.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionPairParser.cs"
 		         Link="Linked\OptionPairParser.cs"/>
 		<!-- Rhino-free by design: the classification math for Prepare UI Inputs is split out

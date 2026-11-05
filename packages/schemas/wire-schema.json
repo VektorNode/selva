@@ -199,9 +199,24 @@
 			"type": "object",
 			"description": "Payload of a `solveEnded` event.",
 			"properties": {
-				"kind": { "$ref": "#/definitions/SolveEndedKind" }
+				"kind": { "$ref": "#/definitions/SolveEndedKind" },
+				"slowest": {
+					"type": "array",
+					"description": "The slowest components that ran in this solve, slowest first, at most five. Local solves only.",
+					"items": { "$ref": "#/definitions/SlowComponent" }
+				}
 			},
 			"required": ["kind"],
+			"additionalProperties": false
+		},
+		"SlowComponent": {
+			"type": "object",
+			"description": "One component of a solve and how long it took.",
+			"properties": {
+				"source": { "type": "string", "description": "The component's nickname." },
+				"ms": { "type": "number", "description": "Milliseconds it spent in this solve." }
+			},
+			"required": ["source", "ms"],
 			"additionalProperties": false
 		},
 		"ProgressPayload": {

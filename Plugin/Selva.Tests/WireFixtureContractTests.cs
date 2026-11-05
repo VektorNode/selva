@@ -266,6 +266,9 @@ public class WireFixtureContractTests
             ["host-save-file-result.json"] = ("HostSaveFileResult",
                 OutboundEnvelopes.HostSaveFileResult(Session, "7", PromptOutcome.Failed, "The file is larger than 150 MB.")),
 
+            ["layout-result.json"] = ("LayoutResult",
+                OutboundEnvelopes.LayoutResult(Session, "9", JToken.Parse(@"{ ""ok"": true, ""unplaced"": [""Seed""] }"))),
+
             ["host-pick-file-result.json"] = ("HostPickFileResult",
                 OutboundEnvelopes.HostPickFileResult(Session, "8", PromptOutcome.Cancelled, null)),
 

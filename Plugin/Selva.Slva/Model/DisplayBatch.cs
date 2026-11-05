@@ -157,6 +157,21 @@ public class SerializableMaterial
     [JsonProperty("ior", NullValueHandling = NullValueHandling.Ignore)]
     public double? Ior { get; set; }
 
+    [JsonProperty("thickness", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Thickness { get; set; }
+
+    [JsonProperty("attenuationColor", NullValueHandling = NullValueHandling.Ignore)]
+    public string AttenuationColor { get; set; }
+
+    [JsonProperty("sheen", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Sheen { get; set; }
+
+    [JsonProperty("sheenColor", NullValueHandling = NullValueHandling.Ignore)]
+    public string SheenColor { get; set; }
+
+    [JsonProperty("sheenRoughness", NullValueHandling = NullValueHandling.Ignore)]
+    public double? SheenRoughness { get; set; }
+
     public static SerializableMaterial FromThreeMaterial(ThreeMaterial material)
     {
         return new SerializableMaterial
@@ -181,7 +196,12 @@ public class SerializableMaterial
             Finish = NullIfEmpty(material.Finish),
             FinishStrength = material.FinishStrength,
             Transmission = material.Transmission,
-            Ior = material.Ior
+            Ior = material.Ior,
+            Thickness = material.Thickness,
+            AttenuationColor = NullIfEmpty(material.AttenuationColor),
+            Sheen = material.Sheen,
+            SheenColor = NullIfEmpty(material.SheenColor),
+            SheenRoughness = material.SheenRoughness
         };
     }
 
@@ -236,7 +256,12 @@ public class SerializableMaterial
             Finish = Finish,
             FinishStrength = FinishStrength,
             Transmission = Transmission,
-            Ior = Ior
+            Ior = Ior,
+            Thickness = Thickness,
+            AttenuationColor = AttenuationColor,
+            Sheen = Sheen,
+            SheenColor = SheenColor,
+            SheenRoughness = SheenRoughness
         };
     }
 }

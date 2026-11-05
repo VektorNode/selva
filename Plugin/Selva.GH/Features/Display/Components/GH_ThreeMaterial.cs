@@ -25,7 +25,11 @@ public class GH_ThreeMaterial : SelvaZuiComponent
         ("Concrete", "concrete"),
         ("Plaster", "plaster"),
         ("Brick", "brick"),
-        ("Corten", "corten")
+        ("Corten", "corten"),
+        ("Molded", "molded"),
+        ("Oak", "oak"),
+        ("Maple", "maple"),
+        ("Wenge", "wenge")
     };
 
     public GH_ThreeMaterial()
@@ -35,7 +39,7 @@ public class GH_ThreeMaterial : SelvaZuiComponent
     {
     }
 
-    public override Guid ComponentGuid => new Guid("8313D290-839F-489C-A86D-DD2A2ED3237B");
+    public override Guid ComponentGuid => new Guid("938B5C95-9C45-4541-966F-848910E4C154");
 
     protected override Bitmap Icon => Resources.ThreeMaterial;
 
@@ -99,12 +103,20 @@ public class GH_ThreeMaterial : SelvaZuiComponent
             GH_ParamAccess.item);
         pManager.AddIntegerParameter("Finish", "F",
             "A built-in surface, no texture needed (right-click for the list): Brushed, Rolled, Wood, "
-            + "Concrete, Plaster, Brick or Corten. Drawn at real size.",
+            + "Concrete, Plaster, Brick, Corten, Molded (injection-moulded plastic grain), Oak, Maple or Wenge. Drawn at real size.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Transmission", "TR",
             "Light passing through (0.0 - 1.0), for glass. Unlike Opacity it keeps the reflections.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("IOR", "IOR", "Index of refraction (1.0 - 2.333); glass is about 1.52.",
+            GH_ParamAccess.item);
+        pManager.AddNumberParameter("Thickness", "TH",
+            "Glass body depth in model units, for glass with Transmission. Set it and the glass refracts "
+            + "and takes on Tint, at the cost of a slower viewer, and other glass no longer shows through it. "
+            + "Leave empty for a thin pane: fast, and panes behind panes stay visible.",
+            GH_ParamAccess.item);
+        pManager.AddColourParameter("Tint", "TN",
+            "Colour light takes on after crossing the whole Thickness of glass. Needs Thickness.",
             GH_ParamAccess.item);
 
         for (var i = 0; i < pManager.ParamCount; i++)
@@ -153,6 +165,24 @@ public class GH_ThreeMaterial : SelvaZuiComponent
         if (TryGet(DA, "Normal Map", out IGH_Goo normalMap)) material.NormalMap = TextureInput.Resolve(normalMap, this);
         if (TryGet(DA, "Transmission", out double transmission)) material.Transmission = transmission;
         if (TryGet(DA, "IOR", out double ior)) material.Ior = ior;
+        if (TryGet(DA, "Tint", out Color tint)) material.AttenuationColor = ColorTranslator.ToHtml(Color.FromArgb(tint.R, tint.G, tint.B));
+
+        if (TryGet(DA, "Thickness", out double thickness))
+        {
+            if (thickness >= 0)
+            {
+                material.Thickness = thickness > 0 ? thickness : null;
+            }
+            else
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Thickness can't be negative; ignored.");
+            }
+        }
+
+        if (material.AttenuationColor != null && material.Thickness == null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Tint needs Thickness; a thin pane ignores it.");
+        }
 
         if (TryGet(DA, "Finish", out int finish))
         {

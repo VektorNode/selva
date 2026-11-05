@@ -408,7 +408,7 @@ are cheaper to delete than to fix.
 - `get-started/cli.md:66-78` and `prerequisites.md:42-58`: the same global-pm2 removal twice.
 - `caching.md`: restated settings and tables (`:13-18`, `:142-154`, `:186-196`, `:24-27`, `:179-182`, about 30
   lines in total).
-- `publishing.md:9-23` (a table that already lags `scripts/publishable-packages.mjs --list`),
+- `publishing.md:9-23` (a table that already lags `scripts/release/publishable-packages.mjs --list`),
   `schema-caching.md:38-46` (an overdue bridge recipe), `turborepo.md:5-32` (about 12),
   `viewer-apps.md:66-79,170-177` (about 20).
 - `how-it-works.md:40-49,68-74,87,90`, `errors.md:64-71`, `common-tasks.md:70-72,118-124`: error behaviour

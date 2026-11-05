@@ -33,7 +33,7 @@ pnpm --config.verify-deps-before-run=false lint-staged --max-arg-length 4000
 if git diff --cached --name-only --diff-filter=d \
 	| grep -E '^\.changeset/[^/]+\.md$' \
 	| grep -qv '^\.changeset/README\.md$'; then
-	if ! node scripts/validate-changesets.mjs; then
+	if ! node scripts/release/validate-changesets.mjs; then
 		echo "pre-commit: fix the changeset above, or 'git commit --no-verify' to bypass." >&2
 		exit 1
 	fi

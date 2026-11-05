@@ -1,9 +1,13 @@
 import { SCALE_FACTORS, parseMeshBatchBlob } from '../src/parse/index.ts';
 import { initThree, updateScene } from '../src/render/index.ts';
 import { LOOK_PRESETS } from '../src/shared/index.ts';
+import { buildGlassScene } from './glass-scene.js';
+import { buildMetalScene } from './metal-scene.js';
+import { buildPlasticScene } from './plastic-scene.js';
+import { buildWoodScene } from './wood-scene.js';
 import { readModelUnits } from './slvm-units.mjs';
 
-const scenes = import.meta.glob('../../../fixtures/viewer-scenes/*.slvm', {
+const scenes = import.meta.glob('../../../dev/viewer-scenes/*.slvm', {
 	query: '?url',
 	import: 'default',
 	eager: true
@@ -35,10 +39,23 @@ const step = () => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function load(names) {
+	// 'glass-panes' leaves out the thick cube, the one object that needs transmission.
+	const glass = names.includes('glass')
+		? buildGlassScene()
+		: names.includes('glass-panes')
+			? buildGlassScene({ panesOnly: true })
+			: [];
+	if (names.includes('metals')) glass.push(...buildMetalScene());
+	if (names.includes('plastics')) glass.push(...buildPlasticScene());
+	if (names.includes('wood')) glass.push(...buildWoodScene());
+	names = names.filter(
+		(name) => !name.startsWith('glass') && !['metals', 'plastics', 'wood'].includes(name)
+	);
+	if (names.length === 0) return glass;
 	const urls = Object.entries(scenes)
 		.filter(([path]) => names.some((name) => path.endsWith(`/${name}.slvm`)))
 		.map(([, url]) => url);
-	if (urls.length === 0) throw new Error(`No scene named ${names}: see fixtures/viewer-scenes.`);
+	if (urls.length === 0) throw new Error(`No scene named ${names}: see dev/viewer-scenes.`);
 	const meshes = await Promise.all(
 		urls.map(async (url) => {
 			const bytes = await (await fetch(url)).arrayBuffer();
@@ -51,7 +68,7 @@ async function load(names) {
 			return batch;
 		})
 	);
-	return meshes.flat();
+	return [...meshes.flat(), ...glass];
 }
 
 async function start() {
@@ -68,6 +85,7 @@ async function start() {
 	if (without.has('bloom')) delete preset.bloom;
 	if (without.has('emissive')) preset.emissiveLights = false;
 	if (without.has('shadows')) render.enableShadows = false;
+	if (without.has('sun')) preset.sunlightIntensity = 0;
 
 	const viewer = initThree(canvas, {
 		look,
@@ -92,6 +110,7 @@ async function start() {
 
 	const target = controls.target;
 	const view = camera.position.clone().sub(target);
+	if (options.target) target.fromArray(options.target.split(',').map(Number));
 	view.applyAxisAngle(camera.up, Number(options.turn ?? 0));
 	view.multiplyScalar(Number(options.distance ?? 1));
 	camera.position.copy(target).add(view);

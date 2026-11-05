@@ -46,6 +46,8 @@ export {
 
 export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.js';
 
+export { GLASS, isGlass, hideGlass } from './glass.js';
+
 export { disposeMaterial, disposeObjectTree } from './gpu-dispose.js';
 export type { DisposeOptions } from './gpu-dispose.js';
 

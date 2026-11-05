@@ -2,13 +2,13 @@
 // Summarizes a SELVA_PERF_LOG file (JSON lines written by the plugin's PerfLog) into the numbers
 // the display-pipeline decisions turn on: where a Display solve's time goes, how much of its input
 // repeats between solves, and how long the bridge takes from a page's value update to the last
-// mesh frame. Usage: node scripts/perf-report.mjs <log.jsonl> [more.jsonl ...]
+// mesh frame. Usage: node scripts/plugin/perf-report.mjs <log.jsonl> [more.jsonl ...]
 
 import fs from 'node:fs';
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
-	console.error('Usage: node scripts/perf-report.mjs <log.jsonl> [more.jsonl ...]');
+	console.error('Usage: node scripts/plugin/perf-report.mjs <log.jsonl> [more.jsonl ...]');
 	process.exit(1);
 }
 

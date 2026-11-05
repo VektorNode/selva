@@ -56,7 +56,7 @@ public static class PaginationPass
 			var pageHeader = ResolveChromeForPage(template.Header, body.HeaderRect, resolver);
 			var pageFooter = ResolveChromeForPage(template.Footer, body.FooterRect, resolver);
 
-			var anchoredContent = AnchorTopLeft(resolver.ResolveTree(body.RawContents[i]), body.ContentRect);
+			var anchoredContent = AnchorTopLeft(resolver.ResolveTree(ResolveBody(body.RawContents[i], body.ContentRect)), body.ContentRect);
 			var anchoredHeader = AnchorChrome(pageHeader, body.HeaderRect, template.HeaderAlign);
 			var anchoredFooter = AnchorChrome(pageFooter, body.FooterRect, template.FooterAlign, VerticalAnchor.Bottom);
 
@@ -349,8 +349,10 @@ public static class PaginationPass
 	internal static DrawElement ResolveChromeForPage(DrawElement template, BoundingBox bandRect, TokenResolver resolver)
 	{
 		if (template == null) return null;
+		// Substituted before layout so text wraps on its real length, and again after: a layout
+		// element nested in another (a title block in a footer stack) only yields its text then.
 		var substituted = resolver.ResolveTree(template);
-		return LayoutPass.Resolve(substituted, new LayoutContext(bandRect));
+		return resolver.ResolveTree(LayoutPass.Resolve(substituted, new LayoutContext(bandRect)));
 	}
 
 	public static double ResolveBandHeight(double? explicitHeight, DrawElement resolved)
@@ -360,6 +362,10 @@ public static class PaginationPass
 		var b = resolved.ComputeBounds();
 		return b.IsEmpty ? 0 : b.Height;
 	}
+
+	// Lays a page body out completely, so tokens in nested layout elements can be substituted.
+	internal static DrawElement ResolveBody(DrawElement content, BoundingBox contentRect)
+		=> LayoutPass.Resolve(content, new LayoutContext(contentRect));
 
 	internal static DrawElement AnchorTopLeft(DrawElement element, BoundingBox available)
 		=> AnchorChrome(element, available, HorizontalAlign.Left);

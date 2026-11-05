@@ -342,6 +342,64 @@ public class DrawingViewTests
 		Assert.Equal(5.0, rewritten.Offset * scale, 6);
 	}
 
+	// A plan drawn in metres: 16 x 10 units with an 8 mm dimension under it. The dimension's
+	// offset and text are paper mm, so they must not count as model units when the view is
+	// sized: they used to make the plan measure 52 units, printing a Length=170 view at 52 mm.
+	private static DrawElement PlanWithDimension() => new GroupElement
+	{
+		Children = new DrawElement[]
+		{
+			new PathElement
+			{
+				Path = new Path.Builder().MoveTo(0, 0).LineTo(16, 0).LineTo(16, 10).LineTo(0, 10).Close().Build(),
+			},
+			new DimensionElement
+			{
+				Kind = DimensionKind.Linear,
+				A = new Point2D(0, 0),
+				B = new Point2D(16, 0),
+				Offset = -8.0,
+				Style = new DimensionStyle { TextSize = 2.5 },
+			},
+		},
+	};
+
+	[Fact]
+	public void Length_scales_from_the_model_not_the_dimension_annotations()
+	{
+		var view = new DrawingView { Geometry = PlanWithDimension(), Length = 170, Padding = Margins.Zero };
+		var resolved = view.Resolve(new LayoutContext(BoundingBox.Empty));
+
+		Assert.True(resolved.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw));
+		Assert.Equal(170.0 / 16, double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture), 6);
+		Assert.Equal(170.0 / 16, DrawingView.ScaleForLength(PlanWithDimension(), 170), 6);
+	}
+
+	[Fact]
+	public void View_makes_room_for_a_dimension_below_the_geometry()
+	{
+		var view = new DrawingView { Geometry = PlanWithDimension(), Length = 170, Padding = Margins.Zero };
+		var b = view.ComputeBounds();
+
+		// The plan is 170 x 106.25 on paper; the dimension adds its 8 mm offset and the label
+		// below it, a short allowance past each end for flipped arrows, and nothing above.
+		Assert.Equal(170 + 2 * 2 * 2.5, b.Width, 1);
+		Assert.Equal(106.25 + 8 + 2 * 2.5, b.Height, 1);
+	}
+
+	[Fact]
+	public void Auto_fit_leaves_room_for_the_dimension_inside_the_budget()
+	{
+		var view = new DrawingView { Geometry = PlanWithDimension(), Padding = Margins.Zero };
+		var resolved = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 190, 120)));
+
+		Assert.True(resolved.Metadata.TryGetValue(DrawingView.ScaleMetadataKey, out var raw));
+		var scale = double.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+		// Height binds: 10 * scale + 13 mm of dimension must fit in 120 mm.
+		Assert.Equal((120 - 13) / 10.0, scale, 6);
+		Assert.True(resolved.ComputeBounds().Height <= 120 + 1e-6);
+	}
+
 	// Offset and TextSize feed the same subtraction in the renderer (extension-line gap and
 	// overshoot are derived from TextSize, then subtracted from Offset), so they have to be
 	// counter-scaled by the same factor or that arithmetic mixes units.

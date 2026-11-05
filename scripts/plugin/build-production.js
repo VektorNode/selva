@@ -12,7 +12,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const projectRoot = join(__dirname, '..');
+const projectRoot = join(__dirname, '..', '..');
 
 // Single source of truth for the plugin version: Selva.GH.csproj <Version>.
 // We substitute it into the yak manifest ourselves rather than leaving yak's

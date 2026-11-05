@@ -19,6 +19,7 @@ const { values } = parseArgs({
 		transition: { type: 'boolean', default: false },
 		turn: { type: 'string' },
 		distance: { type: 'string' },
+		target: { type: 'string' },
 		phone: { type: 'boolean', default: false },
 		bench: { type: 'boolean', default: false }
 	}
@@ -73,7 +74,7 @@ for (const [scene, look] of combos) {
 		page.on('pageerror', (error) => console.error(`${scene}/${look}:`, error.message));
 
 		const query = new URLSearchParams({ scene, look, manual: '' });
-		for (const key of ['frames', 'turn', 'distance', 'orbit', 'background']) {
+		for (const key of ['frames', 'turn', 'distance', 'target', 'orbit', 'background']) {
 			if (values[key] != null) query.set(key, values[key]);
 		}
 		if (without) query.set('without', without);

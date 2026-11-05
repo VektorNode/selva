@@ -43,8 +43,10 @@ selva/
 │   ├── packages/                   # Developers building on @selvajs/*
 │   ├── contributing/               # Repo-only: build, test, release
 │   └── adr/                        # Architecture decision records
+├── examples/                       # Grasshopper definitions for users (inventory: examples/README.md)
+├── dev/                            # Manual-test definitions and viewer-lab scenes (inventory: dev/README.md)
 ├── infra/                          # Terraform, deployment configs
-├── scripts/                        # Build and setup scripts
+├── scripts/                        # Build, release and dev tooling (index: scripts/README.md)
 └── .github/                        # Issue templates, workflows
 ```
 
@@ -136,7 +138,7 @@ A feature folder may also have a small growth area beyond this base layout (e.g.
 
 Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this: only changes to the number, order, type, or access of params do.
 
-**CI enforces this.** `scripts/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/check-component-signatures.mjs --update`.
+**CI enforces this.** `scripts/plugin/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/plugin/check-component-signatures.mjs --update`.
 
 The procedure:
 
@@ -248,7 +250,7 @@ container, read-only forever. Decoders sniff by the leading magic.
 Naming rule for new formats: human name **"Selva _thing_ file"**, extension **`slv` + one
 mnemonic letter**, magic four ASCII bytes. Retired extensions (`.dmf`, `.sps`) stay accepted on
 every read path; only writers moved to the `slv*` names. Cross-stack golden fixtures for these
-formats live in `packages/schemas/fixtures/` (see "Where fixtures live").
+formats live in `packages/schemas/fixtures/` (see "Test data, examples and dev scenes").
 
 ## Where TypeScript tests live
 
@@ -257,33 +259,57 @@ Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`
 `*.spec.ts` is reserved for Playwright specs under `e2e/`. Cross-suite fixtures
 and setup files go in a package-level `tests/`.
 
-### Where fixtures live
+### Test data, examples and dev scenes
 
-A fixture goes in a `fixtures/` directory at the narrowest scope all its
-consumers share:
+Every file that exists to be loaded, rather than to be code or docs, is one of four kinds. Who
+reads it decides the kind, and the kind decides where it lives. `node scripts/develop/check-fixtures.mjs`
+enforces the locations, the names and the inventories below; CI runs it.
 
-- **One suite** → `__tests__/fixtures/` beside the test that reads it.
-- **Several suites in one package** → `tests/fixtures/` (data) or
-  `tests/helpers/` (code that builds test data).
-- **Both stacks (TS + C#)** → `packages/schemas/fixtures/`. This is the only
-  cross-stack location: `Selva.Tests` and `Selva.Slva.Tests` resolve it from
-  the repo root, so it must stay outside `src/`. These are contract artifacts with an update
-  procedure (see the schemas README), not test-private data.
-- **Playwright** → `packages/selva/e2e/fixtures/`. Binary `.gh` files there
-  need the `.gitignore` negation, since the blanket `*.gh` rule swallows them
-  otherwise.
+| Kind          | Read by                                                  | Lives in                                                                                      |
+| ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Test fixture  | an automated test                                        | a `fixtures/` folder at the narrowest test scope (below)                                      |
+| Golden output | a test, compared with what the code produces             | beside its input as `<name>.expected.json`; C# snapshot tests in `Snapshots/` beside the test |
+| Example       | a person learning Selva or a package                     | repo-root `examples/`, or `packages/<pkg>/examples/` with its inputs in `examples/data/`      |
+| Dev scene     | a developer by hand, the viewer lab, a dev server's mock | repo-root `dev/` when several packages use it, else `packages/<pkg>/dev/`                     |
 
-Don't promote a fixture to a wider scope speculatively; move it when a second
-consumer appears. Code that constructs test data is a helper, not a data
-fixture: colocate it (`__tests__/fixtures.ts`) or put it in `tests/helpers/`.
-Assets for `examples/` demos aren't fixtures in this sense and stay under
-`examples/`.
+**`fixtures/` means test data, nothing else.** It may only appear as:
 
-The repo-root `fixtures/` is for local development aids no test reads:
-Grasshopper definitions for manual plugin testing, their rhino-mcp
-regeneration recipes, and the recorded solves in `viewer-scenes/` that
-[the viewer lab](packages/visualization/lab/README.md) replays. If a test starts reading one of these files, it becomes
-a test fixture: move it to the scope its consumers share.
+- `__tests__/fixtures/` beside the one suite that reads it;
+- `tests/fixtures/` when several suites in one package read it (code that builds test data is
+  a helper: `__tests__/fixtures.ts` or `tests/helpers/`);
+- `packages/schemas/fixtures/` when more than one package, or both stacks, read it. `Selva.Tests`
+  and `Selva.Slva.Tests` resolve it from the repo root. The wire, SLVA and SLVM contracts here have
+  an update procedure in the schemas README;
+- `packages/selva/e2e/fixtures/` for Playwright.
+
+Don't promote a fixture speculatively: move it when a second consumer appears. A test that starts
+reading an example or a dev scene moves the file into the test scope; nothing is read from two
+kinds at once. One file, one copy.
+
+**Names are kebab-case**: lowercase letters, digits and hyphens, then the extension
+(`multi-material.slvm`, `multi-material.expected.json`, `studio-task-lamp.gh`). Name the file
+for what it covers, not where it came from. Exempt: `README.md`, C# snapshots (named after their
+test), and shared assets under `assets/` whose names the runtime loads (`baseHDR.hdr`).
+
+**Formats.** Prefer text a diff can review:
+
+- Data is JSON.
+- A Grasshopper definition someone maintains by hand is `.ghx`. `.gh` only for a file a generator
+  writes (the generator is the source) and for examples users download.
+- Binary wire formats (`.slva`, `.slvm`, `.slvz`, `.slhf`) only where that format is what the
+  test or the lab exercises. A golden binary is paired with `<name>.expected.json`.
+
+**Provenance.** A generated or recorded file names its generator: a script such as
+`scripts/plugin/example-definitions`, or `pnpm lab:record`. Never hand-edit generated output; change the
+generator and rerun it.
+
+**Inventory.** `dev/` and `examples/` each keep a `README.md` that lists every file in them:
+what it is for and how to regenerate it. A file the README doesn't list fails the check. Test
+fixtures need no list: the test that reads one is its inventory, and a fixture no test reads is
+deleted.
+
+Code that builds a scene (the lab's `glass-scene.js`, `metal-scene.js`) is code, not data: it
+lives beside what runs it.
 
 Every package's `vitest.config.ts` starts from `createVitestConfig()` in
 `@selvajs/config/vitest` and overrides only what it can justify.

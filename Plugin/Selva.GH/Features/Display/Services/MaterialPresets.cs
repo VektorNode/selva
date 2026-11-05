@@ -25,6 +25,9 @@ public static class MaterialPresets
         public double? Ior;
         public double? Clearcoat;
         public double? ClearcoatRoughness;
+        public double? Sheen;
+        public string SheenColor;
+        public double? SheenRoughness;
 
         /// <summary>The material the Material Preset component outputs.</summary>
         public ThreeMaterial ToMaterial()
@@ -42,6 +45,9 @@ public static class MaterialPresets
                 Ior = Ior,
                 Clearcoat = Clearcoat,
                 ClearcoatRoughness = ClearcoatRoughness,
+                Sheen = Sheen,
+                SheenColor = SheenColor,
+                SheenRoughness = SheenRoughness,
                 Mapping = Mapping
             };
         }
@@ -128,6 +134,61 @@ public static class MaterialPresets
         {
             Name = "Corten steel", Color = Color.FromArgb(0x8E, 0x4C, 0x2A), Metalness = 0.2,
             Roughness = 0.8, Mapping = UvMapping.World, Finish = "corten"
+        },
+        // Plastics take their colour from a Three Material wired with this as Base and its own Color.
+        new()
+        {
+            Name = "Plastic, glossy", Color = Color.FromArgb(0xC0, 0x26, 0x2D), Metalness = 0,
+            Roughness = 0.12, Mapping = UvMapping.Surface
+        },
+        new()
+        {
+            Name = "Plastic, satin", Color = Color.FromArgb(0xF2, 0xF2, 0xEE), Metalness = 0,
+            Roughness = 0.38, Mapping = UvMapping.Surface
+        },
+        new()
+        {
+            Name = "Plastic, matte", Color = Color.FromArgb(0x1D, 0x1E, 0x20), Metalness = 0,
+            Roughness = 0.6, Mapping = UvMapping.Surface
+        },
+        // Spark-eroded mould grain, the usual finish on a moulded housing. Finish Strength sets its depth.
+        new()
+        {
+            Name = "Plastic, textured", Color = Color.FromArgb(0x1D, 0x1E, 0x20), Metalness = 0,
+            Roughness = 0.45, Mapping = UvMapping.World, Finish = "molded"
+        },
+        // Rubber and soft-touch coatings: rough, with a dusty glow at grazing angles.
+        new()
+        {
+            Name = "Plastic, soft-touch", Color = Color.FromArgb(0x3C, 0x3F, 0x42), Metalness = 0,
+            Roughness = 0.8, Mapping = UvMapping.Surface, Sheen = 1, SheenColor = "#8A8D90",
+            SheenRoughness = 0.6
+        },
+        // Polycarbonate. Clear renders as a thin pane; frosted blurs what is behind it.
+        new()
+        {
+            Name = "Plastic, clear", Color = Color.White, Metalness = 0, Roughness = 0.05,
+            Mapping = UvMapping.Surface, Transmission = 1, Ior = 1.58
+        },
+        new()
+        {
+            Name = "Plastic, frosted", Color = Color.White, Metalness = 0, Roughness = 0.45,
+            Mapping = UvMapping.Surface, Transmission = 1, Ior = 1.58
+        },
+        new()
+        {
+            Name = "Oak, oiled", Color = Color.FromArgb(0xB8, 0x91, 0x5E), Metalness = 0,
+            Roughness = 0.7, Mapping = UvMapping.Part, Finish = "oak"
+        },
+        new()
+        {
+            Name = "Maple, lacquered", Color = Color.FromArgb(0xDC, 0xC2, 0x9A), Metalness = 0,
+            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "maple", Clearcoat = 0.6, ClearcoatRoughness = 0.15
+        },
+        new()
+        {
+            Name = "Wenge, oiled", Color = Color.FromArgb(0x3A, 0x2A, 0x20), Metalness = 0,
+            Roughness = 0.65, Mapping = UvMapping.Part, Finish = "wenge"
         }
     };
 

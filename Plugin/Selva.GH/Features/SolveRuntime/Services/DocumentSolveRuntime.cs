@@ -49,6 +49,9 @@ public sealed class DocumentSolveRuntime
     // The finished solution's verdict, collected once. Cleared at SolutionStart.
     private SolveDiagnostics _verdict;
 
+    // What this solution runs, for the slowest list at its end.
+    private List<IGH_ActiveObject> _expiredAtStart = new List<IGH_ActiveObject>();
+
     private readonly StepProgress _steps = new StepProgress();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly AbortArm _abortAtStart;
@@ -216,6 +219,12 @@ public sealed class DocumentSolveRuntime
             if (stepExpired) reporter.ExpireSolution(false);
         }
 
+        // A component that doesn't run keeps the ProcessorTime of the solve it last ran in, so only
+        // the ones expired now are timed at the end.
+        _expiredAtStart = _document.Objects.OfType<IGH_ActiveObject>()
+            .Where(o => o.Phase == GH_SolutionPhase.Blank)
+            .ToList();
+
         // Expired now means it will run this solution; the rest keep last solution's data.
         _steps.Begin(reporters
             .Where(r => r.Phase == GH_SolutionPhase.Blank)
@@ -238,7 +247,11 @@ public sealed class DocumentSolveRuntime
 
         if (_localTransport != null)
         {
-            Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object> { ["kind"] = Verdict().EndedKind });
+            Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object>
+            {
+                ["kind"] = Verdict().EndedKind,
+                ["slowest"] = Slowest()
+            });
             return;
         }
 
@@ -246,6 +259,17 @@ public sealed class DocumentSolveRuntime
         _compute.OnSolutionEnd();
         WriteOutcomeConstant();
     }
+
+    // Where a slow solve spends its time, for whoever authors the definition. Under a
+    // millisecond is noise.
+    private List<Dictionary<string, object>> Slowest() =>
+        _expiredAtStart
+            .Select(o => (o.NickName, Ms: o.ProcessorTime.TotalMilliseconds))
+            .Where(x => x.Ms >= 1)
+            .OrderByDescending(x => x.Ms)
+            .Take(5)
+            .Select(x => new Dictionary<string, object> { ["source"] = x.NickName, ["ms"] = Math.Round(x.Ms) })
+            .ToList();
 
     private void WriteOutcomeConstant()
     {
