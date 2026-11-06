@@ -26,11 +26,12 @@ Definitions for testing the plugin by hand in Rhino.
 Recorded solves the viewer lab replays (`pnpm lab --scene <name>`) and `pnpm dev:plugin:mock`
 serves. Recordings go stale when their definition changes: record again with `pnpm lab:record`.
 
-| File                   | For                                                         | Regenerate                                                |
-| ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
-| `lamp.slvm`            | A desk lamp: emissive materials and the night look          | `pnpm lab:record`, source definition not recorded         |
-| `tower.slvm`           | A tower in a city block: large scenes, frame cost           | `pnpm lab:record`, source definition not recorded         |
-| `courtyard.slvm`       | A courtyard block: large scenes, frame cost                 | `pnpm lab:record`, source definition not recorded         |
-| `repro-aluminium.slvm` | Aluminium strip with real Part UVs: metal finishes          | written from Rhino through `GrainUvs` and the SLVM writer |
-| `repro-sheets.slvm`    | Sheet-metal strips with real Part UVs: grain and anisotropy | written from Rhino through `GrainUvs` and the SLVM writer |
-| `repro-stainless.slvm` | Stainless strip with real Part UVs: metal finishes          | written from Rhino through `GrainUvs` and the SLVM writer |
+| File                   | For                                                            | Regenerate                                                |
+| ---------------------- | -------------------------------------------------------------- | --------------------------------------------------------- |
+| `lamp.slvm`            | A desk lamp: emissive materials and the night look             | `pnpm lab:record`, source definition not recorded         |
+| `lamp-chrome.slvm`     | The desk lamp in chrome: metal reflection under the night look | `pnpm lab:record`, source definition not recorded         |
+| `tower.slvm`           | A tower in a city block: large scenes, frame cost              | `pnpm lab:record`, source definition not recorded         |
+| `courtyard.slvm`       | A courtyard block: large scenes, frame cost                    | `pnpm lab:record`, source definition not recorded         |
+| `repro-aluminium.slvm` | Aluminium strip with real Part UVs: metal finishes             | written from Rhino through `GrainUvs` and the SLVM writer |
+| `repro-sheets.slvm`    | Sheet-metal strips with real Part UVs: grain and anisotropy    | written from Rhino through `GrainUvs` and the SLVM writer |
+| `repro-stainless.slvm` | Stainless strip with real Part UVs: metal finishes             | written from Rhino through `GrainUvs` and the SLVM writer |

@@ -30,6 +30,15 @@ Two gates run before anything reaches npm. `prepack` runs `publint --strict` (ex
 
 Auth is GitHub→npm **OIDC** (`id-token: write`). There is **no `NPM_TOKEN`**: setting one would break publishing. Every package in `--list` needs its own Trusted Publisher entry at npmjs.com → Settings → Trusted Publisher (repo: `VektorNode/selva`, workflow: `release.yml`). A missing entry fails with a misleading 404.
 
+## Promoting beta to stable
+
+1. On `beta`: `pnpm changeset pre exit`, commit, push.
+2. Open a PR `beta` → `main`. Merge it with a **merge commit**, never squash.
+3. Merge the "chore: version packages" PR that `release.yml` opens on `main`. It publishes to `latest`.
+4. On `beta`: `git merge origin/main`, then `pnpm changeset pre enter beta`, commit, push.
+
+Sync `main` into `beta` only by merge commit. A cherry-pick, rebase or squash copies the change under a new hash, git then sees main's version bumps as unmerged, and the next PR conflicts in every `package.json` and `CHANGELOG.md` beta has bumped since. Resolve those in favour of beta (`git checkout --ours`).
+
 ## Release channel (admin opt-in to beta)
 
 A self-hosted instance tracks one **release channel**, chosen in **Admin → System → Release channel**:
