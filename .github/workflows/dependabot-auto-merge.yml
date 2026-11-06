@@ -236,11 +236,16 @@ jobs:
         if: steps.metadata.outputs.update-type != 'version-update:semver-major'
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+          BASE: ${{ github.event.pull_request.base.ref }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MERGE_TOKEN: ${{ steps.bot.outputs.token || secrets.GITHUB_TOKEN }}
+        # Security updates ignore `target-branch` and open against main, whose
+        # ruleset allows merge commits only.
         run: |
           gh pr review --approve "$PR_URL"
-          GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto --squash "$PR_URL"
+          method=--squash
+          [ "$BASE" = main ] && method=--merge
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto "$method" "$PR_URL"
 
       - name: Flag major updates for manual review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'

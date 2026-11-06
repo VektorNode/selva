@@ -42,7 +42,7 @@ It exits pre mode, pushes `beta`, and opens the `beta` → `main` PR with auto-m
 2. Merge the "chore: version packages" PR on `main`. It publishes to `latest`.
 3. The `sync-beta` job in `release.yml` merges `main` back into `beta` and re-enters pre mode. If that merge conflicts, the job fails and lists the files to resolve by hand; after pushing the resolution, re-run the job to re-enter pre mode.
 
-The PR must land as a merge commit, so the `main` ruleset has to allow merge commits. A squash, cherry-pick or rebase copies beta's commits under new hashes: beta never sees them as merged, and the next promotion conflicts in every version line beta bumped since. `sync-beta` recovers from a squash only while beta has no commits past the promotion; otherwise it fails and lists the released changesets beta still holds, which would publish again.
+The PR must land as a merge commit, so the `main` ruleset allows merge commits only. A squash, cherry-pick or rebase copies beta's commits under new hashes: beta never sees them as merged, and the next promotion conflicts in every version line beta bumped since. `sync-beta` recovers from a squash only while beta has no commits past the promotion; otherwise it fails and lists the released changesets beta still holds, which would publish again.
 
 `release.yml` commits to `beta` after every push that carries a changeset. `git config pull.rebase merges` keeps pulling that from adding merge commits.
 
