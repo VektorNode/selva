@@ -139,11 +139,12 @@ describe('createMaterial: optional wire fields', () => {
 	});
 
 	it('applies anisotropy only when the batch carries UVs', () => {
-		const grain = base({ anisotropy: 0.7, anisotropyRotation: Math.PI / 2 });
+		const grain = base({ anisotropy: 0.7, anisotropyRotation: 0.25 });
 
 		const withUvs = createMaterial(grain, { hasUvs: true });
 		expect(withUvs.anisotropy).toBeCloseTo(0.7);
-		expect(withUvs.anisotropyRotation).toBeCloseTo(Math.PI / 2);
+		// Highlights stretch across the grain, a quarter turn off it.
+		expect(withUvs.anisotropyRotation).toBeCloseTo(0.25 + Math.PI / 2);
 
 		expect(createMaterial(grain, { hasUvs: false }).anisotropy).toBe(0);
 	});

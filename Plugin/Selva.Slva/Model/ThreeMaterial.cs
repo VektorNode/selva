@@ -76,7 +76,7 @@ public class ThreeMaterial
     public double? ClearcoatRoughness { get; set; }
 
     /// <summary>
-    ///     0.0 to 1.0. Stretches highlights along the mesh's texture U direction, the grain of
+    ///     0.0 to 1.0. Stretches highlights across the mesh's texture U direction, the grain of
     ///     brushed or rolled sheet. Without a texture map WebDisplay replaces the UVs so U follows
     ///     each part's bend axis (or longest extent when flat), not Rhino's surface parameters.
     /// </summary>

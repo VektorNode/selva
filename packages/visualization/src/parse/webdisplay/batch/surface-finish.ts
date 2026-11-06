@@ -6,8 +6,9 @@ const f = (n: number) => n.toFixed(4);
  * One species of wood, drawn from Part-mapped UVs: U along the grain, V across the face, both in mm.
  * A plank is sawn some way from the pith, so its growth rings meet the face at a slant:
  * `sqrt(pith² + s²)` across a plank's width, plus a slow lean along it (a tree's taper), draws the
- * arches of a flat-sawn board, with rings showing wider on the face than they grew. Planks are
- * `PLANK` mm wide, each with its own pith distance and ring phase, which reads as a glued-up panel.
+ * arches of a flat-sawn board, with rings showing wider on the face than they grew. A glued-up
+ * panel's planks differ in width, shade, taper and where the pith sits, and no log is straight, so
+ * the pith drifts along each plank: with any of that shared, a long or wide surface repeats.
  * Two UV channels can't give exact rings on end grain; there they show as straight lines.
  */
 interface Wood {
@@ -27,31 +28,70 @@ interface Wood {
 // Closer in, rings cross the face at nearly their own spacing and read as combed softwood.
 const PITH = 120;
 const PITH_SPREAD = 120;
-const PLANK = 180;
-// Rings gained per mm along the grain: one every half metre or so at 5 mm rings.
+// Mm the pith distance drifts along a plank, either way, over a few metres.
+const PITH_DRIFT = 25;
+// Planks average PLANK mm; each seam sits up to half of SEAM_JITTER of that off an even grid.
+const PLANK = 160;
+const SEAM_JITTER = 0.7;
+// Rings gained per mm along the grain: one every half metre or so at 5 mm rings. Each plank
+// gets 0.5 to 1.5 times this, or neighbours' arches march in step.
 const LEAN = 0.0105;
+// How much each plank's shade differs, as a share of the colour.
+const BOARD_SHADE = 0.14;
+// Pores: a row every PORE_ROW mm, PORE_FILL of it taken by dashes 1.5 to 5 mm long, each about a
+// third of the row wide. Wider or denser, they bury the rings.
+const PORE_ROW = 0.35;
+const PORE_FILL = 0.3;
+const PORE_DARK = 0.4;
+// A row's average pore cover, from the dashes' tapered ends (0.7) and soft sides (0.42).
+const PORE_MEAN = PORE_FILL * 0.7 * 0.42;
+
+const seam = (k: string) =>
+	`( ( ${k} ) + ( selvaHash( vec2( ${k}, 6.0 ) ) - 0.5 ) * ${f(SEAM_JITTER)} ) * ${f(PLANK)}`;
 
 const wood = ({ ring, latewood, band, pores, streaks }: Wood) => /* glsl */ `
-		float plank = floor( uv.y / ${f(PLANK)} );
-		float s = uv.y - ( plank + 0.5 ) * ${f(PLANK)};
+		float cell = floor( uv.y / ${f(PLANK)} );
+		float plank = cell + ( uv.y < ${seam('cell')} ? -1.0 : ( uv.y >= ${seam('cell + 1.0')} ? 1.0 : 0.0 ) );
+		float lo = ${seam('plank')};
+		float hi = ${seam('plank + 1.0')};
+		// Each plank starts somewhere else along its log.
+		float along = uv.x + selvaHash( vec2( plank, 9.0 ) ) * 5000.0;
+		// The pith lies anywhere under the plank, sometimes past its edge, which leaves straight
+		// rift grain on that side.
+		float heart = mix( lo, hi, selvaHash( vec2( plank, 3.0 ) ) * 1.6 - 0.3 );
+		heart += ( selvaNoise( vec2( along * 0.0006, plank * 7.0 ) ) - 0.5 ) * 50.0;
+		float s = uv.y - heart;
 		float pith = ${f(PITH)} + selvaHash( vec2( plank, 2.0 ) ) * ${f(PITH_SPREAD)};
+		pith += ( selvaFbm( vec2( along * 0.0004, plank * 5.0 + 1.0 ) ) - 0.5 ) * ${f(PITH_DRIFT * 2)};
+		float lean = ${f(LEAN)} * ( 0.5 + selvaHash( vec2( plank, 8.0 ) ) );
 		// Rings wander a few mm and vary in spacing, as growth does from year to year.
-		float wander = ( selvaFbm( uv * vec2( 0.003, 0.008 ) ) - 0.5 ) * ${f(ring * 2)};
-		float r = sqrt( pith * pith + s * s ) + uv.x * ${f(LEAN)} + wander;
+		float wander = ( selvaFbm( vec2( along * 0.003, uv.y * 0.008 ) ) - 0.5 ) * ${f(ring * 2)};
+		float r = sqrt( pith * pith + s * s ) + along * lean + wander;
 		r += selvaFbm( vec2( r * 0.02, plank ) ) * ${f(ring * 3)} + selvaHash( vec2( plank, 1.0 ) ) * ${f(ring * 20)};
 		float year = fract( r / ${f(ring)} );
 		float late = smoothstep( ${f(1 - band)}, ${f(1 - band * 0.4)}, year ) * ( 1.0 - smoothstep( 0.95, 1.0, year ) );
 		// Open-pored wood shows its rings as a broken band of pores, not a clean line.
-		late *= 1.0 - ${f(pores * 0.6)} * ( 1.0 - smoothstep( 0.3, 0.7, selvaNoise( uv * vec2( 0.25, 2.0 ) ) ) );
+		float broken = 1.0 - smoothstep( 0.3, 0.7, selvaNoise( uv * vec2( 0.25, 2.0 ) ) );
+		late *= 1.0 - ${f(pores * 0.45)} * mix( 0.5, broken, selvaDetail( 0.5 ) );
 		late *= selvaDetail( ${f(ring)} );
 		float fibre = ( selvaNoise( uv * vec2( 0.04, 1.6 ) ) - 0.5 ) * selvaDetail( 1.0 );
-		float pore = smoothstep( 0.62, 0.8, selvaNoise( uv * vec2( 0.3, 2.5 ) ) ) * ( 1.0 - 0.6 * late );
-		pore *= ${f(pores)} * selvaDetail( 0.8 );
-		float streak = ( selvaFbm( uv * vec2( 0.0015, 0.012 ) ) - 0.5 ) * ${f(streaks)};
-		float shade = 1.0 + ${f(latewood * band)} - late * ${f(latewood)} + fibre * 0.1 - pore * 0.45 + streak * 0.6;
-		tone = vec3( shade );
+		// Pores: thin dashes along the grain, most of each row empty. Smaller than a pixel they
+		// show as their average shade, or they would be static.
+		float poreRow = floor( uv.y / ${f(PORE_ROW)} );
+		float poreAlong = uv.x / mix( 1.5, 5.0, selvaHash( vec2( poreRow, 11.0 ) ) ) + selvaHash( vec2( poreRow, 12.0 ) );
+		float poreT = fract( poreAlong );
+		float pore = step( ${f(1 - PORE_FILL)}, selvaHash( vec2( poreRow, 13.0 + 1.618 * floor( poreAlong ) ) ) );
+		pore *= smoothstep( 0.0, 0.3, poreT ) * smoothstep( 1.0, 0.7, poreT );
+		pore *= 1.0 - smoothstep( 0.12, 0.3, abs( fract( uv.y / ${f(PORE_ROW)} ) - 0.5 ) );
+		pore = mix( ${f(PORE_MEAN)}, pore, selvaDetail( ${f(PORE_ROW)} ) ) * ${f(pores)} * ( 1.0 - 0.6 * late );
+		float streak = ( selvaFbm( vec2( along * 0.0015, uv.y * 0.012 ) ) - 0.5 ) * ${f(streaks)};
+		float shade = 1.0 + ${f(latewood * band)} - late * ${f(latewood)} + fibre * 0.1 - pore * ${f(PORE_DARK)} + streak * 0.6;
+		float board = ( selvaHash( vec2( plank, 4.0 ) ) - 0.5 ) * selvaDetail( ${f(PLANK * 0.5)} );
+		float warmth = ( selvaHash( vec2( plank, 5.0 ) ) - 0.5 ) * selvaDetail( ${f(PLANK * 0.5)} );
+		tone = vec3( shade ) * ( 1.0 + board * ${f(BOARD_SHADE)} ) * vec3( 1.0 + warmth * 0.06, 1.0, 1.0 - warmth * 0.06 );
 		gloss = 1.0 + late * 0.08 + pore * 0.4 - fibre * 0.2;
-		height = ( fibre * 0.00008 - pore * 0.00015 ) * selvaDetail( 0.6 );`;
+		// No relief from pores: a bump from screen derivatives beads any dash under a few pixels wide.
+		height = fibre * 0.00008 * selvaDetail( 0.6 );`;
 
 /**
  * Procedural surfaces, so a preset looks like its material with no texture files to ship or upload.

@@ -1,4 +1,7 @@
+import { BufferAttribute } from 'three';
+
 import { SCALE_FACTORS, parseMeshBatchBlob } from '../src/parse/index.ts';
+import { grainTangents } from '../src/parse/webdisplay/grain-tangents.ts';
 import { initThree, updateScene } from '../src/render/index.ts';
 import { LOOK_PRESETS } from '../src/shared/index.ts';
 import { buildGlassScene } from './glass-scene.js';
@@ -54,6 +57,14 @@ async function load(names) {
 	if (names.includes('stone')) glass.push(...buildStoneScene());
 	for (const name of names.filter((each) => each.startsWith('night-'))) {
 		glass.push(...buildNightScene(name.slice('night-'.length)));
+	}
+	// A solve's mesh assembly adds these, and anisotropy and the fibre tilt follow them: without,
+	// three rebuilds the frame per pixel and a synthetic scene shows what no solve does.
+	for (const { geometry } of glass) {
+		const { position, normal, uv } = geometry.attributes;
+		if (!uv || !geometry.index) continue;
+		const tangents = grainTangents(position.array, normal.array, geometry.index.array, uv.array);
+		geometry.setAttribute('tangent', new BufferAttribute(tangents, 4));
 	}
 	names = names.filter(
 		(name) =>

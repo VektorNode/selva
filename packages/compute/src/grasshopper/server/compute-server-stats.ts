@@ -22,6 +22,12 @@ export interface ServerLimits {
 	maxRequestBytes: number;
 	/** A stale definition pointer answers `definition_not_cached`, so pointer reuse is safe. */
 	signalsStaleDefinition: boolean;
+	/**
+	 * Changes whenever the server's plugins may have: it restarted (how a plugin is redeployed) or
+	 * recycled its children. A solve result from another deployment may be wrong. `null` when the
+	 * server doesn't report one.
+	 */
+	deploymentId: string | null;
 }
 
 export interface ServerStats {
@@ -246,7 +252,9 @@ export default class ComputeServerStats {
 		return {
 			timeoutSeconds: json.timeoutSeconds,
 			maxRequestBytes: json.maxRequestBytes,
-			signalsStaleDefinition: json.signalsStaleDefinition === true
+			signalsStaleDefinition: json.signalsStaleDefinition === true,
+			deploymentId:
+				typeof json.deploymentId === 'string' && json.deploymentId !== '' ? json.deploymentId : null
 		};
 	}
 

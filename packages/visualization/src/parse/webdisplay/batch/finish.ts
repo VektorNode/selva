@@ -48,6 +48,9 @@ const TILT = 0.6;
 // is 0.5; slower keeps the few deep scratches that still read at wall distance in photos.
 const FIBRE_FADE = 0.35;
 
+// The least length of a fibre segment, in rows of its cell.
+const FIBRE_ASPECT = 16;
+
 const f = (n: number) => n.toFixed(4);
 
 /** The shader patch for a finish, or null when it would draw nothing. `key` extends the program cache key. */
@@ -99,7 +102,8 @@ export function finishPatch(
 				// of the part. depth * |depth| keeps most fibres faint and a few deep.
 				float selvaFibreRow( vec2 uv, float pitch, vec2 len, float seed ) {
 					float row = floor( uv.y / pitch );
-					float l = mix( len.x, len.y, selvaHash( vec2( row, seed + 1.0 ) ) );
+					// A coarse cell stays a streak: as wide as it is long it reads as speckle, not grain.
+					float l = max( mix( len.x, len.y, selvaHash( vec2( row, seed + 1.0 ) ) ), pitch * ${f(FIBRE_ASPECT)} );
 					float along = uv.x / l + selvaHash( vec2( row, seed + 2.0 ) );
 					float seg = floor( along );
 					float depth = selvaHash( vec2( row, seed + 3.0 + 1.618 * seg ) ) * 2.0 - 1.0;

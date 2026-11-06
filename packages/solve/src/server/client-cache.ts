@@ -91,6 +91,8 @@ export interface ClientCacheConfig {
 export interface ClientCache {
 	/**
 	 * Get (or create) the warm client + scheduler for a resolved compute server, keyed by its `id`.
+	 * With the solve cache on, a warm client last checked over 30 s ago first re-reads the server's
+	 * `/limits` (at most 1 s), and one that reports another deployment is rebuilt with an empty cache.
 	 *
 	 * @throws {ComputeError} `ABORTED` when `evict` or `disposeAll` overtakes the build.
 	 */
@@ -131,6 +133,20 @@ const DEFAULT_MAX_WARM_COMPUTE_SERVERS = 16;
  * concurrency probe. An operator who changes `--timeout` sees it within this window.
  */
 const LIMITS_RECHECK_MS = 5 * 60 * 1000;
+
+/**
+ * How stale the server's `deploymentId` may be before a warm client whose solve cache could
+ * answer is handed out again. A cache hit never reaches the server, so riding on solve completion
+ * would let a redeployed plugin's old results be served until the next miss.
+ */
+const DEPLOYMENT_RECHECK_MS = 30 * 1000;
+
+/**
+ * Longest a request waits on that check. The proxy answers `/limits` itself, in milliseconds; an
+ * unreachable server must not hold a request that the cache could answer. The check finishes
+ * behind it and retires the client if the deployment changed.
+ */
+const DEPLOYMENT_CHECK_WAIT_MS = 1000;
 
 /**
  * How long a failed build is remembered before the next `getClient` retries the
@@ -189,6 +205,7 @@ function describeSettledSolve(result: SettledSolve): string[] {
 
 export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const maxWarmComputeServers = config.maxWarmComputeServers ?? DEFAULT_MAX_WARM_COMPUTE_SERVERS;
+	const cacheEnabled = config.responseCacheMaxBytes > 0;
 	const cache = new Map<string, CachedClient>();
 	// Builds in flight, keyed like `cache`. Concurrent `getClient` calls for the
 	// same id must share ONE build: without this, both miss, both handshake, and
@@ -199,6 +216,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const failed = new Map<string, FailedBuild>();
 	// Out of `cache`, waiting for their running solves to finish.
 	const draining = new Set<CachedClient>();
+	// Per warm client: resolves false once the server reports another deployment (see
+	// DEPLOYMENT_RECHECK_MS), true while it may still serve from its solve cache.
+	const deploymentChecks = new WeakMap<CachedClient, () => Promise<boolean>>();
 
 	if (config.debug === 'verbose') enableDebugLogging();
 
@@ -272,30 +292,34 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		const client = await GrasshopperClient.create(clientConfig);
 
 		const probe = createConcurrencyProbe(client, debugLog);
-		const readLimits = async () =>
-			solveLimitsFor(
-				(await Promise.resolve(client.serverStats?.getLimits?.()).catch(() => null)) ?? null
-			);
-		const [limits] = await Promise.all([readLimits(), probe.refresh()]);
+		const readReported = async () =>
+			(await Promise.resolve(client.serverStats?.getLimits?.()).catch(() => null)) ?? null;
+		const [reported] = await Promise.all([readReported(), probe.refresh()]);
+		const limits = solveLimitsFor(reported);
 		debugLog(
 			`[Compute/client-cache] server ${server.id}: deadline ${limits.solveDeadlineMs}ms, ` +
 				`request cap ${limits.maxRequestBytes ?? 'not reported'}, pointer reuse ${limits.reuseDefinitionCache}`
 		);
 		let limitsCheckedAt = Date.now();
-		let checkingLimits = false;
-		const recheckLimitsIfDue = () => {
-			if (checkingLimits || Date.now() - limitsCheckedAt < LIMITS_RECHECK_MS) return;
-			checkingLimits = true;
-			void readLimits()
+		let recheck: Promise<boolean> | null = null;
+		/** Re-reads the limits; true when they changed, which retires this client. */
+		const recheckLimits = () =>
+			(recheck ??= readReported()
 				.then((next) => {
 					limitsCheckedAt = Date.now();
-					if (sameSolveLimits(next, limits)) return;
+					// Unanswered by a server that did answer: down or restarting, not reconfigured.
+					// Its defaults would switch pointer reuse off until the next recheck.
+					if (next === null && reported !== null) return false;
+					if (sameSolveLimits(solveLimitsFor(next), limits)) return false;
 					debugLog(`[Compute/client-cache] server ${server.id} limits changed — rebuilding`);
 					if (cache.get(server.id) === entry) evictEntry(server.id);
+					return true;
 				})
 				.finally(() => {
-					checkingLimits = false;
-				});
+					recheck = null;
+				}));
+		const recheckLimitsIfDue = () => {
+			if (Date.now() - limitsCheckedAt >= LIMITS_RECHECK_MS) void recheckLimits();
 		};
 
 		const scheduler = client.createScheduler({
@@ -310,11 +334,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
 			timeoutMs: limits.solveDeadlineMs,
-			// The byte budget is the only eviction pressure. A solve is a pure
-			// function of (definition, inputs), both immutable, so a retained
-			// result can never go stale — expiring one only forces a paid re-solve
-			// of the identical answer.
-			cache: config.responseCacheMaxBytes > 0 ? { maxBytes: config.responseCacheMaxBytes } : false,
+			// The byte budget is the only eviction pressure. A solve is a pure function of
+			// (definition, inputs) on one deployment: expiring a result only forces a paid
+			// re-solve of the same answer. A redeployed plugin is another deployment, so the
+			// client is retired with its cache (`deploymentChecks`).
+			cache: cacheEnabled ? { maxBytes: config.responseCacheMaxBytes } : false,
 			reuseServerDefinitionCache: limits.reuseDefinitionCache,
 			onSettle: (_ctx, result) => {
 				// Deferred: this hook fires before the scheduler drops the solve from its in-flight set.
@@ -331,6 +355,18 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			}
 		});
 		const entry: CachedClient = { client, scheduler, limits };
+		deploymentChecks.set(entry, async () => {
+			if (Date.now() - limitsCheckedAt < DEPLOYMENT_RECHECK_MS) return true;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const waited = new Promise<false>((resolve) => {
+				timer = setTimeout(() => resolve(false), DEPLOYMENT_CHECK_WAIT_MS);
+			});
+			try {
+				return !(await Promise.race([recheckLimits(), waited]));
+			} finally {
+				clearTimeout(timer);
+			}
+		});
 		return entry;
 	}
 
@@ -341,7 +377,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		retire(entry);
 	}
 
-	return {
+	const self: ClientCache = {
 		async getClient(server, opts): Promise<CachedClient> {
 			const key = server.id;
 			const existing = cache.get(key);
@@ -349,7 +385,10 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				// Refresh LRU position.
 				cache.delete(key);
 				cache.set(key, existing);
-				return existing;
+				// Only a client whose cache could answer waits on its server's deployment.
+				if (!cacheEnabled || (await deploymentChecks.get(existing)?.()) !== false) return existing;
+				// Retired by the check: whatever now stands for `key` serves, or a fresh build.
+				return self.getClient(server, opts);
 			}
 
 			const inFlight = pending.get(key);
@@ -463,4 +502,5 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			failed.clear();
 		}
 	};
+	return self;
 }

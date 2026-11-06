@@ -84,7 +84,7 @@ public class GH_ThreeMaterial : SelvaZuiComponent
         pManager.AddNumberParameter("Clearcoat Roughness", "CR",
             "Roughness of the clearcoat layer (0.0 - 1.0).", GH_ParamAccess.item);
         pManager.AddNumberParameter("Anisotropy", "A",
-            "Stretches highlights along the grain (0.0 - 1.0), as on brushed or rolled sheet. The grain "
+            "Stretches highlights across the grain (0.0 - 1.0), as on brushed or rolled sheet. The grain "
             + "runs along the mesh's texture U direction; meshes without texture coordinates ignore it.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Anisotropy Rotation", "AR",
