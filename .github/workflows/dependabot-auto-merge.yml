@@ -29,7 +29,14 @@ jobs:
   # toolchain, and the ignore would silently stop their updates.
   lockfile:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # This job runs the PR's code with write access and secrets. `github.actor`
+    # alone is whoever caused the event, and a fork PR can get its own
+    # Dependabot to push to it; requiring a Dependabot-opened PR from a branch
+    # in this repo closes that.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: write
     # Secrets can't be read in `if:`; an env var can. A Dependabot-triggered run
@@ -141,7 +148,11 @@ jobs:
 
   dependabot-auto-merge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # Same guard as `lockfile`.
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     # The bot-token push above re-triggers CI on the new head. Gating on this job
     # keeps the wait below from concluding against the pre-repair commit's checks.
     needs: lockfile
@@ -163,8 +174,7 @@ jobs:
       # contents access to the head repo, so that read 403s and the whole gate
       # dies before it ever looks at CI. The lockfile job above already pushes
       # an unsigned commit to this branch, so signature checking cannot pass
-      # here regardless — the `github.actor == 'dependabot[bot]'` job guard is
-      # what establishes the PR's provenance.
+      # here regardless — the job guard is what establishes the PR's provenance.
       - id: metadata
         uses: dependabot/fetch-metadata@v3
         with:

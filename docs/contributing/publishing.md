@@ -44,19 +44,35 @@ It exits pre mode, pushes `beta`, and opens the `beta` → `main` PR with auto-m
 
 The PR must land as a merge commit, so the `main` ruleset allows merge commits only. A squash, cherry-pick or rebase copies beta's commits under new hashes: beta never sees them as merged, and the next promotion conflicts in every version line beta bumped since. `sync-beta` recovers from a squash only while beta has no commits past the promotion; otherwise it fails and lists the released changesets beta still holds, which would publish again.
 
+With nothing to publish, `sync-beta` never runs, so the script refuses. CI or docs changes reach `main` as their own PR from a branch off `main`.
+
 `release.yml` commits to `beta` after every push that carries a changeset. `git config pull.rebase merges` keeps pulling that from adding merge commits.
 
 ## Release bot (one-time setup)
 
 A push, PR or merge made with `GITHUB_TOKEN` starts no workflows, and a push with it may not change `.github/workflows/`. Four steps use a GitHub App token instead. Without the App they fall back to `GITHUB_TOKEN`, and:
 
-- `sync-beta` (`release.yml`) fails whenever `main` changed a workflow.
-- The "chore: version packages" PR (`release.yml`) gets no CI, so it cannot merge without an admin bypass.
-- A repaired Dependabot PR (`lockfile` job) gets no CI, so it never auto-merges.
-- A Dependabot auto-merge starts no `test.yml` or `release.yml` run on `main`.
+- The "chore: version packages" PR gets no CI until someone re-runs its checks by hand.
+- A Dependabot PR the `lockfile` job repaired gets no CI, so it never auto-merges.
+- A Dependabot auto-merge starts no `test.yml` or `release.yml` run on `beta`.
+- `sync-beta` fails whenever `main` changed a workflow that `beta` lacks.
 
-1. Create a GitHub App with webhooks off and repository permissions Contents, Pull requests and Workflows set to read and write. Install it on `VektorNode/selva`.
-2. Add `RELEASE_BOT_APP_ID` and `RELEASE_BOT_PRIVATE_KEY` under Settings → Secrets and variables, in **Actions** and again in **Dependabot**: a Dependabot-triggered run only sees the latter.
+Setup:
+
+1. [Create the App](https://github.com/organizations/VektorNode/settings/apps/new): any name, homepage `https://github.com/VektorNode/selva`, webhook **Active** unticked, repository permissions Contents, Pull requests and Workflows set to **Read and write**, installable only on this account.
+2. On the App's page, note the **App ID** and generate a private key (`.pem`).
+3. **Install App** → VektorNode → only `selva`.
+4. Store both in Actions and in Dependabot secrets (a Dependabot-triggered run reads only the latter), then delete the `.pem`:
+
+   ```powershell
+   $id = "<App ID>"; $pem = "<path to .pem>"
+   foreach ($app in "actions", "dependabot") {
+     gh secret set RELEASE_BOT_APP_ID --repo VektorNode/selva --app $app --body $id
+     Get-Content $pem -Raw | gh secret set RELEASE_BOT_PRIVATE_KEY --repo VektorNode/selva --app $app
+   }
+   ```
+
+A leaked key: delete it on the App's page and generate a new one. The App can write only to `selva`, and only those three permissions.
 
 ## Release channel (admin opt-in to beta)
 

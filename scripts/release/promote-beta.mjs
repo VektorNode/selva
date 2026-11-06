@@ -139,6 +139,13 @@ const promoted = read('node', ['scripts/release/publishable-packages.mjs', '--li
 	.filter(([, version]) => version?.includes('-'))
 	.map(([name, version]) => `${name} ${version.replace(/-.*$/, '')}`);
 
+// sync-beta re-enters pre mode only after a publish. With nothing to publish,
+// beta would stay out of pre mode and main would receive an exit-mode pre.json.
+if (!promoted.length && !unreleased.length)
+	die(
+		'Nothing to release: no beta versions and no changesets. Ship CI or docs changes to main as their own PR from a branch off main.'
+	);
+
 const containsMain = succeeds('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
 
 console.log('\nPromote beta → main');
