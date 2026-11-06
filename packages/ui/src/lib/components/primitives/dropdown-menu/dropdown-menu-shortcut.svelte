@@ -14,7 +14,7 @@
 	bind:this={ref}
 	data-slot="dropdown-menu-shortcut"
 	class={cn(
-		'h-5 min-w-5 px-1 font-mono ml-auto inline-flex items-center justify-center rounded-sm border bg-muted text-2xs text-muted-foreground group-focus/dropdown-menu-item:text-foreground',
+		'h-5 min-w-5 px-1 font-mono ml-auto inline-flex items-center justify-center rounded-sm border bg-muted text-2xs text-muted-foreground group-focus/dropdown-menu-item:text-foreground pointer-coarse:hidden',
 		className
 	)}
 	{...restProps}

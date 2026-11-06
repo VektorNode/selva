@@ -316,7 +316,7 @@
 						>
 							<Spline />
 							{t.edges}
-							<DropdownMenu.Shortcut class="pointer-coarse:hidden">E</DropdownMenu.Shortcut>
+							<DropdownMenu.Shortcut>E</DropdownMenu.Shortcut>
 						</DropdownMenu.CheckboxItem>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
@@ -406,14 +406,14 @@
 					>
 						<Cuboid />
 						{t.switchToOrthographic}
-						<DropdownMenu.Shortcut class="pointer-coarse:hidden">O</DropdownMenu.Shortcut>
+						<DropdownMenu.Shortcut>O</DropdownMenu.Shortcut>
 					</DropdownMenu.CheckboxItem>
 
 					{#if showGrid}
 						<DropdownMenu.CheckboxItem switch checked={gridVisible} onCheckedChange={onToggleGrid}>
 							<Grid3x3 />
 							{t.grid}
-							<DropdownMenu.Shortcut class="pointer-coarse:hidden">G</DropdownMenu.Shortcut>
+							<DropdownMenu.Shortcut>G</DropdownMenu.Shortcut>
 						</DropdownMenu.CheckboxItem>
 					{/if}
 
@@ -421,7 +421,7 @@
 						<DropdownMenu.CheckboxItem switch checked={nightOn} onCheckedChange={onToggleNight}>
 							<Moon />
 							{t.nightMode}
-							<DropdownMenu.Shortcut class="pointer-coarse:hidden">N</DropdownMenu.Shortcut>
+							<DropdownMenu.Shortcut>N</DropdownMenu.Shortcut>
 						</DropdownMenu.CheckboxItem>
 					{/if}
 

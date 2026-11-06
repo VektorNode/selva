@@ -38,7 +38,7 @@
 		{@render childrenProp?.()}
 		{#if asSwitch}
 			<span
-				class="[[data-slot=dropdown-menu-shortcut]+&]:ml-2 h-4.5 w-8 pointer-events-none relative ml-auto shrink-0 rounded-full transition-colors {checked
+				class="not-pointer-coarse:[[data-slot=dropdown-menu-shortcut]+&]:ml-2 h-4.5 w-8 pointer-events-none relative ml-auto shrink-0 rounded-full transition-colors {checked
 					? 'bg-primary'
 					: 'bg-input'}"
 				data-slot="dropdown-menu-checkbox-item-switch"
