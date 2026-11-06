@@ -39,6 +39,7 @@
 		"plugin:logs": "node scripts/plugin/dev-logs.mjs",
 		"plugin:session": "node scripts/plugin/dev-session.mjs",
 		"release:plugin": "node scripts/release/release-plugin.js",
+		"release:promote": "node scripts/release/promote-beta.mjs",
 		"compute:deploy": "node scripts/plugin/compute-deploy.mjs",
 		"check": "turbo run check --concurrency=20 --filter=!@selvajs/website",
 		"type-check": "turbo run type-check --concurrency=20 --filter=!@selvajs/website",

@@ -32,14 +32,33 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     permissions:
       contents: write
+    # Secrets can't be read in `if:`; an env var can. A Dependabot-triggered run
+    # reads Dependabot secrets, not Actions secrets: the bot's keys must be in both.
+    env:
+      BOT_APP_ID: ${{ secrets.RELEASE_BOT_APP_ID }}
     steps:
+      # The repair commit must be pushed with the release bot's token. A
+      # GITHUB_TOKEN push starts no workflows, so the repaired head never got CI
+      # and the wait below timed out after 45 minutes on every repaired PR.
+      - name: Release bot token
+        id: bot
+        if: env.BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Warn when the bot token is missing
+        if: env.BOT_APP_ID == ''
+        run: echo "::warning::RELEASE_BOT_APP_ID is not set as a Dependabot secret. A repair commit will start no CI, and this PR cannot auto-merge."
+
       # pull_request_target checks out the BASE by default, which would
       # regenerate a lockfile for a tree without Dependabot's bumps in it.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.bot.outputs.token || secrets.GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
@@ -123,10 +142,22 @@ jobs:
   dependabot-auto-merge:
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
-    # The push above re-triggers CI on the new head. Gating on this job keeps
-    # the wait below from concluding against the pre-repair commit's checks.
+    # The bot-token push above re-triggers CI on the new head. Gating on this job
+    # keeps the wait below from concluding against the pre-repair commit's checks.
     needs: lockfile
+    env:
+      BOT_APP_ID: ${{ secrets.RELEASE_BOT_APP_ID }}
     steps:
+      # Auto-merge lands as whoever enabled it, and a GITHUB_TOKEN merge starts
+      # no workflows: test.yml and release.yml would never run on main for it.
+      - name: Release bot token
+        id: bot
+        if: env.BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
       # skip-commit-verification: v3 verifies the head commit's GPG signature,
       # which reads the PR's commits. Under pull_request_target the token has no
       # contents access to the head repo, so that read 403s and the whole gate
@@ -206,9 +237,10 @@ jobs:
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_TOKEN: ${{ steps.bot.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge --auto --squash "$PR_URL"
 
       - name: Flag major updates for manual review
         if: steps.metadata.outputs.update-type == 'version-update:semver-major'

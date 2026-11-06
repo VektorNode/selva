@@ -2,10 +2,11 @@ name: Test
 
 on:
   pull_request:
-  # Push + cron catch what the PR trigger misses: admin/direct pushes,
-  # Dependabot auto-merges, and advisories that land between merges.
+  # Push catches what the PR trigger misses: direct pushes (routine on beta) and
+  # Dependabot auto-merges. Without beta here, beta's first lint, fixture and
+  # changeset check was the promotion PR. Cron catches toolchain drift.
   push:
-    branches: [main]
+    branches: [main, beta]
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
@@ -62,20 +63,39 @@ jobs:
           git fetch --depth=1 origin "${{ github.base_ref }}"
           node scripts/release/check-changesets.mjs --base FETCH_HEAD
 
-      # --prod excludes devDeps, so this gates only what actually ships.
-      - name: Audit production dependencies
-        run: pnpm audit --prod --audit-level moderate
+      # beta takes direct pushes, so no PR ran the check above. Diff from where
+      # beta forked off main, the delta the promotion PR checks, not from
+      # `before`: concurrency cancels superseded runs, so a per-push diff never
+      # checks the cancelled pushes, and sync-beta's push would list main's
+      # released commits as beta's own.
+      - name: Resolve beta's fork point
+        if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+        run: |
+          git fetch --no-tags --unshallow origin \
+            +refs/heads/main:refs/remotes/origin/main \
+            +refs/heads/beta:refs/remotes/origin/beta
+          echo "BETA_BASE=$(git merge-base origin/main HEAD)" >> "$GITHUB_ENV"
+
+      - name: Check changesets (beta push)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+        run: node scripts/release/check-changesets.mjs --base "$BETA_BASE"
+
+      # Advisories are checked in audit.yml, not here: a new one would fail
+      # every PR, whatever it changed.
 
       # ui-schema.json and wire-schema.json are the source of truth; the generated TS/C# is derived.
       # This is the CI backstop for both generator guarantees: stale committed
-      # output, and (on PRs) a definitions change without a schemaVersion bump.
-      # The bump guard compares against the PR base — in CI the working tree
-      # always matches HEAD, so its default HEAD comparison can never fire.
+      # output, and (on PRs and beta pushes) a definitions change without a
+      # schemaVersion bump. The bump guard compares against the PR base or
+      # beta's fork point: in CI the working tree always matches HEAD, so its
+      # default HEAD comparison can never fire.
       - name: Verify generated code is up to date
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --depth=1 origin "${{ github.base_ref }}"
             export SCHEMA_GUARD_BASE_REF=FETCH_HEAD
+          elif [ -n "$BETA_BASE" ]; then
+            export SCHEMA_GUARD_BASE_REF="$BETA_BASE"
           fi
           pnpm generate
           if ! git diff --exit-code -- \

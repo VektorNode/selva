@@ -36,12 +36,17 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      published: ${{ steps.changesets.outputs.published }}
     # Must be job-level: vite's SSR worker doesn't inherit step-level env, and
     # the Local* provider factories throw on missing env at module load.
     env:
       SELVA_HMAC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       SELVA_AT_REST_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       DATA_PATH: /tmp/selva-build
+      # Secrets can't be read in `if:`; an env var can.
+      BOT_APP_ID: ${{ secrets.RELEASE_BOT_APP_ID }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -305,7 +310,23 @@ jobs:
       # longer reads GITHUB_TOKEN from the environment — it must be passed as
       # `github-token`. A v1 name under v2 is silently ignored, which would run
       # the action with no version/publish script at all.
+      #
+      # The version PR is opened with the release bot's token: one opened with
+      # GITHUB_TOKEN starts no CI, so main's required checks never report and it
+      # cannot merge. Minted here, after install and tests, and without workflow
+      # access, so no dependency script runs while it exists.
+      - name: Release bot token
+        id: bot
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true' && env.BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: changesets/action@v2
+        id: changesets
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         with:
           version-script: pnpm changeset version
@@ -314,4 +335,103 @@ jobs:
           publish-script: pnpm release
           commit-message: 'chore: version packages'
           pr-title: 'chore: version packages'
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.bot.outputs.token || secrets.GITHUB_TOKEN }}
+
+  # After a stable publish, main holds versions beta has never seen. Merging them
+  # back and re-entering pre mode by hand is where releases went wrong: a squash
+  # or cherry-pick copied main's commits under new hashes, and the next promotion
+  # conflicted in every version line. A conflict here fails this job, never the
+  # publish above.
+  #
+  # A re-run or dispatch that finds nothing left to publish also syncs: a publish
+  # that landed in a run that then failed (tags, GitHub releases) never set
+  # `published`, and every later run sees the versions already on npm.
+  sync-beta:
+    needs: release
+    if: >-
+      github.ref == 'refs/heads/main' && (
+        needs.release.outputs.published == 'true' ||
+        (needs.release.outputs.should_run == 'false' &&
+          (github.run_attempt > 1 || github.event_name == 'workflow_dispatch'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    # Secrets can't be read in `if:`; an env var can.
+    env:
+      BOT_APP_ID: ${{ secrets.RELEASE_BOT_APP_ID }}
+    steps:
+      # A GITHUB_TOKEN push starts no CI on beta and may not touch
+      # .github/workflows/, so a main that changed CI fails the push. The release
+      # bot's token does both.
+      - name: Release bot token
+        id: bot
+        if: env.BOT_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: beta
+          fetch-depth: 0
+          token: ${{ steps.bot.outputs.token || secrets.GITHUB_TOKEN }}
+
+      - name: Merge main into beta
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "beta already contains main."
+            exit 0
+          fi
+          if ! git merge --no-edit -m "chore: merge main into beta after release" origin/main; then
+            echo "::error::main does not merge cleanly into beta. Conflicts:"
+            git diff --name-only --diff-filter=U
+            git merge --abort
+            echo "::error::Resolve by hand: on beta, git merge origin/main, resolve, commit, push. Then re-run this job: it re-enters pre mode."
+            exit 1
+          fi
+
+      # `changeset version` deletes pre.json when it collapses the betas, so
+      # after a promotion it is gone. After a release cut on main alone, beta
+      # is still in pre mode. A pre.json in "exit" mode means a promotion is
+      # still on its way to main: re-entering would carry pre mode into main.
+      #
+      # Written by hand, not `pnpm changeset pre enter beta`: that needs an
+      # install (dependency scripts under this token) and writes 2-space JSON
+      # that fails format:check. In @changesets/pre 3.x `pre enter` writes
+      # exactly these two fields; recheck on a major upgrade.
+      - name: Re-enter beta pre mode
+        env:
+          HUSKY: 0
+        run: |
+          if [ -f .changeset/pre.json ]; then
+            if grep -q '"mode": *"exit"' .changeset/pre.json; then
+              echo "::notice::beta is exiting pre mode: a promotion is in flight. The sync after its stable release re-enters pre mode."
+            else
+              echo "beta is already in pre mode."
+            fi
+            exit 0
+          fi
+          printf '{\n\t"mode": "pre",\n\t"tag": "beta"\n}\n' > .changeset/pre.json
+          git add .changeset/pre.json
+          git commit --no-verify -m "chore: enter beta pre mode"
+
+      - name: Push beta
+        run: |
+          if git push origin HEAD:beta; then
+            exit 0
+          fi
+          git fetch origin beta
+          if ! git merge-base --is-ancestor origin/beta HEAD; then
+            echo "::error::beta moved while this job ran. Re-run this job: it starts again from the new tip."
+          elif [ -z "$BOT_APP_ID" ]; then
+            echo "::error::Push refused. GITHUB_TOKEN cannot push a merge that changes .github/workflows/, so a re-run fails the same way. Set up the release bot (docs/contributing/publishing.md), then re-run."
+          else
+            echo "::error::Push refused (see the git error above). A re-run fails the same way until that is fixed."
+          fi
+          exit 1
