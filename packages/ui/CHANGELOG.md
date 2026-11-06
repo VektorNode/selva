@@ -1,5 +1,13 @@
 # @selvajs/ui
 
+## 7.0.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies [43a9046]
+  - @selvajs/solve@2.1.0-beta.0
+  - @selvajs/visualization@1.7.1-beta.0
+
 ## 7.0.2
 
 ### Patch Changes

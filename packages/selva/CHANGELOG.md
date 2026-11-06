@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.20.1-beta.0
+
+### Patch Changes
+
+- 43a9046: `COMPUTE_CACHE_ERRORED_SOLVES` is listed as retired: boot and `selva config show` name it instead of calling it an unknown key, and `selva migrate` removes it.
+
 ## 4.20.0
 
 ### Minor Changes
