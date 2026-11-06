@@ -388,11 +388,36 @@ jobs:
             echo "beta already contains main."
             exit 0
           fi
+          # A squashed promotion puts beta's exact tree on main under a new hash.
+          # A plain merge then conflicts in every version line and keeps the
+          # changesets main just consumed. Beta holds nothing main lacks, so
+          # take main's tree.
+          if git log --format=%T origin/main | grep -qx "$(git rev-parse 'HEAD^{tree}')"; then
+            echo "::warning::beta → main was squashed, not merged. Taking main's tree."
+            git merge --no-commit --no-ff -s ours origin/main
+            git read-tree --reset -u origin/main
+            git commit --no-verify -m "chore: merge main into beta after release"
+            exit 0
+          fi
           if ! git merge --no-edit -m "chore: merge main into beta after release" origin/main; then
             echo "::error::main does not merge cleanly into beta. Conflicts:"
             git diff --name-only --diff-filter=U
             git merge --abort
             echo "::error::Resolve by hand: on beta, git merge origin/main, resolve, commit, push. Then re-run this job: it re-enters pre mode."
+            exit 1
+          fi
+
+      # A squashed promotion with beta commits on top of it merges cleanly but
+      # keeps changesets main already released, and beta would ship them again.
+      # Its own step so a re-run after a hand-resolved merge checks too.
+      - name: Check for released changesets
+        run: |
+          stale=$(git log origin/main --diff-filter=D --name-only --format= -- '.changeset/*.md' \
+            | sort -u | grep -v '/README\.md$' | while read -r f; do [ -f "$f" ] && echo "$f"; done)
+          if [ -n "$stale" ]; then
+            echo "::error::beta still holds changesets main already released:"
+            echo "$stale"
+            echo "::error::On beta: git rm them, commit, push. Then re-run this job."
             exit 1
           fi
 
