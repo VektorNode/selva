@@ -1,5 +1,24 @@
 # @selvajs/visualization
 
+## 1.7.0
+
+### Minor Changes
+
+- 8d47f38: The `night` look is now lit by the model's lamps instead of by fill. Before, a white surface away from any lamp still read at half brightness, and polished metal mirrored a lit studio, so a chrome lamp looked like a daytime product shot. Now:
+
+  - the fill is cut so the lamp lights the scene
+  - metal reflects about as much as white paint does in the same dark
+  - lamp light is scaled up 3×, so a lamp lights its desk without lifting the background
+
+  A glow sent without lumens now lights like the lamp its strength stands for (strength × 160 lm), the same as one sent with lumens. It used to be scaled to the scene's size, so the same glow lit a large scene far more than a small one.
+
+  `LookPreset` gains `metalReflection` (how much a fully metallic material reflects, default 1) and `emissiveLightScale` (a multiplier on the light glowing parts cast, default 1).
+
+### Patch Changes
+
+- 8d47f38: Brushed and rolled metal now stretch highlights across the grain, as grooves do, not along it. Panels with vertical grain no longer wash out to a pale card, and a ball keeps its spun swirl at the pole instead of a black notch. Brushed grain also stays linear at a few metres, where it used to break into speckle.
+- 8d47f38: Procedural wood no longer repeats on long or wide surfaces. Planks now vary in width, shade, taper and where the pith sits, and the pith drifts along each plank. Before, every plank was 180 mm wide and repeated the same arch about every half metre. Pores are now thin, sparse dashes that settle to an even tone when smaller than a pixel. Before, they were dark blotches that hid the grain on edges and on faces seen head-on.
+
 ## 1.7.0-beta.0
 
 ### Minor Changes
