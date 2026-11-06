@@ -78,3 +78,48 @@ await browser.close();
 
 console.table(results);
 console.log(`Amplified differences in ${diffDir}`);
+
+// Per-object numbers from `lab:run`, where both labels have them. Only objects that moved past
+// the noise floor are listed: two runs of unchanged code agree to within it.
+const NOISE = { mean: 0.005, percent: 1 };
+const readStats = async (label) => {
+	try {
+		return JSON.parse(await readFile(`${out(label)}stats.json`, 'utf8'));
+	} catch {
+		return null;
+	}
+};
+const [statsBefore, statsAfter] = await Promise.all([readStats(before), readStats(after)]);
+if (statsBefore && statsAfter) {
+	const rows = [];
+	for (const [image, { objects }] of Object.entries(statsAfter)) {
+		const previous = statsBefore[image]?.objects;
+		if (!previous) continue;
+		for (const [name, now] of Object.entries(objects)) {
+			const was = previous[name];
+			if (!was) continue;
+			const change = {
+				mean: now.mean - was.mean,
+				clipped: now.clippedPercent - was.clippedPercent,
+				crushed: now.crushedPercent - was.crushedPercent
+			};
+			if (
+				Math.abs(change.mean) < NOISE.mean &&
+				Math.abs(change.clipped) < NOISE.percent &&
+				Math.abs(change.crushed) < NOISE.percent
+			) {
+				continue;
+			}
+			rows.push({
+				image,
+				object: name,
+				mean: `${was.mean} → ${now.mean}`,
+				clipped: `${was.clippedPercent} → ${now.clippedPercent}`,
+				crushed: `${was.crushedPercent} → ${now.crushedPercent}`,
+				color: `${was.color} → ${now.color}`
+			});
+		}
+	}
+	if (rows.length) console.table(rows);
+	else console.log('No object moved past the noise floor.');
+}

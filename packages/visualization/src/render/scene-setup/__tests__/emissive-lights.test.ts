@@ -80,17 +80,36 @@ describe('createEmissiveLights', () => {
 		expect(bulb.castShadow).toBe(false);
 	});
 
-	it('gives the same brightness at any model scale', () => {
-		const irradiance = (size: number) => {
+	it('lights a glow without lumens like the lamp its strength stands for', () => {
+		const light = (lumens?: number) => {
 			const scene = new THREE.Scene();
-			const mesh = glowingBox(4, [0, 0, 0]);
-			mesh.scale.setScalar(size);
-			mesh.updateMatrixWorld();
-			scene.add(mesh);
+			const lamp = glowingBox(5, [0, 0, 0]);
+			if (lumens !== undefined) {
+				(lamp.material as THREE.Material).userData[EMISSIVE_LIGHT] =
+					(lumens / (4 * Math.PI)) * 0.005;
+			}
+			// A room around it, or a glow the size of the whole scene gets no point light at all.
+			const room = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+			room.position.set(60, 0, 0);
+			room.userData.source = SOURCE_COMPUTE;
+			room.updateMatrixWorld();
+			scene.add(lamp, room);
 			createEmissiveLights(scene).sync(true);
-			return pointLights(scene)[0].intensity / (size * size);
+			return pointLights(scene)[0].intensity;
 		};
-		expect(irradiance(1000)).toBeCloseTo(irradiance(1));
+		// Strength 5 is what the plugin sends for 800 lm.
+		expect(light()).toBeCloseTo(light(800));
+	});
+
+	it('scales every light it casts by the look', () => {
+		const scene = new THREE.Scene();
+		const lamp = glowingBox(5, [0, 0, 0]);
+		(lamp.material as THREE.Material).userData[EMISSIVE_LIGHT] = 2;
+		scene.add(lamp);
+
+		createEmissiveLights(scene).sync(true, undefined, 3);
+
+		expect(pointLights(scene)[0].intensity).toBe(6);
 	});
 
 	it("uses a real source's intensity as given, so lumens mean the same at any model size", () => {

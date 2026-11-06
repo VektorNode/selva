@@ -20,10 +20,11 @@ const MIN_RELATIVE_STRENGTH = 1 / 3;
 /** Parts this close, as a share of the larger one's diagonal, are one lamp: a bulb and its reflector. */
 const SAME_LAMP_GAP = 0.05;
 /**
- * three's point lights are in candela, so brightness falls off with the scene's units squared.
- * Scaling by the scene's radius squared makes one strength read the same in millimetres and metres.
+ * A glow sent without lumens lights like the lamp its strength stands for, so it agrees with one
+ * that has them. Mirrors `Photometry` in Selva.Slva: one strength is 160 lm, spread over 4π
+ * steradians, at 0.005 viewer units per lux. Assumes a scene in metres, as the lumens path does.
  */
-const INTENSITY_PER_STRENGTH = 0.17;
+const LIGHT_PER_STRENGTH = (160 / (4 * Math.PI)) * 0.005;
 /** Share of a source's light that comes back off the room, with no shadow to stop it. */
 const BOUNCE_SHARE = 0.07;
 /** A lamp's source has a size, so its shadow has a penumbra; three's default edge is a hard line. */
@@ -136,9 +137,9 @@ export function pickLightSources<S extends { strength: number }>(
 export interface EmissiveLights {
 	/**
 	 * Rebuilds from what the scene draws now, so call it after anything is shown or hidden.
-	 * `enabled` false removes every light.
+	 * `enabled` false removes every light. `lightScale` multiplies every light it casts.
 	 */
-	sync(enabled: boolean, maxLights?: number): void;
+	sync(enabled: boolean, maxLights?: number, lightScale?: number): void;
 	/** Moves each key light within its lamp's bounds, which is what gives its shadow a real penumbra. */
 	jitter(index: number): void;
 	/** Back to the middle of each lamp. */
@@ -209,7 +210,7 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 		}
 	};
 
-	const sync = (enabled: boolean, maxLights = DEFAULT_MAX_LIGHTS) => {
+	const sync = (enabled: boolean, maxLights = DEFAULT_MAX_LIGHTS, lightScale = 1) => {
 		for (const mesh of silenced) mesh.castShadow = true;
 		silenced.clear();
 
@@ -219,7 +220,7 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 		// Reused across solves: a new light reallocates its shadow map and recompiles every shader.
 		sources.forEach((source, index) => {
 			const { key, bounce, home, size } = lights[index] ?? addLight(index < MAX_SHADOWED_LIGHTS);
-			const intensity = source.light ?? source.strength * INTENSITY_PER_STRENGTH * radius * radius;
+			const intensity = (source.light ?? source.strength * LIGHT_PER_STRENGTH) * lightScale;
 			key.color.copy(source.color);
 			// Lit windows across a facade end up as one light in its middle, which burns a hole in the
 			// wall. Only the bounce's even wash suits a glow that wide. Zeroed, not removed: removing a

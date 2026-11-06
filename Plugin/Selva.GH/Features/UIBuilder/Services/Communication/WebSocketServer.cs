@@ -250,6 +250,11 @@ public class WebSocketServer : IDisposable
             return Task.CompletedTask;
         }
 
+        if (DevMode.Enabled)
+        {
+            TraceOutgoing("broadcast", message, binaryFrames);
+        }
+
         var frames = new List<OutgoingFrame>(1 + (binaryFrames?.Count ?? 0))
         {
             new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text)
@@ -295,12 +300,47 @@ public class WebSocketServer : IDisposable
         return sends.Count == 0 ? Task.CompletedTask : Task.WhenAll(sends);
     }
 
+    private static readonly System.Text.RegularExpressions.Regex OutgoingType =
+        new System.Text.RegularExpressions.Regex(@"""type""\s*:\s*""([^""]+)""");
+
+    // The type and sizes only: a payload can hold a user's inputs.
+    private void TraceOutgoing(string how, string message, IReadOnlyList<byte[]> binaryFrames)
+    {
+        var head = message.Length > 300 ? message.Substring(0, 300) : message;
+        var type = OutgoingType.Match(head);
+        var binary = 0L;
+        if (binaryFrames != null)
+        {
+            foreach (var frame in binaryFrames)
+            {
+                binary += frame.Length;
+            }
+        }
+
+        var frames = binaryFrames?.Count > 0 ? $" + {binaryFrames.Count} binary ({binary} B)" : "";
+        Logger.Trace(
+            $"[ws:{Port}] out {(type.Success ? type.Groups[1].Value : "?")} {how}, {message.Length} chars{frames}, {ClientCount()} client(s)");
+    }
+
+    private int ClientCount()
+    {
+        lock (_clientsLock)
+        {
+            return _connectedClients.Count;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Reply to one socket
     // -------------------------------------------------------------------------
 
     public Task SendAsync(WebSocket client, string message)
     {
+        if (DevMode.Enabled)
+        {
+            TraceOutgoing("reply", message, null);
+        }
+
         return SendDirectAsync(client, new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text));
     }
 
@@ -486,6 +526,11 @@ public class WebSocketServer : IDisposable
             return;
         }
 
+        if (DevMode.Enabled)
+        {
+            Logger.Trace($"[ws:{Port}] client connected from {host ?? "browser"}, {ClientCount()} connected");
+        }
+
         OnClientConnected?.Invoke(this, webSocket);
         await ReceiveMessagesAsync(webSocket, host, cancellationToken).ConfigureAwait(false);
     }
@@ -599,6 +644,11 @@ public class WebSocketServer : IDisposable
 
         if (removed)
         {
+            if (DevMode.Enabled)
+            {
+                Logger.Trace($"[ws:{Port}] client disconnected ({webSocket.CloseStatus?.ToString() ?? webSocket.State.ToString()}), {ClientCount()} connected");
+            }
+
             OnClientDisconnected?.Invoke(this, webSocket);
         }
 

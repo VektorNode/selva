@@ -7,8 +7,13 @@
 //   node scripts/plugin/bridge-drive.mjs 'http://localhost:60045/?session=yd91OOmb&wsPort=8765#s=...' '[{"at":300,"send":{"03398815-...":210}},{"at":3000,"send":"cancel"}]' 8000
 // Pass the whole URL: the bridge refuses an upgrade without the page's Origin, and closes a socket
 // whose first message isn't `authenticate` with the secret from the fragment.
-const [urlArg, stepsJson, totalArg] = process.argv.slice(2);
-const url = new URL(urlArg);
+// On a dev install the URL can be left out: the newest live session is used.
+import { sessionUrlOr } from './dev-session.mjs';
+
+const args = process.argv.slice(2);
+if (!/^https?:/.test(args[0] ?? '')) args.unshift(undefined);
+const [urlArg, stepsJson, totalArg] = args;
+const url = new URL(sessionUrlOr(urlArg));
 const session = url.searchParams.get('session');
 const steps = JSON.parse(stepsJson);
 const total = Number(totalArg ?? 15000);

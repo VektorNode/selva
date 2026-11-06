@@ -89,6 +89,7 @@
 		"bench": "vitest bench --run",
 		"lab": "vite --config lab/vite.config.js",
 		"lab:run": "node lab/run.mjs",
+		"lab:night": "node lab/run.mjs --suite night",
 		"lab:record": "node lab/record.mjs",
 		"lab:diff": "node lab/diff.mjs",
 		"type-check": "tsc --noEmit"

@@ -12,7 +12,7 @@ const linear = (r, g, b) =>
 	`#${new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace).getHexString()}`;
 
 // The plugin's metal presets (MaterialPresets.cs), as they arrive on the wire.
-const METALS = [
+export const METALS = [
 	[
 		'stainless',
 		{

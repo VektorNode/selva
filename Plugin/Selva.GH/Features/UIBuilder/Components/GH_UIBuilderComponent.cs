@@ -501,8 +501,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var baseUrl = _service.WebServer?.IsRunning == true
             ? _service.WebServer.BaseUrl
             : $"http://localhost:{AppConfig.UIBuilder.DevServerPort}";
-        return BridgeAccess.SessionUrl(
-            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret, host, _role);
+        var wsPort = _service.WebSocketTransport.WebSocketPort;
+        if (DevMode.Enabled)
+        {
+            // The browser form (no host): what a tool outside Rhino opens.
+            DevSessions.Publish(
+                _sessionId,
+                BridgeAccess.SessionUrl(baseUrl, _sessionId, wsPort, _service.BridgeSecret, null, _role),
+                wsPort,
+                BridgeAccess.RoleName(_role),
+                OnPingDocument()?.DisplayName);
+        }
+
+        return BridgeAccess.SessionUrl(baseUrl, _sessionId, wsPort, _service.BridgeSecret, host, _role);
     }
 
     /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
@@ -953,6 +964,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     private void CleanupCommunication()
     {
+        DevSessions.Remove(_sessionId);
         if (_service?.ServerManager != null)
         {
             try

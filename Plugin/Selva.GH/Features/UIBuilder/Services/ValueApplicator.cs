@@ -65,6 +65,7 @@ public class ValueApplicator
     {
         var updateCount = 0;
         var pendingExpirations = new HashSet<IGH_ActiveObject>();
+        var applied = DevMode.Enabled ? new List<string>() : null;
         var ranges = new NumberRanges(schema);
 
         foreach (var input in schema.Inputs)
@@ -110,6 +111,8 @@ public class ValueApplicator
                     continue;
                 }
 
+                applied?.Add(input.Nickname);
+
                 if (!ValidateValue(input, value, addMessage))
                 {
                     continue;
@@ -151,6 +154,14 @@ public class ValueApplicator
                 addMessage?.Invoke(GH_RuntimeMessageLevel.Error,
                     $"Error applying value to '{input.Nickname}': {ex.Message}");
             }
+        }
+
+        if (DevMode.Enabled)
+        {
+            Logger.Trace(applied.Count == 0
+                ? $"[values] {values.Count} received, none changed: no solve"
+                : $"[values] {values.Count} received, applying {applied.Count}: {string.Join(", ", applied)}" +
+                  (pendingExpirations.Count > 0 ? "" : " (nothing expired: no solve)"));
         }
 
         if (pendingExpirations.Count > 0)
@@ -204,6 +215,20 @@ public class ValueApplicator
     public void SetLastAppliedValues(Dictionary<string, object> values)
     {
         _lastAppliedValues = new ConcurrentDictionary<string, object>(values);
+    }
+
+    /// <summary>
+    ///     Records values the document already holds as applied. A page that connects echoes the
+    ///     <c>initialData</c> values straight back; without this the empty record calls every one a
+    ///     change and re-solves the whole definition for nothing. Comparing by <c>ToString</c> only
+    ///     errs toward "changed": a type the echo spells differently costs a solve, never a value.
+    /// </summary>
+    public void MarkApplied(Dictionary<string, object> documentValues)
+    {
+        foreach (var pair in documentValues)
+        {
+            _lastAppliedValues[pair.Key] = pair.Value;
+        }
     }
 
     public void RemoveValues(IEnumerable<string> keys)

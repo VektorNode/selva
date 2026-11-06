@@ -484,6 +484,7 @@ public class BridgeOrchestrator : IDisposable
             var currentParams = GetCurrentAvailableParameters(document);
             var currentValues = _valueCollector.CollectInputValues(
                 document, validatedSchema, _component.AddRuntimeMessage);
+            _valueApplicator.MarkApplied(currentValues);
 
             _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 

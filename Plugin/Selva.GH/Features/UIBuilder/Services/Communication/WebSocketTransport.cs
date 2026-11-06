@@ -302,6 +302,17 @@ public class WebSocketTransport : IDisposable
 
     public Task BroadcastSolveEvent(SolveEvent solveEvent)
     {
+        if (DevMode.Enabled)
+        {
+            // The envelope trace shows only "solveEvent"; which one and for which solve is the story.
+            var reason = solveEvent.Payload != null && solveEvent.Payload.TryGetValue("reason", out var r)
+                ? $" ({r})"
+                : "";
+            Logger.Trace(
+                $"[session {_sessionId}] solve {solveEvent.SolveId?.Substring(0, Math.Min(8, solveEvent.SolveId.Length))} " +
+                $"#{solveEvent.Seq} {solveEvent.Type}{reason}");
+        }
+
         return BroadcastAsync(OutboundEnvelopes.SolveEvent(_sessionId, solveEvent));
     }
 
@@ -687,6 +698,13 @@ public class WebSocketTransport : IDisposable
         try
         {
             var inbound = _inboundParser.Parse(frame.Text, _sessionId);
+            if (DevMode.Enabled)
+            {
+                var values = inbound.Values == null ? "" : $" [{string.Join(", ", inbound.Values.Keys)}]";
+                Logger.Trace(
+                    $"[session {_sessionId}] in  {inbound.MessageType} from {frame.Host ?? "browser"}, " +
+                    $"{frame.Text?.Length ?? 0} chars{values}");
+            }
 
             // Hiding the builder on the page isn't enough: the socket itself must not write.
             if (BridgeAccess.IsRefused(inbound.Kind, _role()))

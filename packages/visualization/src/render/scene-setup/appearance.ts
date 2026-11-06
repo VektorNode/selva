@@ -140,7 +140,7 @@ export function envMapIntensityForLook(material: THREE.Material, preset: LookPre
 	// Runs before the previous look's override is lifted, so read the parsed metalness.
 	const target = material as OverridableMaterial;
 	const metalness = target[BASELINE_KEY]?.metalness ?? target.metalness ?? 0;
-	return lookEnvMapIntensity(preset.envMapIntensity, metalness);
+	return lookEnvMapIntensity(preset.envMapIntensity, metalness, preset.metalReflection);
 }
 
 export type SetLookOptions = {
@@ -262,8 +262,8 @@ export function createAppearanceController(params: {
 	};
 
 	const syncEmissiveLights = () => {
-		const { emissiveLights: enabled, maxEmissiveLights } = presetOf(activeLook);
-		emissiveLights.sync(!!enabled, maxEmissiveLights);
+		const { emissiveLights: enabled, maxEmissiveLights, emissiveLightScale } = presetOf(activeLook);
+		emissiveLights.sync(!!enabled, maxEmissiveLights, emissiveLightScale);
 		requestRender();
 	};
 

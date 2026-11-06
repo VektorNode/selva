@@ -102,7 +102,11 @@ export function createMaterial(
 		material.envMapIntensity = matData.envMapIntensity;
 		material.userData[OWN_ENV_MAP_INTENSITY] = matData.envMapIntensity;
 	} else if (appearance?.envMapIntensity != null) {
-		material.envMapIntensity = lookEnvMapIntensity(appearance.envMapIntensity, matData.metalness);
+		material.envMapIntensity = lookEnvMapIntensity(
+			appearance.envMapIntensity,
+			matData.metalness,
+			appearance.metalReflection
+		);
 	}
 
 	if (matData.emissive != null) {

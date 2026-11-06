@@ -7,7 +7,7 @@ import { createMaterial } from '../src/parse/webdisplay/batch/materials.ts';
 // leg. Modelled in millimetres, with the plugin's wood UVs (partUvs below).
 const MM = 0.001;
 
-const WOODS = [
+export const WOODS = [
 	[
 		'walnut-preset',
 		{

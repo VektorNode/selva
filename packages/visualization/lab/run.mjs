@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
@@ -13,6 +13,8 @@ const { values } = parseArgs({
 		gpu: { type: 'string', default: 'auto' },
 		frames: { type: 'string' },
 		without: { type: 'string' },
+		set: { type: 'string' },
+		suite: { type: 'string' },
 		breakdown: { type: 'boolean', default: false },
 		orbit: { type: 'string' },
 		background: { type: 'string' },
@@ -63,19 +65,42 @@ const variants = values.breakdown
 	? ['', 'ao', 'bloom', 'shadows', 'emissive', 'finishes', 'ao,bloom']
 	: [values.without ?? ''];
 
+// Fixed scenes and cameras, so two labels always shoot the same frames. `night` covers every
+// material category on the night rig, close and wide, and the recorded lamp the look was built for.
+const NIGHT_CLOSE = { distance: '0.55', target: '0,-0.5,0.1' };
+const SUITES = {
+	night: [
+		...['metals', 'plastics', 'wood', 'stone', 'glass'].flatMap((category) => [
+			{ scene: `night-${category}`, look: 'night', view: 'wide' },
+			{ scene: `night-${category}`, look: 'night', view: 'close', ...NIGHT_CLOSE }
+		]),
+		{ scene: 'lamp-chrome', look: 'night', view: 'wide' },
+		{ scene: 'lamp-chrome', look: 'night', view: 'close', distance: '0.5' },
+		{ scene: 'lamp', look: 'night', view: 'wide' }
+	]
+};
+if (values.suite && !SUITES[values.suite]) {
+	throw new Error(`No suite ${values.suite}: use ${Object.keys(SUITES).join(', ')}.`);
+}
+
 const results = [];
-const combos = values.scene
-	.split(',')
-	.flatMap((scene) => values.look.split(',').map((look) => [scene, look]));
-for (const [scene, look] of combos) {
+const stats = {};
+const jobs =
+	SUITES[values.suite] ??
+	values.scene
+		.split(',')
+		.flatMap((scene) => values.look.split(',').map((look) => ({ scene, look })));
+for (const job of jobs) {
+	const { scene, look, view } = job;
 	let full;
 	for (const without of variants) {
 		const page = await (await browser.newContext(values.phone ? PHONE : DESKTOP)).newPage();
 		page.on('pageerror', (error) => console.error(`${scene}/${look}:`, error.message));
 
 		const query = new URLSearchParams({ scene, look, manual: '' });
-		for (const key of ['frames', 'turn', 'distance', 'target', 'orbit', 'background']) {
-			if (values[key] != null) query.set(key, values[key]);
+		for (const key of ['frames', 'turn', 'distance', 'target', 'orbit', 'background', 'set']) {
+			const value = job[key] ?? values[key];
+			if (value != null) query.set(key, value);
 		}
 		if (without) query.set('without', without);
 		await page.goto(`http://localhost:${port}/?${query}`);
@@ -85,7 +110,7 @@ for (const [scene, look] of combos) {
 			timeout: 60000
 		});
 
-		const name = [scene, look, values.phone && 'phone', without && `no-${without}`]
+		const name = [scene, view ?? look, values.phone && 'phone', without && `no-${without}`]
 			.filter(Boolean)
 			.join('-');
 		if (values.bench || values.breakdown) {
@@ -100,6 +125,7 @@ for (const [scene, look] of combos) {
 		}
 		const image = await page.evaluate(() => window.lab.shot());
 		await writeFile(`${outDir}${name}.png`, Buffer.from(image, 'base64'));
+		stats[name] = await page.evaluate(() => window.lab.measure());
 		await page.context().close();
 	}
 }
@@ -113,4 +139,20 @@ if (results.length) {
 	console.log(gpu);
 	await writeFile(`${outDir}bench.json`, JSON.stringify(results, null, '\t'));
 }
-console.log(`Images in ${outDir}`);
+// Merged, so several runs into one label (one scene each) keep each other's numbers, as their images do.
+const earlier = await readFile(`${outDir}stats.json`, 'utf8').then(JSON.parse, () => ({}));
+await writeFile(`${outDir}stats.json`, JSON.stringify({ ...earlier, ...stats }, null, '	'));
+console.table(
+	Object.fromEntries(
+		Object.entries(stats).map(([name, { frame, objects }]) => [
+			name,
+			{
+				mean: frame?.mean,
+				clippedPercent: frame?.clippedPercent,
+				crushedPercent: frame?.crushedPercent,
+				greyCard: objects['ref-grey-ball']?.mean
+			}
+		])
+	)
+);
+console.log(`Images and stats.json in ${outDir}`);

@@ -223,6 +223,14 @@ Rhino 9 on Windows is the primary platform: develop, debug and test against it f
 
 `pnpm install:plugin` builds the production plugin and installs it into Rhino 8's and 9's package folders, where a released install lives (`--skip-build` reinstalls the last build). Close Rhino first: it locks `Selva.gha`.
 
+For debugging, install with `pnpm install:plugin:dev` instead. Then:
+
+- `pnpm plugin:logs` follows a JSON-lines log of every Logger call, every bridge message in and out, and unhandled exceptions with stacks. Filter with `--level warn`, `--grep <session>` or `--since 10m`; `--json` gives raw lines.
+- `pnpm plugin:session` lists live sessions with their full URL, secret included.
+- `lab:record` and `bridge-drive.mjs` connect to the newest live session when no URL is given.
+
+A plain `install:plugin` turns this off again.
+
 To load a build from the Libraries folder instead, uninstall the package first, or Grasshopper loads both. Copy the whole TFM folder: `Selva.Panel.rhp` and the dependencies sit beside `Selva.gha`.
 
 ```bash

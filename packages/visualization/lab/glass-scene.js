@@ -7,7 +7,7 @@ import { createMaterial } from '../src/parse/webdisplay/batch/materials.ts';
 const MM = 0.001;
 
 // The plugin's Glass preset, as it arrives on the wire.
-const GLASS = {
+export const GLASS = {
 	color: '#ffffff',
 	metalness: 0,
 	roughness: 0.05,
@@ -16,7 +16,7 @@ const GLASS = {
 	transmission: 1,
 	ior: 1.52
 };
-const TINTED_GLASS = { ...GLASS, thickness: 1000, attenuationColor: '#6fb7a4' };
+export const TINTED_GLASS = { ...GLASS, thickness: 1000, attenuationColor: '#6fb7a4' };
 const ALUMINIUM = {
 	color: '#b9bec4',
 	metalness: 1,
