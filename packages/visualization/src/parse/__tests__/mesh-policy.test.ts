@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
-import { cloneSceneObjects, meshPolicy, releaseSceneObjects } from '../mesh-policy.js';
+import {
+	cloneSceneObjects,
+	meshPolicy,
+	releaseSceneObjects,
+	sceneObjectsByteSize
+} from '../mesh-policy.js';
 
 // `@selvajs/solve`'s result memo keeps meshes opaque and injects these rules, so this is the
 // only place the actual clone/dispose semantics are pinned — the memo's suite proves it CALLS
@@ -89,5 +94,29 @@ describe('releaseSceneObjects', () => {
 
 		expect((stored[0] as THREE.Mesh).geometry.attributes.position).toBeDefined();
 		expect(meshPolicy.clone(stored)[0]).not.toBe(served[0]);
+	});
+});
+
+describe('sceneObjectsByteSize', () => {
+	it('sums every attribute and index buffer through the subtree', () => {
+		const mesh = meshWithChild();
+		const expected = [mesh, mesh.children[0] as THREE.Mesh].reduce((sum, m) => {
+			const g = m.geometry;
+			const attributes = Object.values(g.attributes).reduce(
+				(s, a) => s + (a as THREE.BufferAttribute).array.byteLength,
+				0
+			);
+			return sum + attributes + (g.index?.array.byteLength ?? 0);
+		}, 0);
+
+		expect(sceneObjectsByteSize([mesh])).toBe(expected);
+		expect(expected).toBeGreaterThan(0);
+	});
+
+	it('counts a geometry shared by two meshes once', () => {
+		const geometry = new THREE.BoxGeometry(1, 1, 1);
+		const one = sceneObjectsByteSize([new THREE.Mesh(geometry)]);
+
+		expect(sceneObjectsByteSize([new THREE.Mesh(geometry), new THREE.Mesh(geometry)])).toBe(one);
 	});
 });

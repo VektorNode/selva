@@ -60,7 +60,7 @@ A push, PR or merge made with `GITHUB_TOKEN` starts no workflows, and a push wit
 Setup:
 
 1. [Create the App](https://github.com/organizations/VektorNode/settings/apps/new): any name, homepage `https://github.com/VektorNode/selva`, webhook **Active** unticked, repository permissions Contents, Pull requests and Workflows set to **Read and write**, installable only on this account.
-2. On the App's page, note the **App ID** and generate a private key (`.pem`).
+2. Note the **App ID** under **General**, then **Credentials** → **Key pairs** → **New key** downloads the `.pem`.
 3. **Install App** → VektorNode → only `selva`.
 4. Store both in Actions and in Dependabot secrets (a Dependabot-triggered run reads only the latter), then delete the `.pem`:
 

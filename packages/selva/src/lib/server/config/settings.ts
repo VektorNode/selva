@@ -230,7 +230,8 @@ export const RETIRED_KEYS: Readonly<Record<string, string>> = {
 	SUPABASE_PRIVATE_URL_PREFIX: 'fixed at /api/files',
 	COMPUTE_SOLVE_DEADLINE_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
 	MAX_SOLVE_DURATION_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
-	COMPUTE_REUSE_DEFINITION_CACHE: 'on whenever the compute server reports /limits'
+	COMPUTE_REUSE_DEFINITION_CACHE: 'on whenever the compute server reports /limits',
+	COMPUTE_CACHE_ERRORED_SOLVES: 'removed'
 };
 
 /**

@@ -18,6 +18,12 @@ function composeManifest(parts) {
 		}
 	return out;
 }
+// ../platform/src/utils/trim.ts
+function trimTrailing(s, ch) {
+	let end = s.length;
+	while (end > 0 && s[end - 1] === ch) end--;
+	return s.slice(0, end);
+}
 // ../platform/src/config/resolve.ts
 var TRUE = /* @__PURE__ */ new Set(['true', '1', 'yes', 'on']);
 var FALSE = /* @__PURE__ */ new Set(['false', '0', 'no', 'off']);
@@ -49,7 +55,7 @@ function parse(spec, raw) {
 				new URL(v);
 				return {
 					ok: true,
-					value: v.replace(/\/+$/, '')
+					value: trimTrailing(v, '/')
 				};
 			} catch {
 				return {
@@ -122,7 +128,7 @@ function parse(spec, raw) {
 function isKey32(v) {
 	if (/^[0-9a-fA-F]{64}$/.test(v)) return true;
 	const buf = Buffer.from(v, 'base64');
-	return buf.length === 32 && buf.toString('base64').replace(/=+$/, '') === v.replace(/=+$/, '');
+	return buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(v, '=');
 }
 /** What `raw` meant to the reader before it parsed strictly. */
 function legacyValue(spec, raw) {
@@ -1107,7 +1113,8 @@ var RETIRED_KEYS = {
 	SUPABASE_PRIVATE_URL_PREFIX: 'fixed at /api/files',
 	COMPUTE_SOLVE_DEADLINE_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
 	MAX_SOLVE_DURATION_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
-	COMPUTE_REUSE_DEFINITION_CACHE: 'on whenever the compute server reports /limits'
+	COMPUTE_REUSE_DEFINITION_CACHE: 'on whenever the compute server reports /limits',
+	COMPUTE_CACHE_ERRORED_SOLVES: 'removed'
 };
 /**
  * The manifest for this deployment: engine and app keys, plus the slices of

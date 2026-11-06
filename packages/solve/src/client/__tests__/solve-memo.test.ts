@@ -217,3 +217,52 @@ describe('createSolveMemo — mesh ownership', () => {
 		expect(policy.released).toBe(0);
 	});
 });
+
+describe('createSolveMemo — byte budget', () => {
+	/** Every fake mesh weighs 100 bytes; clones are counted so a skipped copy is visible. */
+	function sizedPolicy() {
+		const policy = Object.assign(trackingPolicy(), {
+			clones: 0,
+			byteSize: (meshes: FakeMesh[]) => meshes.length * 100
+		});
+		const clone = policy.clone;
+		policy.clone = (meshes) => {
+			policy.clones++;
+			return clone(meshes);
+		};
+		return policy;
+	}
+
+	it('evicts the oldest entries once the bytes exceed the budget', () => {
+		const policy = sizedPolicy();
+		const memo = createSolveMemo<FakeMesh>({ maxBytes: 250, meshPolicy: policy });
+		memo.set({ k: 1 }, meshResult('a'));
+		memo.set({ k: 2 }, meshResult('b'));
+
+		memo.set({ k: 3 }, meshResult('c')); // 300 bytes: evicts k:1
+		expect(memo.get({ k: 1 })).toBeUndefined();
+		expect(memo.get({ k: 2 })).toBeDefined();
+		expect(policy.released).toBe(1);
+	});
+
+	it('never stores, or copies, a result larger than the whole budget', () => {
+		const policy = sizedPolicy();
+		const memo = createSolveMemo<FakeMesh>({ maxBytes: 150, meshPolicy: policy });
+		memo.set({ k: 1 }, meshResult('small'));
+
+		memo.set({ k: 2 }, { outputs: {}, meshes: [mesh('a'), mesh('b')] }); // 200 bytes
+		expect(memo.get({ k: 2 })).toBeUndefined();
+		expect(memo.get({ k: 1 })).toBeDefined();
+		expect(policy.clones).toBe(2); // k:1 in, k:1 served; never k:2
+	});
+
+	it('frees the budget on clear()', () => {
+		const memo = createSolveMemo<FakeMesh>({ maxBytes: 150, meshPolicy: sizedPolicy() });
+		memo.set({ k: 1 }, meshResult('a'));
+		memo.clear();
+
+		memo.set({ k: 2 }, meshResult('b'));
+		memo.set({ k: 2 }, meshResult('b2')); // overwrite must not double-count
+		expect(memo.get({ k: 2 })!.outputs).toEqual({ out: 'b2' });
+	});
+});

@@ -29,6 +29,7 @@ The viewer is a preview, not a photometric simulation. Light spreads evenly from
 
 - **Put the source inside its housing.** Light leaves from the middle of the glowing part, and the rest of the model blocks it. A bulb inside a shade throws a pool of light; a glowing shade lights everything.
 - **Separate sources from glowing surfaces.** Anything under a third of the strongest strength glows but casts no light. Give a frosted diffuser about 0.3 of its bulb.
+- **Make a diffuser glass.** A cover in front of the bulb blocks its light like any other part, even when transparent. Give its Three Material a Transmission above 0: glass casts no shadow.
 - **Light a building with some of its windows.** Split the glazing into two groups, and give only the lit ones an Emissive Material.
 - **Three sources at most cast light,** the strongest first. Each one costs rendering time, so a street of lamps should glow instead.
 - **Phones get a lighter Night:** one source casts light, with no bloom or contact shading, at a lower resolution. Check a design with several lamps on a phone.

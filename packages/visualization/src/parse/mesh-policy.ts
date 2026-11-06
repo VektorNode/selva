@@ -30,11 +30,31 @@ export function releaseSceneObjects(meshes: THREE.Object3D[]): void {
 	meshes.forEach((root) => disposeObjectTree(root, { materials: false }));
 }
 
+/** Geometry bytes only: the memo's copies share materials and textures with the live scene. */
+export function sceneObjectsByteSize(meshes: THREE.Object3D[]): number {
+	let bytes = 0;
+	const seen = new Set<THREE.BufferGeometry>();
+	for (const root of meshes) {
+		root.traverse((child) => {
+			const geometry = (child as Partial<THREE.Mesh>).geometry;
+			if (!geometry || seen.has(geometry)) return;
+			seen.add(geometry);
+			for (const attribute of Object.values(geometry.attributes)) {
+				bytes += (attribute as THREE.BufferAttribute).array.byteLength;
+			}
+			if (geometry.index) bytes += geometry.index.array.byteLength;
+		});
+	}
+	return bytes;
+}
+
 /** Structurally, not nominally, typed as `@selvajs/solve/client`'s `MeshPolicy<THREE.Object3D>` — avoids a dependency on solve. */
 export const meshPolicy: {
 	clone(meshes: THREE.Object3D[]): THREE.Object3D[];
 	release(meshes: THREE.Object3D[]): void;
+	byteSize(meshes: THREE.Object3D[]): number;
 } = {
 	clone: cloneSceneObjects,
-	release: releaseSceneObjects
+	release: releaseSceneObjects,
+	byteSize: sceneObjectsByteSize
 };

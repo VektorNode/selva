@@ -9,22 +9,25 @@ description: 'Moving a 4.19 deployment to 4.20: the .env changes that stop boot,
 
 For a deployment on 4.19 installed with `@selvajs/cli`, on the local provider, with local or header (Entra) auth. Supabase deployments have extra database migrations, not covered here.
 
+Most deployments only need the checklist. Steps 4 and 9 apply only if you set `COMPUTE_SOLVE_DEADLINE_MS` or use header auth.
+
 ## Checklist
 
 1. **Back up** `.env` and the whole `DATA_PATH` folder (and `HEADER_AUTH_DATA_DIR` if you set it apart).
-2. **Check `.env` for values that now stop boot** (see [Strict `.env` parsing](#strict-env-parsing)). The 4.19 CLI has no `config` command, but the new one runs against a 4.19 install: `npx @selvajs/cli@latest config show` in the deployment folder reads `.env` against the new rules without touching the app. Or check by hand:
-   - `SELVA_HMAC_KEY` set and at least 32 characters, on every auth provider, header auth included.
-   - `SELVA_AT_REST_KEY` exactly 64 hex characters or 32 bytes of base64, with no stray characters.
-   - Every `SELVA_FLAG_*`, `ALLOW_INSECURE_COOKIES` and `SMTP_SECURE` is one of `true false 1 0 yes no on off`.
-   - `ORIGIN`, `SENTRY_DSN` and `SELVA_EVENT_CALLBACK_ORIGIN`, if set, are absolute URLs.
-3. **Update the Rhino.Compute fork first** with the updater in [Rhino Compute setup](../get-started/rhino-compute.md), so it answers `/limits`. **Move long solve deadlines to Rhino.Compute.** If you set `COMPUTE_SOLVE_DEADLINE_MS`, set `--timeout` (`RHINO_COMPUTE_TIMEOUT`) on the compute server instead. See [Compute limits come from the server](#compute-limits-come-from-the-compute-server).
-4. **Update:** `npm run update` (or `npx selva update`). It stops the app, updates `@selvajs/cli` and `@selvajs/selva`, and starts it again.
-5. **If the app doesn't come up:** `npx selva config show` names each bad value. Fix it with `npx selva config set KEY=VALUE`, then `npm run restart`.
-6. **Clean `.env`:** `npx selva migrate --dry-run`, then `npx selva migrate`. It removes retired keys and keeps every setting's meaning. It also strips the copied template comments from `.env`; short notes directly above a setting stay.
-7. **Swap the pm2 daemon:** `npx pm2 update`, then `npx pm2 list` until `selva-compute` is `online`, then `npx pm2 save` and `npm run doctor`. `migrate` pinned pm2 7.1.2, but the running daemon stays on the old version until `pm2 update`. See [pm2 7.1.2](#pm2-712).
-8. **Header auth only:** update the Caddyfile for the new bypass routes, and check the Caddy and oauth2-proxy versions. See [Header auth (Entra)](#header-auth-entra).
-9. **Check `/admin/system`** (config report, key status) and **`/admin/compute`** (what each compute server reports).
-10. **Update `Selva.gha`** on every machine that edits definitions. See [Grasshopper plugin](#grasshopper-plugin).
+2. **Check `.env` for values that now stop boot.** In the deployment folder, run `npx --package=@selvajs/cli@latest selva config show`. It reads `.env` against the 4.20 rules without touching the app, marks each bad value with `✗` and the reason, and ends with how many settings would stop boot. The 4.19 CLI has no `config` command, and `npx @selvajs/cli@latest config show` would run the installer instead. To check by hand, see [Strict `.env` parsing](#strict-env-parsing).
+3. **Update the Rhino.Compute fork** with the updater in [Rhino Compute setup](../get-started/rhino-compute.md). On an older build Selva re-uploads the `.gh` on every solve. See [Compute limits](#compute-limits-come-from-the-compute-server).
+4. **If you set `COMPUTE_SOLVE_DEADLINE_MS`:** set `--timeout` (`RHINO_COMPUTE_TIMEOUT`) on the compute server instead. Selva ignores the old setting.
+5. **Update Selva:** `npm run update` (or `npx selva update`). It stops the app, updates `@selvajs/cli` and `@selvajs/selva`, and starts it again.
+6. **If the app doesn't come up:** `npx selva config show` names each bad value. Fix it with `npx selva config set KEY=VALUE`, then `npm run restart`.
+7. **Clean `.env`:** `npx selva migrate --dry-run`, then `npx selva migrate`. It removes retired keys, keeps every setting's meaning and pins pm2 7.1.2. It also strips the copied template comments; short notes directly above a setting stay.
+8. **Swap the pm2 daemon.** The app keeps running under the old pm2 until you do. See [pm2 7.1.2](#pm2-712).
+   1. `npx pm2 update`. The app goes down briefly. Don't interrupt it.
+   2. `npx pm2 list`, until `selva-compute` shows `online`.
+   3. `npx pm2 save`. **Only once `selva-compute` is online:** saving an empty list overwrites the list pm2 restores after a reboot.
+   4. `npm run doctor`.
+9. **Header auth only:** update the Caddyfile for the new bypass routes, and check the Caddy and oauth2-proxy versions. See [Header auth (Entra)](#header-auth-entra).
+10. **Check `/admin/system`** (config report, key status) and **`/admin/compute`** (what each compute server reports).
+11. **Update `Selva.gha`** on every machine that edits definitions. See [Grasshopper plugin](#grasshopper-plugin).
 
 ## Breaking
 
@@ -34,15 +37,13 @@ For a deployment on 4.19 installed with `@selvajs/cli`, on the local provider, w
 
 What stops boot:
 
-- `SELVA_HMAC_KEY` missing or shorter than 32 characters. Before, only the local auth provider checked it; now every provider does.
+- `SELVA_HMAC_KEY` missing or shorter than 32 characters. Before, only the local auth provider checked it; now every provider does, header auth included.
 - `SELVA_AT_REST_KEY` that isn't 32 bytes as 64 hex characters or base64. Padding or a passphrase that only looks like base64 is refused.
-- A boolean that isn't `true|false|1|0|yes|no|on|off` (case-insensitive). `SELVA_FLAG_ENABLE_SHARING=enabled` used to mean off.
-- A URL setting that isn't an absolute URL, an out-of-range `PORT`, a `SELVA_TENANCY` other than `single|multi`, `SIGN_IN_MAX_AGE_DAYS` that isn't a whole number.
-- `SMTP_PORT` out of range.
+- A boolean that isn't `true|false|1|0|yes|no|on|off` (case-insensitive). This covers every `SELVA_FLAG_*`, `ALLOW_INSECURE_COOKIES` and `SMTP_SECURE`. `SELVA_FLAG_ENABLE_SHARING=enabled` used to mean off.
+- A URL setting (`ORIGIN`, `SENTRY_DSN`, `SELVA_EVENT_CALLBACK_ORIGIN`) that isn't an absolute URL.
+- An out-of-range `PORT` or `SMTP_PORT`, a `SELVA_TENANCY` other than `single|multi`, a `SIGN_IN_MAX_AGE_DAYS` that isn't a whole number.
 
 Tunables (cache sizes, queue depth, `LOG_LEVEL`) still warn and fall back to the default.
-
-Code: `packages/server/src/config/settings.ts`, `packages/selva/src/lib/server/config/settings.ts`, `boot.server.ts`.
 
 ### Retired env vars
 
@@ -65,18 +66,18 @@ These are ignored. Boot logs `Retired env var, ignored: run selva migrate` for e
 
 If you had raised one of the fixed caps, it is back at the value shown. `COMPUTE_DEFINITION_BYTE_CACHE_MB` and `COMPUTE_RESPONSE_CACHE_MB` still work as aliases of `COMPUTE_DEFINITION_CACHE_MB` and `COMPUTE_SOLVE_CACHE_MB`, with a boot warning.
 
+The CLI released with 4.20.0 misses `COMPUTE_CACHE_ERRORED_SOLVES`: it reports it as an unknown key and `migrate` leaves it in place. Delete the line by hand; nothing reads it.
+
 ### Compute limits come from the compute server
 
-Selva no longer sets a solve's deadline or whether to reuse Rhino.Compute's cached definition. It asks each server (`GET /limits`) and shows the answer on `/admin/compute`.
+Selva no longer sets a solve's deadline or decides whether to reuse the definition Rhino.Compute already holds. It asks each compute server (`GET /limits`, an endpoint the VektorNode fork added) and shows the answer on `/admin/compute`.
 
-- **Server that reports `/limits`** (a current VektorNode fork build): the deadline is its `--timeout` plus 5 s, capped at one hour, and the cached definition is reused.
+- **Server that reports `/limits`** (a current fork build): the deadline is its `--timeout` plus 5 s, capped at one hour, and the cached definition is reused.
 - **Server that doesn't** (McNeel's stock build, older fork builds): the deadline is 100 s, and Selva **re-uploads the `.gh` on every solve**, which 4.19 did not do by default. Large definitions get slower. Update the fork to fix it.
 
 A deployment that ran solves longer than 100 s through `COMPUTE_SOLVE_DEADLINE_MS` now times out at 100 s until the compute server reports a longer `--timeout`. Raise the reverse proxy's read timeout to match.
 
-The fork ships as the latest CI build of its `8.x.selva` branch, not as tagged releases. Re-run the updater from [Rhino Compute setup](../get-started/rhino-compute.md) on the compute machine before updating Selva; any `8.x.selva` build from November 2026 on answers `/limits`. `/admin/compute` shows what yours reports.
-
-Code: `packages/solve/src/server/server-limits.ts`, `packages/compute/src/grasshopper/server/compute-server-stats.ts`.
+The fork ships as the latest CI build of its `8.x.selva` branch, not as tagged releases. Re-run the updater from [Rhino Compute setup](../get-started/rhino-compute.md) on the compute machine before updating Selva; any `8.x.selva` build from November 2026 on answers `/limits`.
 
 ### Compute server URLs that redirect
 
@@ -97,9 +98,9 @@ Stored keys in the old `enc:v1:` format still decrypt and are rewritten as `enc:
 
 The deployment's pinned pm2 moves from 7.0.3 to 7.1.2. 7.1.2 drops the proxy and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml); afterwards `npm audit --omit=dev` reports none from pm2.
 
-This upgrade runs on the 4.19 updater, which doesn't change pm2: `selva migrate` writes the new pin, and `npx pm2 update` replaces the running daemon (the app goes down briefly). Let `pm2 update` finish; interrupting it leaves `selva-compute` unregistered. Run `npx pm2 save` only once `npx pm2 list` shows `selva-compute` online: saving an empty list overwrites the record pm2 restores from. If the list is empty, run `npx selva start`, then save. Details: [Upgrading pm2](./prerequisites.md#upgrading-pm2).
+This upgrade runs on the 4.19 updater, which doesn't touch pm2. That's why the checklist has two steps: `selva migrate` writes the new pin, and `npx pm2 update` replaces the running daemon. If `pm2 update` was interrupted and `npx pm2 list` is empty, run `npx selva start`, then `npx pm2 save`. Details: [Upgrading pm2](./prerequisites.md#upgrading-pm2).
 
-From 4.20 on, the in-app update and `npm run update` move pm2 to the release's pin themselves and swap the daemon. Under systemd the in-app update can't swap it and ends with a warning to run `npx pm2 update` from a shell. `npm run doctor` now also fails when `selva-compute` isn't online.
+From 4.20 on, the in-app update and `npm run update` move pm2 to the release's pin and swap the daemon themselves. Under systemd the in-app update can't swap it and ends with a warning to run `npx pm2 update` from a shell. `npm run doctor` now also fails when `selva-compute` isn't online.
 
 Don't run `npm audit fix --force` in the deployment: it replaces the exact pm2 pin with a range, and doctor then fails on the pin.
 
@@ -109,28 +110,37 @@ The 3D viewer and display meshes in Selva now follow the definition's `viewerOpt
 
 ## Header auth (Entra)
 
-**An existing Entra setup keeps signing people in unchanged.** Header names and defaults (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`), `HEADER_AUTH_*` settings, the allowlist file format and the bootstrap rule are the same. Verified in `packages/providers/header-auth/src/`.
+**An existing Entra setup keeps signing people in unchanged.** Header names and defaults (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`), `HEADER_AUTH_*` settings, the allowlist file format and the bootstrap rule are the same.
 
 What changed:
 
 - **Email fallback is narrower.** When the UPN header matches no allowlist row, Selva still falls back to the email header, but now only matches rows whose UPN is that address (people pre-allowlisted by email). It no longer matches the `email` column, which proxy headers write. A user whose Entra UPN changed since their first sign-in, and who was matched through that column, is refused. Fix their row's `upn` in `header-allowlist.json`.
-- **New routes must skip `forward_auth`** if you want API tokens, MCP clients or the Grasshopper plugin's "Upload to Selva": requests with `Authorization: Bearer selva_*`, `/mcp`, `/.well-known/oauth-*`, `/oauth/register` and `/oauth/token`. Without the bypass oauth2-proxy redirects them to the Entra login and they fail; browser use is unaffected. The working Caddyfile is in [header-auth-entra.md](../providers/header-auth-entra.md).
+- **New routes must skip `forward_auth`**, the Caddy step that sends a request to oauth2-proxy and the Entra login. API tokens, MCP clients and the Grasshopper plugin's "Upload to Selva" need it skipped for requests with `Authorization: Bearer selva_*`, `/mcp`, `/.well-known/oauth-*`, `/oauth/register` and `/oauth/token`. Without the bypass they are redirected to the Entra login and fail; browser use is unaffected. The working Caddyfile is in [header-auth-entra.md](../providers/header-auth-entra.md).
 - **Live solve progress** posts from Rhino.Compute to `/api/v1/solve-events/<id>`. Behind `forward_auth` those posts were refused, in 4.19 too, so the page showed no progress (solves still finished). The same Caddyfile lets them through; the route checks a per-solve token.
 - **Proxy versions:** use Caddy 2.11.2 or later and oauth2-proxy 7.15.5 or later. Older versions have header-passthrough and log-leak advisories, linked from the Entra guide.
 - Optional: `SIGN_IN_MAX_AGE_DAYS`. Under header auth every request through the proxy counts as a sign-in, so an API token whose owner hasn't come through the proxy for that many days is revoked. This is what retires the keys of someone disabled in Entra. Off by default.
 
 ## Local data
 
-**Local data on disk is read as-is; there is no migration step.** Verified in `packages/providers/local/src/`:
+**Local data on disk is read as-is; there is no migration step.**
 
 - Existing JSON files keep their shape. New fields are optional (`sourceDocumentId` on definitions). API tokens go in a new `DATA_PATH/api-tokens.json`.
 - Sessions, invite links and share links issued by 4.19 keep working. New tokens are stored as unkeyed SHA-256; old ones still resolve under the current or previous `SELVA_HMAC_KEY`.
 - Writes to each JSON file are now serialized, so concurrent saves no longer lose an invite, grant, share link or compute server.
 - An org whose slug is now reserved (`docs`, `mcp`, `oauth`) still loads and works: the reserved list is checked only when an org is created or its slug is changed, and no route reads an org by slug.
 - The provider now caches the org, definition, user-data and `auth-users.json` files in memory. Stop the app before hand-editing one, or the next write overwrites your edit. `header-allowlist.json` is still read on every request, so editing it live is fine.
-- Erasing a user now also removes their invites, memberships, grants, share links and API tokens. Their orgs, projects and definitions stay, under the erased-actor id.
+- Erasing a user now also removes their invites, memberships, grants, share links and API tokens. Their orgs, projects and definitions stay, owned by a placeholder for the erased user.
 
-## Behaviour changes worth knowing
+## What your users notice
+
+- A new look: Hanken Grotesk, reworked light and dark themes, and a phone layout.
+- Share links created without an expiry now expire after 90 days. Existing links keep theirs.
+- Restarts and updates no longer wait out pm2's `kill_timeout`. Open tabs show "Selva has been updated" with a Reload button.
+- A stored definition solves with the inputs from its version's schema; inputs sent in the request are ignored, and number bounds are enforced on the server. A version whose schema can't be read answers 503.
+- A value that can't be coerced (text in a number input) is left out, so Grasshopper keeps its own value. 4.19 sent `0` or the minimum. `generic` inputs now reach Grasshopper.
+- Uploaded images over 60 megapixels are refused; stored images fit within 1200 px on both sides.
+
+## What admins notice
 
 **Config and keys**
 
@@ -138,6 +148,7 @@ What changed:
 - `selva keys rotate hmac|at-rest` keeps the old key working for 30 days as `<KEY>_PREVIOUS`. Changing a key by hand without that still breaks sessions or stored compute API keys.
 - An `http://` `ORIGIN` drops the `Secure` cookie flag by itself; `ALLOW_INSECURE_COOKIES` is only needed to override.
 - `selva setup-proxy` writes `max_size 256MiB`. Caddy reads `256mb` as 10^6-byte megabytes, slightly under the app's cap, so change it by hand in an older Caddyfile.
+- Optional: `SENTRY_TRACES_SAMPLE_RATE` (0–1) turns on Sentry tracing; 0 sends errors only. Sentry events are scrubbed of cookies, auth headers, bodies and query strings.
 - SvelteKit 3 underneath. `.env`, the start command and the proxy setup are unchanged; Selva applies `ORIGIN` itself.
 
 **API tokens, MCP, OAuth** (new, on by default)
@@ -146,21 +157,19 @@ What changed:
 - `/mcp` serves MCP clients, which sign in through `/oauth/authorize`. `MCP_ALLOWED_ORIGINS` adds browser origins.
 - 600 requests per token per minute (`API_TOKEN_RATE_LIMIT_MAX`, 0 turns it off). Browser sessions are not charged.
 - Disabling a user revokes all their keys; removing a member revokes their keys in that org.
+- Org members, invites and org compute config can't be changed with an API key; those need a browser session.
 
-**Access and admin**
+**Access**
 
 - Deleting the only owner of an org answers 409: make someone else owner or delete the org first.
-- Only the org owner can change an owner's or admin's permissions. Member role changes need a browser session, not an API key.
+- Only the org owner can change an owner's or admin's permissions.
 - Accepting an invite checks the inviter is still enabled and in the org.
-- Share links created without an expiry now expire after 90 days. Existing links keep theirs.
 - On commons projects, uploading needs view access; with `SELVA_FLAG_ALLOW_CROSS_ORG_PUBLIC` off, outsiders can't upload there.
-- Uploaded images over 60 megapixels are refused; stored images fit within 1200 px on both sides.
 
-**Solving**
+**Scripts and integrations**
 
-- A stored definition solves with the inputs from its version's schema; inputs in the request body are ignored, and number bounds are enforced on the server. A version whose schema can't be read answers 503.
-- A value that can't be coerced (text in a number input) is left out, so Grasshopper keeps its own value. 4.19 sent `0` or the minimum. `generic` inputs now reach Grasshopper.
-- Restarts and updates no longer wait out pm2's `kill_timeout`. Open tabs show "Selva has been updated" with a Reload button.
+- A 429 answers with `code: RATE_LIMITED`, and the compute route moved `retryAfter` into `details.retryAfter`. The `Retry-After` header is unchanged.
+- A share link created with `expiresAt: null` still never expires; leaving `expiresAt` out now means 90 days.
 
 ## Grasshopper plugin
 

@@ -44,11 +44,21 @@ export interface MeshPolicy<TMesh> {
 	clone(meshes: TMesh[]): TMesh[];
 	/** Must not free anything shared with live content (e.g. materials another object still uses). */
 	release(meshes: TMesh[]): void;
+	/** Bytes the meshes hold. Without it the memo caps by entry count only. */
+	byteSize?(meshes: TMesh[]): number;
 }
 
+/**
+ * Every entry is a full copy of its geometry, next to the copy on screen. A 13.6-million-triangle
+ * scene is about 390 MB per copy, so a count cap alone lets 16 entries reach 6 GB.
+ */
+export const DEFAULT_MEMO_MAX_BYTES = 256 * 1024 * 1024;
+
 export interface SolveMemoOptions<TMesh> {
-	/** Entry cap, not a byte cap. Kept small on purpose: this targets the slider-scrub loop, not a durable cache. */
+	/** Entry cap. Kept small on purpose: this targets the slider-scrub loop, not a durable cache. */
 	max?: number;
+	/** Mesh bytes across all entries, measured by `meshPolicy.byteSize`. A result larger than this is not memoized. */
+	maxBytes?: number;
 	meshPolicy?: MeshPolicy<TMesh>;
 }
 
@@ -61,8 +71,9 @@ export interface SolveMemo<TMesh = unknown> {
 export function createSolveMemo<TMesh = unknown>(
 	options: SolveMemoOptions<TMesh> = {}
 ): SolveMemo<TMesh> {
-	const { max = 16, meshPolicy } = options;
-	const entries = new Map<string, SolveResult<TMesh>>();
+	const { max = 16, maxBytes = DEFAULT_MEMO_MAX_BYTES, meshPolicy } = options;
+	const entries = new Map<string, { result: SolveResult<TMesh>; bytes: number }>();
+	let totalBytes = 0;
 
 	function release(result: SolveResult<TMesh>): void {
 		if (result.meshes?.length) meshPolicy?.release(result.meshes);
@@ -77,7 +88,8 @@ export function createSolveMemo<TMesh = unknown>(
 		const entry = entries.get(key);
 		if (entry === undefined) return;
 		entries.delete(key);
-		release(entry);
+		totalBytes -= entry.bytes;
+		release(entry.result);
 	}
 
 	return {
@@ -89,20 +101,31 @@ export function createSolveMemo<TMesh = unknown>(
 			entries.set(key, hit);
 			// eslint-disable-next-line no-console -- fires per frame during a slider scrub
 			console.debug(`[Solve/memo] HIT — served from client memo (${entries.size}/${max})`);
-			return copy(hit);
+			return copy(hit.result);
 		},
 		set(values, result) {
 			const key = stableInputKey(values);
 			evict(key);
-			entries.set(key, copy(result));
+			const bytes = result.meshes?.length ? (meshPolicy?.byteSize?.(result.meshes) ?? 0) : 0;
+			// Measured before cloning, so an oversized result never costs its copy.
+			if (bytes > maxBytes) {
+				// eslint-disable-next-line no-console -- once per solve of an oversized scene
+				console.debug(
+					`[Solve/memo] not memoized: ${(bytes / 1048576).toFixed(0)} MB of meshes exceeds ${(maxBytes / 1048576).toFixed(0)} MB`
+				);
+				return;
+			}
+			entries.set(key, { result: copy(result), bytes });
+			totalBytes += bytes;
 			for (const oldest of entries.keys()) {
-				if (entries.size <= max) break;
+				if (entries.size <= max && totalBytes <= maxBytes) break;
 				evict(oldest);
 			}
 		},
 		clear() {
-			entries.forEach(release);
+			entries.forEach((entry) => release(entry.result));
 			entries.clear();
+			totalBytes = 0;
 		}
 	};
 }
