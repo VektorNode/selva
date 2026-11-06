@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.
-
-## [0.25.0] - 2026-11-05
-
 ### Added
 
 - The UI Bridge answers `readLayout` and `applyLayout`: scripts and agents read and lay out the form by parameter nickname over the bridge's WebSocket, without the canvas. Player sessions can only read.
@@ -28,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rough glass and clear plastic (roughness 0.2 and up) render frosted, blurring what is behind them. Frosting redraws the scene a second time each frame, as glass with a Thickness does.
 - Part mapping measures V around curved faces instead of projecting it, so wood grain and brushed or rolled metal no longer jump at every facet of a tube, a turned leg or a bent panel. On a face cut across the grain, U now follows the part's widest direction instead of an arbitrary one. A bent board's grain follows the board around the bend, where it used to turn 90° at the seam between the bend and a long flat; a folded profile strip keeps its grain along the strip.
 - Metal sheet keeps its colour at every angle. A standing panel no longer turns brass olive or copper brown, and a sheet lying face-up no longer clips to white in the sun.
+- Three Material's Anisotropy stretches highlights across the grain, as grooves do, not along it. Panels with vertical grain no longer wash out to a pale card, a ball keeps its spun swirl at the pole, and brushed grain stays linear at a few metres instead of breaking into speckle.
+- Wood finishes no longer repeat on long or wide surfaces: planks vary in width, shade, taper and where the pith sits. Pores are thin, sparse dashes instead of dark blotches that hid the grain on edges.
+- The night look is lit by the model's lamps instead of fill. A surface away from any lamp goes dark, and polished metal no longer mirrors a lit studio.
+- The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.
 
 ### Fixed
 
