@@ -6,7 +6,7 @@
  *   GET /                    -> 200 "compute.rhino3d running" (proxy liveness root).
  *   GET /activechildren      -> plain-text integer (proxy writes ActiveComputeCount).
  *   GET /version             -> { rhino, compute, git_sha } lowercase (proxied to a child).
- *   GET /limits              -> { timeoutSeconds, maxRequestBytes, signalsStaleDefinition } (fork only).
+ *   GET /limits              -> { timeoutSeconds, maxRequestBytes, signalsStaleDefinition, deploymentId? } (fork only).
  *   GET /plugins/*\/installed -> { name: version } map of non-core plugins.
  *
  * The client must DEGRADE GRACEFULLY on every failure (return null/false, never
@@ -184,8 +184,26 @@ describe('getLimits', () => {
 		await expect(stats.getLimits()).resolves.toEqual({
 			timeoutSeconds: 1800,
 			maxRequestBytes: 52428800,
-			signalsStaleDefinition: true
+			signalsStaleDefinition: true,
+			deploymentId: null
 		});
+		await stats.dispose();
+	});
+
+	it('reads the deployment id a server reports', async () => {
+		route({
+			'/limits': () =>
+				res(
+					JSON.stringify({
+						timeoutSeconds: 1800,
+						maxRequestBytes: 1,
+						signalsStaleDefinition: true,
+						deploymentId: '6f1c2a'
+					})
+				)
+		});
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.getLimits()).resolves.toMatchObject({ deploymentId: '6f1c2a' });
 		await stats.dispose();
 	});
 

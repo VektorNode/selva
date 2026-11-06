@@ -10,7 +10,7 @@ const MM = 0.001;
 
 // The plugin's plastic presets (MaterialPresets.cs) as they arrive on the wire, each in a colour a
 // designer would wire into Color.
-const PLASTICS = [
+export const PLASTICS = [
 	['glossy-red', { color: '#c0262d', metalness: 0, roughness: 0.12 }],
 	['satin-white', { color: '#f2f2ee', metalness: 0, roughness: 0.38 }],
 	['matte-black', { color: '#1d1e20', metalness: 0, roughness: 0.6 }],

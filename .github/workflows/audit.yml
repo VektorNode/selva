@@ -1,0 +1,73 @@
+name: Audit
+
+# Dependency advisories. PRs run this only when they change dependencies: on
+# every PR, a new advisory would fail work that never touched one. A failed
+# scheduled run opens (or comments on) one issue.
+
+on:
+  pull_request:
+    paths:
+      - pnpm-lock.yaml
+      - Plugin/Directory.Packages.props
+      - 'Plugin/**/*.csproj'
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # `pnpm audit` reads only the lockfile, so no install.
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # --prod excludes devDeps: only what ships.
+      - run: pnpm audit --prod --audit-level moderate
+
+  # Linux restores both Rhino TFMs (EnableWindowsTargeting in Directory.Build.props).
+  nuget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      # `dotnet list package --vulnerable` exits 0 either way; the text is the result.
+      - name: List vulnerable packages
+        run: |
+          dotnet list Plugin/Selva.sln package --vulnerable --include-transitive | tee audit.txt
+          if grep -q "has the following vulnerable packages" audit.txt; then
+            echo "::error::Vulnerable NuGet packages found (see above)."
+            exit 1
+          fi
+
+  report:
+    needs: [npm, nuget]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Dependency audit failed"
+          body="The weekly audit found vulnerable production dependencies: $RUN_URL"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

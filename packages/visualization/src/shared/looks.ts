@@ -132,25 +132,28 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			emissiveIntensity: 0
 		}
 	},
-	// Triangle edges only — the tessellation itself, diagonals and all. That makes it a mesh-
-	// inspection tool, not a drawing: for a readable line drawing use `lineart`, which draws
-	// feature edges and lets near faces occlude far ones. Nothing here is a lit surface:
-	// the sun is off and fill carries the image, because a directional light on a line renders it
-	// black wherever the line runs away from the key. AO is off for the same reason — a full-screen
-	// contact pass has no contacts to find between wires, and it only costs frames.
 	// After dark: the only real light comes from what the model emits, so a lamp lights its desk.
 	// A little sky stays so the unlit half of the model keeps its shape instead of going black.
+	//
+	// The fill is cut to where white paint away from the lamp reads about 0.2 of display white:
+	// any more and the fill, not the lamp, lights the scene. A metal takes no hemisphere or ambient
+	// light, only its reflection, so `metalReflection` is set where a metal in the dark lands beside
+	// that white paint instead of reflecting a lit studio. `pnpm lab:night` measures both.
 	night: {
 		toneMapping: THREE.ACESFilmicToneMapping,
 		toneMappingExposure: 1,
-		envMapIntensity: 0.32,
-		environmentIntensity: 0.15,
-		hemisphereIntensity: 0.26,
-		ambientIntensity: 0.05,
+		envMapIntensity: 0.12,
+		metalReflection: 0.05,
+		environmentIntensity: 0.04,
+		hemisphereIntensity: 0.06,
+		ambientIntensity: 0.02,
 		cullBackfaces: false,
 		ambientOcclusion: true,
-		sunlightIntensity: 0.14,
+		sunlightIntensity: 0.03,
 		background: 0x0a0e12,
+		// Lumens map to light for a room exposed for daylight; a room at night is exposed for its
+		// lamps. Here rather than in `toneMappingExposure`, which would lift the background too.
+		emissiveLightScale: 3,
 		// Above what the environment reaches on polished metal, so only emitters glow.
 		bloom: { strength: 0.2, radius: 0.3, threshold: 1.8 },
 		emissiveLights: true,
@@ -164,6 +167,12 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			maxPixelRatio: 1.5
 		}
 	},
+	// Triangle edges only — the tessellation itself, diagonals and all. That makes it a mesh-
+	// inspection tool, not a drawing: for a readable line drawing use `lineart`, which draws
+	// feature edges and lets near faces occlude far ones. Nothing here is a lit surface:
+	// the sun is off and fill carries the image, because a directional light on a line renders it
+	// black wherever the line runs away from the key. AO is off for the same reason — a full-screen
+	// contact pass has no contacts to find between wires, and it only costs frames.
 	wireframe: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1,
@@ -213,8 +222,12 @@ export const OWN_ENV_MAP_INTENSITY = 'selvaEnvMapIntensity';
  * reflection, which is all a metal shows. Blending toward 1 by metalness keeps a dielectric's fill
  * on the look and a metal's reflection the same in every look.
  */
-export function lookEnvMapIntensity(lookValue: number, metalness: number): number {
-	return lookValue + (1 - lookValue) * Math.min(1, Math.max(0, metalness));
+export function lookEnvMapIntensity(
+	lookValue: number,
+	metalness: number,
+	metalReflection = 1
+): number {
+	return lookValue + (metalReflection - lookValue) * Math.min(1, Math.max(0, metalness));
 }
 
 /** Baked at parse time (not toggleable at runtime). */
@@ -222,6 +235,7 @@ export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions
 	const preset = LOOK_PRESETS[look];
 	return {
 		envMapIntensity: preset.envMapIntensity,
+		metalReflection: preset.metalReflection,
 		cullBackfaces: preset.cullBackfaces
 	};
 }

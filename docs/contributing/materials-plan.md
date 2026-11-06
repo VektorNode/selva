@@ -54,6 +54,11 @@ in the mesh-assembly worker. three's `computeTangents()` leaves a zero tangent w
 constant across a triangle, which renders NaN-black. No wire channel: that would cost an SLVA flag
 bit, a version gate and fixtures for the same result.
 
+three stretches highlights along its anisotropy direction, and grooves along the grain spread
+reflections across it, so `createMaterial` turns the anisotropy a quarter off U. Along U, a
+standing panel with vertical grain mirrored the overhead softbox and washed out, and a ball showed a
+black notch at its pole.
+
 ## Presets
 
 The presets live in `MaterialPresets.cs` and come out of the **Material Preset** component as a
@@ -72,6 +77,8 @@ single streak the height of the part. The normal tilts across the grain by the f
 fibres glint. Only `rolled` gets bands (long soft streaks): on brushed, bands 1.5-6 mm wide and
 150-500 mm long read as full-height streaks on a profile wall. Past pixel size a fibre layer switches
 to coarser cells standing for the rows they cover, so distance keeps the texture without shimmer.
+Each segment stays at least 16 cells long: at their own 2-12 mm, coarse stainless cells read as
+felt at 2 m.
 Fading octaves out instead left only the widest, softest one at wall distance: soft full-height
 bands, nothing like the photos. Tuned by eye against photos of brushed stainless at 120 mm, 350 mm
 and 0.9 m; `finishStrength` scales the whole finish (0 off).

@@ -53,6 +53,7 @@
 	);
 
 	let startedAt = 0;
+	let wasSolving = false;
 	let elapsed = $state(0);
 	let finished = $state<{ ms: number; aborted: boolean } | null>(null);
 	let ping = $state(0);
@@ -67,6 +68,10 @@
 	$effect(() => {
 		const solving = isSolving;
 		untrack(() => {
+			// Transitions only: the cloud session re-notifies `isSolving` unchanged on every live
+			// event and on the result, and restarting the clock there made a long solve end on 0.0 s.
+			if (solving === wasSolving) return;
+			wasSolving = solving;
 			if (solving) {
 				startedAt = performance.now();
 				shownThisSolve = show;
@@ -74,7 +79,6 @@
 				finished = null;
 				return;
 			}
-			if (!startedAt) return;
 			const ms = performance.now() - startedAt;
 			startedAt = 0;
 			if (shownThisSolve) {

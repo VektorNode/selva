@@ -1,8 +1,13 @@
+import { BufferAttribute } from 'three';
+
 import { SCALE_FACTORS, parseMeshBatchBlob } from '../src/parse/index.ts';
+import { grainTangents } from '../src/parse/webdisplay/grain-tangents.ts';
 import { initThree, updateScene } from '../src/render/index.ts';
 import { LOOK_PRESETS } from '../src/shared/index.ts';
 import { buildGlassScene } from './glass-scene.js';
 import { buildMetalScene } from './metal-scene.js';
+import { buildNightScene } from './night-scene.js';
+import { measure } from './measure.js';
 import { buildPlasticScene } from './plastic-scene.js';
 import { buildStoneScene } from './stone-scene.js';
 import { buildWoodScene } from './wood-scene.js';
@@ -50,8 +55,22 @@ async function load(names) {
 	if (names.includes('plastics')) glass.push(...buildPlasticScene());
 	if (names.includes('wood')) glass.push(...buildWoodScene());
 	if (names.includes('stone')) glass.push(...buildStoneScene());
+	for (const name of names.filter((each) => each.startsWith('night-'))) {
+		glass.push(...buildNightScene(name.slice('night-'.length)));
+	}
+	// A solve's mesh assembly adds these, and anisotropy and the fibre tilt follow them: without,
+	// three rebuilds the frame per pixel and a synthetic scene shows what no solve does.
+	for (const { geometry } of glass) {
+		const { position, normal, uv } = geometry.attributes;
+		if (!uv || !geometry.index) continue;
+		const tangents = grainTangents(position.array, normal.array, geometry.index.array, uv.array);
+		geometry.setAttribute('tangent', new BufferAttribute(tangents, 4));
+	}
 	names = names.filter(
-		(name) => !name.startsWith('glass') && !['metals', 'plastics', 'wood', 'stone'].includes(name)
+		(name) =>
+			!name.startsWith('glass') &&
+			!name.startsWith('night-') &&
+			!['metals', 'plastics', 'wood', 'stone'].includes(name)
 	);
 	if (names.length === 0) return glass;
 	const urls = Object.entries(scenes)
@@ -88,6 +107,15 @@ async function start() {
 	if (without.has('emissive')) preset.emissiveLights = false;
 	if (without.has('shadows')) render.enableShadows = false;
 	if (without.has('sun')) preset.sunlightIntensity = 0;
+
+	// `set=metalReflection:0.2,bloom.strength:0.5` retunes the look's dials without editing source.
+	for (const entry of options.set?.split(',') ?? []) {
+		const [path, value] = entry.split(':');
+		const keys = path.split('.');
+		const last = keys.pop();
+		const holder = keys.reduce((object, key) => (object[key] ??= {}), preset);
+		holder[last] = Number.isNaN(Number(value)) ? value : Number(value);
+	}
 
 	const viewer = initThree(canvas, {
 		look,
@@ -169,13 +197,32 @@ async function start() {
 		await sleep(250);
 	};
 
+	let lastShot = null;
 	window.lab = {
+		/** What each solve mesh is made of, as parsed: the first question when a scene looks wrong. */
+		materials: () =>
+			meshes.map(({ name, userData, material }) => ({
+				name: userData.name || name,
+				members: userData.members?.length ?? 1,
+				color: `#${material.color?.getHexString()}`,
+				metalness: material.metalness,
+				roughness: material.roughness,
+				emissive: material.userData.selvaEmissive
+					? `#${material.emissive.getHexString()} x${material.emissiveIntensity}`
+					: null,
+				emissiveLight: material.userData.selvaEmissiveLight ?? null,
+				opacity: material.opacity,
+				transmission: material.transmission ?? 0
+			})),
+		/** Per-object numbers for the last `shot()`. Call it last: the ID pass redraws the scene. */
+		measure: () => measure(viewer, lastShot),
 		/** Waits out the settle delay and every refine frame, so the image is the finished one. */
 		shot: async () => {
 			await settle();
 			for (let i = 0; i < refineFrames; i++) step();
 			finish();
 			const blob = await viewer.captureImage();
+			lastShot = blob;
 			const bytes = new Uint8Array(await blob.arrayBuffer());
 			return btoa(bytes.reduce((text, byte) => text + String.fromCharCode(byte), ''));
 		},

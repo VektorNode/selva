@@ -4,7 +4,10 @@
  * Builds the production plugin and installs it into Rhino's yak package folders,
  * so Rhino loads it exactly like a released install. Restart Rhino afterwards.
  *
- * `--skip-build` reinstalls the last build.
+ * `--skip-build` reinstalls the last build. `--dev` also drops the marker that turns on the plugin's
+ * dev mode: a log at <LocalAppData>/Selva/dev/selva.log (`pnpm plugin:logs`) and a file per live
+ * session that `pnpm plugin:session`, `lab:record` and `bridge-drive` connect through. A plain
+ * install wipes the version folder, so it turns dev mode off again.
  */
 
 import { execSync } from 'child_process';
@@ -54,6 +57,8 @@ const csproj = readFileSync(join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj')
 const version = csproj.match(/<Version>([^<]+)<\/Version>/)?.[1].trim();
 if (!version) throw new Error('No <Version> in Selva.GH.csproj');
 
+const dev = process.argv.includes('--dev');
+
 const lockers = runningLockers();
 if (lockers.length > 0) {
 	console.error(`${lockers.join(', ')} running and locking Selva.gha. Close and rerun.`);
@@ -79,7 +84,14 @@ for (const { staging, rhino } of targets) {
 		filter: (src) => !src.endsWith('.yak')
 	});
 	writeFileSync(join(pluginDir, 'manifest.txt'), version);
-	console.log(`Rhino ${rhino}: installed ${version} -> ${versionDir}`);
+	if (dev) {
+		writeFileSync(
+			join(versionDir, 'selva.dev.json'),
+			JSON.stringify({ installedAt: new Date().toISOString() }, null, '\t')
+		);
+	}
+	console.log(`Rhino ${rhino}: installed ${version}${dev ? ' (dev)' : ''} -> ${versionDir}`);
 }
 
 console.log('\nRestart Rhino to load it.');
+if (dev) console.log('Then: pnpm plugin:logs, and pnpm plugin:session once a UI Bridge runs.');

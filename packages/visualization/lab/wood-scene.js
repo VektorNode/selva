@@ -3,11 +3,12 @@ import * as THREE from 'three';
 import { createMaterial } from '../src/parse/webdisplay/batch/materials.ts';
 
 // Synthetic, so wood work has a fixed scene without a recording: the plugin's Walnut preset and the
-// variants a designer would try, each as a tabletop, a board on edge, an end-grain block and a turned
-// leg. Modelled in millimetres, with the plugin's wood UVs (partUvs below).
+// variants a designer would try, each as a tabletop, a board on edge, an end-grain block, a turned
+// leg, a bent panel and a 3 m slab, where repetition shows. Modelled in millimetres, with the
+// plugin's wood UVs (partUvs below).
 const MM = 0.001;
 
-const WOODS = [
+export const WOODS = [
 	[
 		'walnut-preset',
 		{
@@ -108,6 +109,7 @@ function partUvs(geometry, grain) {
 }
 
 const X = new THREE.Vector3(1, 0, 0);
+const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
 
 export function buildWoodScene() {
@@ -132,7 +134,7 @@ export function buildWoodScene() {
 	add(
 		'floor',
 		FLOOR,
-		partUvs(new THREE.BoxGeometry(WOODS.length * pitch + 400, 2200, 20), X).translate(0, 0, -10)
+		partUvs(new THREE.BoxGeometry(WOODS.length * pitch + 400, 5600, 20), X).translate(0, 1700, -10)
 	);
 
 	WOODS.forEach(([name, wire], i) => {
@@ -168,6 +170,12 @@ export function buildWoodScene() {
 			wire,
 			partUvs(bent.rotateX(Math.PI / 2), Z).translate(x + 250, -700, 200),
 			false
+		);
+		// A 3000 x 900 x 40 slab, a dining table's length, grain along it.
+		add(
+			`${name}-slab`,
+			wire,
+			partUvs(new THREE.BoxGeometry(900, 3000, 40), Y).translate(x, 2800, 20)
 		);
 	});
 

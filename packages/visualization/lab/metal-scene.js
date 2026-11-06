@@ -12,7 +12,7 @@ const linear = (r, g, b) =>
 	`#${new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace).getHexString()}`;
 
 // The plugin's metal presets (MaterialPresets.cs), as they arrive on the wire.
-const METALS = [
+export const METALS = [
 	[
 		'stainless',
 		{
@@ -81,10 +81,14 @@ const METALS = [
 ];
 const CONCRETE = { color: '#828282', metalness: 0, roughness: 0.85 };
 
-// three's UVs run 0-1 across each face; stretched to the shape's size they read as mm.
-const uvsInMm = (geometry, u, v) => {
+// three's UVs run 0-1 across each face; stretched to the shape's size they read as mm. `swap` puts
+// U along three's V, where the plugin's grain runs: a flat part's longest side, a rolled part's axis.
+const uvsInMm = (geometry, u, v, swap = false) => {
 	const uv = geometry.attributes.uv;
-	for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * u, uv.getY(i) * v);
+	for (let i = 0; i < uv.count; i++) {
+		const [a, b] = [uv.getX(i) * u, uv.getY(i) * v];
+		uv.setXY(i, ...(swap ? [b, a] : [a, b]));
+	}
 	return geometry;
 };
 
@@ -117,10 +121,14 @@ export function buildMetalScene() {
 	METALS.forEach(([name, wire], i) => {
 		const x = x0 + i * pitch;
 		// A 3 mm sheet stood on edge, Z-up: width along x, height along z.
-		const panel = uvsInMm(new THREE.BoxGeometry(600, 3, 1400), 600, 1400).translate(x, 400, 700);
+		const panel = uvsInMm(new THREE.BoxGeometry(600, 3, 1400), 600, 1400, true).translate(
+			x,
+			400,
+			700
+		);
 		add(`${name}-panel`, wire, panel, true);
 
-		const tube = uvsInMm(new THREE.CylinderGeometry(60, 60, 900, 48), Math.PI * 120, 900)
+		const tube = uvsInMm(new THREE.CylinderGeometry(60, 60, 900, 48), Math.PI * 120, 900, true)
 			.rotateX(Math.PI / 2)
 			.translate(x - 150, -300, 450);
 		add(`${name}-tube`, wire, tube, true);

@@ -66,6 +66,11 @@ export type LookPreset = {
 	toneMapping: THREE.ToneMapping;
 	toneMappingExposure: number;
 	envMapIntensity: number;
+	/**
+	 * Reflection strength a fully metallic material blends toward instead of 1. Set by looks whose
+	 * room is dark, where a chrome that mirrors the full-bright studio probe reads as daylit.
+	 */
+	metalReflection?: number;
 	/** Multiplier on the HDR's IBL (`scene.environmentIntensity`). */
 	environmentIntensity: number;
 	hemisphereIntensity: number;
@@ -86,6 +91,11 @@ export type LookPreset = {
 	bloom?: BloomOptions;
 	/** Emissive meshes light the scene, through a shadow-casting point light each. */
 	emissiveLights?: boolean;
+	/**
+	 * Multiplier on the light emissive sources cast. Exposes for lamp light without
+	 * `toneMappingExposure`, which would also lift the background. Default 1.
+	 */
+	emissiveLightScale?: number;
 	/** How many emissive sources get a light. Default 3. */
 	maxEmissiveLights?: number;
 	/** Caps the render resolution while this look is active. */
@@ -111,6 +121,8 @@ export type LookPreset = {
 export interface MaterialAppearanceOptions {
 	/** Default 1 (three.js's own material default) when omitted. */
 	envMapIntensity?: number;
+	/** See {@link LookPreset.metalReflection}. Default 1. */
+	metalReflection?: number;
 	/**
 	 * `THREE.FrontSide` on every mesh, open surfaces included, which then vanish when viewed from
 	 * behind. Default false: only meshes detected as closed solids are culled.

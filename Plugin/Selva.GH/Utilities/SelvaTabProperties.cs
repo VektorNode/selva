@@ -5,6 +5,7 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
+using Selva.GH.Utilities.Helpers;
 using Selva.Slva;
 using Instances = Grasshopper.Instances;
 
@@ -14,6 +15,8 @@ public class SelvaTabProperties : GH_AssemblyPriority
 {
     public override GH_LoadingInstruction PriorityLoad()
     {
+        DevMode.Start(RhinoApp.Version.ToString());
+
         var server = Instances.ComponentServer;
         server.AddCategoryIcon("Selva", Resources.Icon);
         server.AddCategorySymbolName("Selva", 'S');

@@ -3,13 +3,17 @@ import { fileURLToPath } from 'node:url';
 
 import { chromium } from '@playwright/test';
 
+import { sessionUrlOr } from '../../../scripts/plugin/dev-session.mjs';
 import { stampModelUnits } from './slvm-units.mjs';
 
-const [url, name] = process.argv.slice(2);
-if (!url || !name) {
-	console.error('Usage: pnpm lab:record <session url> <scene name>');
+// The URL is optional on a dev install: the newest live session is used.
+const args = process.argv.slice(2);
+const name = args.at(-1);
+if (!name || /^https?:/.test(name)) {
+	console.error('Usage: pnpm lab:record [session url] <scene name>');
 	process.exit(1);
 }
+const url = sessionUrlOr(args.length > 1 ? args[0] : undefined);
 
 const outDir = fileURLToPath(new URL('../../../dev/viewer-scenes/', import.meta.url));
 await mkdir(outDir, { recursive: true });

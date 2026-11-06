@@ -102,7 +102,11 @@ export function createMaterial(
 		material.envMapIntensity = matData.envMapIntensity;
 		material.userData[OWN_ENV_MAP_INTENSITY] = matData.envMapIntensity;
 	} else if (appearance?.envMapIntensity != null) {
-		material.envMapIntensity = lookEnvMapIntensity(appearance.envMapIntensity, matData.metalness);
+		material.envMapIntensity = lookEnvMapIntensity(
+			appearance.envMapIntensity,
+			matData.metalness,
+			appearance.metalReflection
+		);
 	}
 
 	if (matData.emissive != null) {
@@ -125,9 +129,11 @@ export function createMaterial(
 
 	// The anisotropy tangent comes from the UVs; without them three normalizes a zero vector and the
 	// mesh renders NaN-black.
+	// three stretches highlights along its anisotropy direction. Grooves along the grain tilt the
+	// normal only across it, so that is where reflections smear: a quarter turn off U.
 	if (matData.anisotropy != null && matData.anisotropy > 0 && options?.hasUvs) {
 		material.anisotropy = matData.anisotropy;
-		material.anisotropyRotation = matData.anisotropyRotation ?? 0;
+		material.anisotropyRotation = (matData.anisotropyRotation ?? 0) + Math.PI / 2;
 	}
 
 	if (matData.ior != null) material.ior = matData.ior;

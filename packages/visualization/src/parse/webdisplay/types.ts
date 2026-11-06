@@ -29,11 +29,11 @@ export interface SerializableMaterial {
 	clearcoat?: number;
 	clearcoatRoughness?: number;
 	/**
-	 * Stretches highlights along texture U, the grain of brushed or rolled sheet. Ignored when the
+	 * Stretches highlights across texture U, the grain of brushed or rolled sheet. Ignored when the
 	 * batch carries no UVs: the tangent is built from them.
 	 */
 	anisotropy?: number;
-	/** Radians, counter-clockwise from texture U. */
+	/** The grain's direction in radians, counter-clockwise from texture U. */
 	anisotropyRotation?: number;
 	/**
 	 * Millimetres one repeat of every map covers across U; V follows each image's aspect. Set only

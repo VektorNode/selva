@@ -22,6 +22,8 @@ export interface SolveLimits {
 	 * answers a stale pointer with `definition_not_cached`: one that doesn't returns empty geometry.
 	 */
 	reuseDefinitionCache: boolean;
+	/** The server's deployment (`ServerLimits.deploymentId`); another one may solve differently. */
+	deploymentId: string | null;
 }
 
 export function solveLimitsFor(reported: ServerLimits | null): SolveLimits {
@@ -29,7 +31,8 @@ export function solveLimitsFor(reported: ServerLimits | null): SolveLimits {
 		return {
 			solveDeadlineMs: DEFAULT_SOLVE_DEADLINE_MS,
 			maxRequestBytes: null,
-			reuseDefinitionCache: false
+			reuseDefinitionCache: false,
+			deploymentId: null
 		};
 	}
 	return {
@@ -38,7 +41,9 @@ export function solveLimitsFor(reported: ServerLimits | null): SolveLimits {
 			MAX_SOLVE_DEADLINE_MS
 		),
 		maxRequestBytes: reported.maxRequestBytes,
-		reuseDefinitionCache: reported.signalsStaleDefinition
+		reuseDefinitionCache: reported.signalsStaleDefinition,
+		// An older `@selvajs/compute` leaves it undefined.
+		deploymentId: reported.deploymentId ?? null
 	};
 }
 
@@ -46,6 +51,7 @@ export function sameSolveLimits(a: SolveLimits, b: SolveLimits): boolean {
 	return (
 		a.solveDeadlineMs === b.solveDeadlineMs &&
 		a.maxRequestBytes === b.maxRequestBytes &&
-		a.reuseDefinitionCache === b.reuseDefinitionCache
+		a.reuseDefinitionCache === b.reuseDefinitionCache &&
+		a.deploymentId === b.deploymentId
 	);
 }

@@ -26,9 +26,37 @@ Two gates run before anything reaches npm. `prepack` runs `publint --strict` (ex
 `release.yml` runs on every push to `main` and `beta`:
 
 - **main**: pending changesets → opens the "chore: version packages" PR. Merging it triggers publish.
-- **beta**: versions as `x.y.z-beta.N` and publishes under the `beta` dist-tag. Requires `pnpm changeset pre enter beta` on the branch first.
+- **beta**: versions as `x.y.z-beta.N` and publishes under the `beta` dist-tag. Runs only in pre mode, which `sync-beta` re-enters after each stable release.
 
 Auth is GitHub→npm **OIDC** (`id-token: write`). There is **no `NPM_TOKEN`**: setting one would break publishing. Every package in `--list` needs its own Trusted Publisher entry at npmjs.com → Settings → Trusted Publisher (repo: `VektorNode/selva`, workflow: `release.yml`). A missing entry fails with a misleading 404.
+
+## Promoting beta to stable
+
+```bash
+pnpm release:promote    # --dry-run checks everything and changes nothing
+```
+
+It exits pre mode, pushes `beta`, and opens the `beta` → `main` PR with auto-merge set to a merge commit. Then:
+
+1. The PR merges itself once CI passes.
+2. Merge the "chore: version packages" PR on `main`. It publishes to `latest`.
+3. The `sync-beta` job in `release.yml` merges `main` back into `beta` and re-enters pre mode. If that merge conflicts, the job fails and lists the files to resolve by hand; after pushing the resolution, re-run the job to re-enter pre mode.
+
+The PR must land as a merge commit, so the `main` ruleset has to allow merge commits. A squash, cherry-pick or rebase copies beta's commits under new hashes: beta never sees them as merged, and the next promotion conflicts in every version line beta bumped since.
+
+`release.yml` commits to `beta` after every push that carries a changeset. `git config pull.rebase merges` keeps pulling that from adding merge commits.
+
+## Release bot (one-time setup)
+
+A push, PR or merge made with `GITHUB_TOKEN` starts no workflows, and a push with it may not change `.github/workflows/`. Four steps use a GitHub App token instead. Without the App they fall back to `GITHUB_TOKEN`, and:
+
+- `sync-beta` (`release.yml`) fails whenever `main` changed a workflow.
+- The "chore: version packages" PR (`release.yml`) gets no CI, so it cannot merge without an admin bypass.
+- A repaired Dependabot PR (`lockfile` job) gets no CI, so it never auto-merges.
+- A Dependabot auto-merge starts no `test.yml` or `release.yml` run on `main`.
+
+1. Create a GitHub App with webhooks off and repository permissions Contents, Pull requests and Workflows set to read and write. Install it on `VektorNode/selva`.
+2. Add `RELEASE_BOT_APP_ID` and `RELEASE_BOT_PRIVATE_KEY` under Settings → Secrets and variables, in **Actions** and again in **Dependabot**: a Dependabot-triggered run only sees the latter.
 
 ## Release channel (admin opt-in to beta)
 

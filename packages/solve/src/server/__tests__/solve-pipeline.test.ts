@@ -73,7 +73,8 @@ function fakeClient(
 		limits: {
 			solveDeadlineMs: 42_000,
 			maxRequestBytes: 50 * 1024 * 1024,
-			reuseDefinitionCache: true
+			reuseDefinitionCache: true,
+			deploymentId: null
 		}
 	};
 }

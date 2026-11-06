@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/visualization",
-	"version": "1.6.1",
+	"version": "1.7.0-beta.0",
 	"description": "Headless, extensible viewer core for Selva — parse, render and scene layers over Three.js",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -89,6 +89,7 @@
 		"bench": "vitest bench --run",
 		"lab": "vite --config lab/vite.config.js",
 		"lab:run": "node lab/run.mjs",
+		"lab:night": "node lab/run.mjs --suite night",
 		"lab:record": "node lab/record.mjs",
 		"lab:diff": "node lab/diff.mjs",
 		"type-check": "tsc --noEmit"

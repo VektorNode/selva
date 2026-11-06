@@ -8,6 +8,7 @@ using Grasshopper.Kernel.Expressions;
 using Newtonsoft.Json;
 using Selva.GH.Features.SolveRuntime.Components;
 using Selva.GH.Utilities.Guards;
+using Selva.GH.Utilities.Helpers;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
 
@@ -224,6 +225,16 @@ public sealed class DocumentSolveRuntime
         _expiredAtStart = _document.Objects.OfType<IGH_ActiveObject>()
             .Where(o => o.Phase == GH_SolutionPhase.Blank)
             .ToList();
+
+        if (DevMode.Enabled)
+        {
+            // Why a solve ran at all: the objects it is about to recompute.
+            var names = _expiredAtStart.Take(8).Select(o => o.NickName);
+            var more = _expiredAtStart.Count > 8 ? $", +{_expiredAtStart.Count - 8}" : "";
+            Logger.Trace(
+                $"[solve {_localSolveId.Substring(0, 8)}] start on '{_document.DisplayName}', " +
+                $"{_expiredAtStart.Count} expired: {string.Join(", ", names)}{more}");
+        }
 
         // Expired now means it will run this solution; the rest keep last solution's data.
         _steps.Begin(reporters

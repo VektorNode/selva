@@ -8,7 +8,7 @@
  * disposeAll, the `X-Selva-Definition` header) without a live compute server.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 // --- Mock @selvajs/compute -------------------------------------------------
 //
@@ -189,7 +189,8 @@ describe('createClientCache — limits from the server', () => {
 		expect(entry.limits).toEqual({
 			solveDeadlineMs: 1_805_000,
 			maxRequestBytes: 1024,
-			reuseDefinitionCache: true
+			reuseDefinitionCache: true,
+			deploymentId: null
 		});
 	});
 
@@ -229,6 +230,91 @@ describe('createClientCache — limits from the server', () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+describe('createClientCache — a redeployed server', () => {
+	const limitsOf = (deploymentId: string) => ({
+		timeoutSeconds: 100,
+		maxRequestBytes: 1,
+		signalsStaleDefinition: true,
+		deploymentId
+	});
+	type LimitsClient = { client: { serverStats: { getLimits: () => Promise<unknown> } } };
+
+	async function warmThenAdvance(config = baseConfig()) {
+		reportedLimits = limitsOf('d1');
+		const cache = createClientCache(config);
+		const first = await cache.getClient(server('a'));
+		let reads = 0;
+		const stats = (first as unknown as LimitsClient).client.serverStats;
+		const read = stats.getLimits;
+		stats.getLimits = () => {
+			reads += 1;
+			return read();
+		};
+		return { cache, first, stats, reads: () => reads };
+	}
+
+	beforeEach(() => vi.useFakeTimers());
+	afterEach(() => vi.useRealTimers());
+
+	it('hands out a warm client checked within 30 s without asking the server', async () => {
+		const { cache, first, reads } = await warmThenAdvance();
+		vi.advanceTimersByTime(29_000);
+		expect(await cache.getClient(server('a'))).toBe(first);
+		expect(reads()).toBe(0);
+	});
+
+	it('keeps the client, and its cache, while the deployment is the same', async () => {
+		const { cache, first, reads } = await warmThenAdvance();
+		vi.advanceTimersByTime(31_000);
+		expect(await cache.getClient(server('a'))).toBe(first);
+		expect(reads()).toBe(1);
+		expect(mockScheduler(first).disposed).toBe(false);
+	});
+
+	it('rebuilds with an empty cache once the server reports another deployment', async () => {
+		const { cache, first } = await warmThenAdvance();
+		reportedLimits = limitsOf('d2');
+		vi.advanceTimersByTime(31_000);
+		const next = await cache.getClient(server('a'));
+		expect(next).not.toBe(first);
+		expect(next.limits.deploymentId).toBe('d2');
+		expect(mockScheduler(first).disposed).toBe(true);
+	});
+
+	it('does not hold a request on a server that does not answer, and retires it once it does', async () => {
+		const { cache, first, stats } = await warmThenAdvance();
+		let answer!: (v: unknown) => void;
+		stats.getLimits = () => new Promise((resolve) => (answer = resolve));
+		vi.advanceTimersByTime(31_000);
+
+		const served = cache.getClient(server('a'));
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(await served).toBe(first);
+
+		answer(limitsOf('d2'));
+		await vi.waitFor(() => expect(mockScheduler(first).disposed).toBe(true));
+	});
+
+	it('keeps the client when a server that reported its limits stops answering', async () => {
+		const { cache, first, stats } = await warmThenAdvance();
+		stats.getLimits = async () => null;
+		vi.advanceTimersByTime(31_000);
+		expect(await cache.getClient(server('a'))).toBe(first);
+		expect(first.limits.reuseDefinitionCache).toBe(true);
+	});
+
+	it('never checks with the solve cache off', async () => {
+		const { cache, first, reads } = await warmThenAdvance({
+			...baseConfig(),
+			responseCacheMaxBytes: 0
+		});
+		reportedLimits = limitsOf('d2');
+		vi.advanceTimersByTime(31_000);
+		expect(await cache.getClient(server('a'))).toBe(first);
+		expect(reads()).toBe(0);
 	});
 });
 
