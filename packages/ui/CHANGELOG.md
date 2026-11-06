@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 7.0.2
+
+### Patch Changes
+
+- 8d47f38: A long cloud solve no longer finishes on "Done 0.0 s". The solve status kept restarting its clock on every progress update, so the time it showed only counted since the last one.
+
 ## 7.0.2-beta.0
 
 ### Patch Changes
