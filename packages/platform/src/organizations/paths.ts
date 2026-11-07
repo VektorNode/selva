@@ -16,6 +16,9 @@ function prefix(id: string): string {
  * `classifyAssetPath` / `ASSET_CLASSES` decide visibility from these prefixes.
  */
 export const orgPaths = {
-	asset: (id: string, kind: OrgAssetKind) => `${prefix(id)}branding/${kind}.webp`,
+	asset: (id: string, kind: OrgAssetKind) => {
+		assertSafeKey(kind, 'assetKind');
+		return `${prefix(id)}branding/${kind}.webp`;
+	},
 	prefix
 } as const;

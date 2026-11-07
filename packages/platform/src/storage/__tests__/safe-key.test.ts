@@ -18,6 +18,10 @@ describe('a path no write can produce', () => {
 		expect(() => orgPaths.asset(id, 'logo')).toThrow(/Unsafe orgId/);
 	});
 
+	it('is refused on write for an asset kind the type does not stop at runtime', () => {
+		expect(() => orgPaths.asset('acme', '../../x' as never)).toThrow(/Unsafe assetKind/);
+	});
+
 	it.each([
 		'orgs/../branding/logo.webp',
 		'orgs/./branding/logo.webp',

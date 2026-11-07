@@ -129,6 +129,23 @@ function readRemoteInputs(inputs: unknown): SolveInput[] {
 	return inputs as SolveInput[];
 }
 
+function admittedSolveInputs(
+	schema: UISchema | undefined,
+	inputs: unknown,
+	values: Record<string, unknown>
+): SolveInput[] {
+	const solveInputs = schema ? solveInputsFromSchema(schema) : readRemoteInputs(inputs);
+	const serverOnly = postedServerSourcedIds(solveInputs, values);
+	if (serverOnly.length > 0) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`These inputs are filled on the server and may not be posted in values: ${serverOnly.join(', ')}.`
+		);
+	}
+	return solveInputs;
+}
+
 /**
  * Run a solve and return the HTTP response.
  *
@@ -353,6 +370,11 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// build and solve are measured inside the pipeline.
 	const defLoadMs = performance.now() - loadStart;
 
+	// Checked before the share cap, so a request refused for its values spends no
+	// solve. A version without a stored schema is checked after the backfill below.
+	let solveInputs =
+		storedSchema || !isLocal ? admittedSolveInputs(storedSchema, inputs, values) : null;
+
 	// Atomic check-and-increment; runs before solve to avoid wasting compute.
 	if (sharedAccess) {
 		const next = await providers.data.shareLinks.tryIncrementSolveCount(
@@ -402,15 +424,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			"This version's inputs could not be read. Retry shortly."
 		);
 	}
-	const solveInputs = storedSchema ? solveInputsFromSchema(storedSchema) : readRemoteInputs(inputs);
-	const serverOnly = postedServerSourcedIds(solveInputs, values);
-	if (serverOnly.length > 0) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`These inputs are filled on the server and may not be posted in values: ${serverOnly.join(', ')}.`
-		);
-	}
+	solveInputs ??= admittedSolveInputs(storedSchema, inputs, values);
 
 	// `SolveEngine.solve` owns warm-client lookup, input-tree build, single-flight
 	// coalescing (a coalesced solve aborts only when its last caller leaves), and

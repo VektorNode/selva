@@ -36,6 +36,7 @@ import {
 	type TestProviders
 } from '#lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import type { UISchema } from '@selvajs/schemas';
 import {
 	computeRateLimitCount,
 	resetComputeRateLimit
@@ -136,6 +137,43 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 		// A revoked token is an invalid token — refused at resolution (401), well
 		// before the cap gate. Never 2xx.
 		expect(res.status).toBe(401);
+		const after = await tp.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id);
+		expect(after?.solveCount).toBe(0);
+	});
+
+	it('refuses a value posted for a server-sourced input without spending a solve', async () => {
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+		await tp.config.data.definitions.setVersionSchema(aliceLocals.ctx, def.version.id, {
+			name: 'Wall',
+			inputs: [{ id: 'job', nickname: 'Job', paramType: 'Text', default: 'j1' }],
+			outputs: [],
+			layout: {
+				type: 'flat',
+				groups: [
+					{
+						items: [
+							{ type: 'input', widgetType: 'text', paramId: 'job', source: { kind: 'server' } }
+						]
+					}
+				]
+			}
+		} as unknown as UISchema);
+		const { link, rawToken } = await seedShareLink(tp, {
+			definitionId: def.record.guid,
+			createdBy: alice.id,
+			maxSolves: 5
+		});
+
+		const res = await call(POST, {
+			locals: anon(tp),
+			url: `http://test.local/api/compute?token=${rawToken}`,
+			body: { ...solveBody(def.record.guid), values: { job: 'FORGED' } }
+		});
+
+		expect(res.status).toBe(400);
 		const after = await tp.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id);
 		expect(after?.solveCount).toBe(0);
 	});
