@@ -4,17 +4,21 @@
 // transport-level fake, not a FakeSource swap.
 //
 // The first message must be `authenticate` with STUB_SECRET, as the plugin requires.
-// Handled inbound after that: requestInitialData -> initialData; saveSchema -> schemaUpdated +
-// schemaSaved; valueUpdate -> outputs (echoes a trivial computed value); selvaGetAccount,
-// selvaListTargets and selvaUpload -> the shared wire fixtures (signed in, a suggestion, a
-// successful upload). Everything else is ignored. No binary mesh frames (binaryBatchCount
-// omitted = "leave meshes alone").
+// Handled inbound after that: requestInitialData -> initialData; saveSchema -> schemaUpdated
+// (echoing the saved schema) + schemaSaved; valueUpdate -> outputs (echoes a trivial computed
+// value); selvaGetAccount, selvaListTargets and selvaUpload -> the shared wire fixtures (signed
+// in, a suggestion, a successful upload). Everything else is ignored. No binary mesh frames
+// (binaryBatchCount omitted = "leave meshes alone").
 
 import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 
-// Set E2E_WS_PORT when the dev mock or Rhino already holds 8765; specs hand it to the page as wsPort.
-export const STUB_PORT = Number(process.env.E2E_WS_PORT ?? 8765);
+import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
+
+// Global setup binds a free port and publishes it as E2E_WS_PORT before the workers start; specs
+// hand it to the page as wsPort. The fallback, for a standalone run, stays clear of the plugin's
+// 8765 so a running Rhino never answers in the stub's place.
+export const STUB_PORT = Number(process.env.E2E_WS_PORT ?? 8799);
 export const STUB_SECRET = 'e2e-secret';
 
 /** A Count the stub takes SLOW_SOLVE_MS to "solve", long enough for any solving indicator. */
@@ -29,35 +33,38 @@ function fixture(name: string, sessionId: string): Record<string, unknown> {
 	return { ...message, sessionId };
 }
 
-// A minimal but valid UISchema: a number input and a value list shown as buttons with icons,
-// placed in one tab/group, and one output. Layout defaults are filled by the app, but a tab is
-// provided so the builder shows a real editor and the preview renders input controls.
-const TIMBER_INPUT = {
+// Discovered params, as Grasshopper reports them: a number and a value list.
+const COUNT_PARAM = {
+	id: 'in-count',
+	nickname: 'Count',
+	paramType: 'number',
+	default: 3,
+	minimum: 0,
+	maximum: 10
+} as const;
+const TIMBER_PARAM = {
 	id: 'in-timber',
 	nickname: 'Timber',
 	paramType: 'valueList',
 	default: 'Oak',
 	options: { Oak: '0', Larch: '1' }
-};
+} as const;
 
-function sampleSchema() {
+// A minimal but valid UISchema: the two params, the value list shown as buttons with icons,
+// placed in one tab/group, and one output. Layout defaults are filled by the app, but a tab is
+// provided so the builder shows a real editor and the preview renders input controls.
+function sampleSchema(): UISchema {
 	return {
 		id: 'e2e-schema',
+		schemaVersion: UI_SCHEMA_VERSION,
 		name: 'E2E Test Schema',
 		documentId: 'e2e-doc',
 		instanceSolve: true,
 		inputs: [
-			{
-				id: 'in-count',
-				nickname: 'Count',
-				paramType: 'number',
-				default: 3,
-				minimum: 0,
-				maximum: 10
-			},
-			TIMBER_INPUT
+			{ id: 'in-count', nickname: 'Count', paramType: 'number', default: 3 },
+			{ id: 'in-timber', nickname: 'Timber', paramType: 'valueList', default: 'Oak' }
 		],
-		outputs: [{ id: 'out-area', nickname: 'Area', paramType: 'number' }],
+		outputs: [{ id: 'out-area', nickname: 'Area', type: 'number' }],
 		assets: { a1b2c3d4e5f6: { d: 'M3 21V8l9-5 9 5v13' } },
 		layout: {
 			type: 'tabbed',
@@ -87,7 +94,7 @@ function sampleSchema() {
 									displayName: 'Timber',
 									widgetType: 'dropdown',
 									config: {
-										options: { Oak: '0', Larch: '1' },
+										options: TIMBER_PARAM.options,
 										displayAs: 'segmented',
 										optionMedia: { Oak: { icon: 'a1b2c3d4e5f6' } }
 									}
@@ -103,17 +110,7 @@ function sampleSchema() {
 
 function availableParams() {
 	return {
-		inputs: [
-			{
-				id: 'in-count',
-				nickname: 'Count',
-				paramType: 'number',
-				default: 3,
-				minimum: 0,
-				maximum: 10
-			},
-			TIMBER_INPUT
-		],
+		inputs: [COUNT_PARAM, TIMBER_PARAM],
 		outputs: [{ id: 'out-area', nickname: 'Area', paramType: 'number' }]
 	};
 }
@@ -133,6 +130,7 @@ export function startStub(port = STUB_PORT): WebSocketServer {
 				sessionId?: string;
 				secret?: string;
 				values?: Record<string, unknown>;
+				schema?: UISchema;
 			};
 			try {
 				msg = JSON.parse(raw.toString());
@@ -166,11 +164,12 @@ export function startStub(port = STUB_PORT): WebSocketServer {
 					break;
 
 				case 'saveSchema':
-					// Echo the saved schema back as the canonical broadcast, then ack.
+					// Echo what the page sent as the canonical broadcast, then ack, as the plugin does:
+					// a save that drops part of the schema then shows up in the builder.
 					send(ws, {
 						type: 'schemaUpdated',
 						sessionId,
-						schema: sampleSchema(),
+						schema: msg.schema,
 						schemaHash: 'hash-2'
 					});
 					send(ws, { type: 'schemaSaved', sessionId, success: true });

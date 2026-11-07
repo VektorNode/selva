@@ -35,14 +35,6 @@ public class WireFixtureContractTests
     private static readonly Guid RemovedId = Guid.Parse("33333333-3333-4333-8333-333333333333");
     private static readonly DateTime FixedTime = new DateTime(2026, 1, 15, 12, 0, 0, DateTimeKind.Utc);
 
-    // Mirrors WebSocketTransport's SecureSerializerSettings (sans MaxDepth, which
-    // only constrains deserialization) so fixtures match production bytes.
-    private static readonly JsonSerializerSettings TransportSettings = new JsonSerializerSettings
-    {
-        TypeNameHandling = TypeNameHandling.None,
-        MetadataPropertyHandling = MetadataPropertyHandling.Ignore
-    };
-
     private static UISchema SampleSchema()
     {
         return new UISchema
@@ -322,7 +314,7 @@ public class WireFixtureContractTests
 
         foreach (var (fileName, (_, envelope)) in Samples())
         {
-            var produced = JToken.Parse(JsonConvert.SerializeObject(envelope, TransportSettings));
+            var produced = JToken.Parse(JsonConvert.SerializeObject(envelope, WireJson.Settings));
             var path = Path.Combine(fixturesDir, fileName);
 
             if (update)
@@ -358,7 +350,7 @@ public class WireFixtureContractTests
     {
         foreach (var (fileName, (_, envelope)) in Samples())
         {
-            var json = JsonConvert.SerializeObject(envelope, TransportSettings);
+            var json = JsonConvert.SerializeObject(envelope, WireJson.Settings);
             Assert.False(json.Contains("selva_"), $"{fileName} carries a selva_ string.");
         }
     }

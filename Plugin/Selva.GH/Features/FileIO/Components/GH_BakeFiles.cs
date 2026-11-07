@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
-using System.Linq;
 using Grasshopper.Kernel;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
@@ -117,31 +116,11 @@ public class GH_BakeFiles : GH_Component
         return writtenPaths;
     }
 
-    private string BuildFilePath(string basePath, FileData fileData)
+    private static string BuildFilePath(string basePath, FileData fileData)
     {
-        // Segment-wise, not a raw Combine: "ROOT::Panels" is illegal as a single Windows directory
-        // name and threw IOException here before, and a raw value could otherwise carry ".." out
-        // of the export root.
-        var segments = SubFolderPath.Split(fileData.SubFolder);
-
-        var fullDirectory = segments.Count == 0
-            ? basePath
-            : Path.Combine(new[] { basePath }.Concat(segments).ToArray());
-
-        if (!Directory.Exists(fullDirectory))
-        {
-            Directory.CreateDirectory(fullDirectory);
-        }
-
-        var fileName = fileData.FileName ?? "file";
-        var extension = fileData.FileType ?? ".bin";
-
-        if (!extension.StartsWith("."))
-        {
-            extension = "." + extension;
-        }
-
-        return Path.Combine(fullDirectory, fileName + extension);
+        var path = BakeFilePath.Resolve(basePath, fileData);
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        return path;
     }
 
     private void WriteFileToPath(string filePath, FileData fileData)

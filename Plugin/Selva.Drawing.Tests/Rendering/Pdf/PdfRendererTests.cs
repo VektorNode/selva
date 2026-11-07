@@ -231,12 +231,24 @@ public class PdfRendererTests
 	public void Renderer_is_idempotent_across_calls()
 	{
 		// PdfFontEmbedder installs the font resolver lazily on first Render(); subsequent
-		// renders must not throw when the resolver is already pinned in place.
-		var renderer = new PdfRenderer();
-		var doc = new Document { Pages = new[] { new Page { Content = new GroupElement() } } };
-		var first = renderer.Render(doc);
+		// renders must not throw when the resolver is already pinned in place, and must embed the
+		// font the same way.
+		var doc = new Document
+		{
+			Pages = new[]
+			{
+				new Page
+				{
+					Content = new GroupElement
+					{
+						Children = new DrawElement[] { new TextElement { Text = "Embedded", Position = new Point2D(10, 10) } },
+					},
+				},
+			},
+		};
+		var first = new PdfRenderer().Render(doc);
 		var second = new PdfRenderer().Render(doc);
 		Assert.NotEmpty(first);
-		Assert.NotEmpty(second);
+		Assert.Equal(first, second);
 	}
 }

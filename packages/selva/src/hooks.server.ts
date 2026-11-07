@@ -26,6 +26,8 @@ import {
 import { signInMaxAgeMs } from '#lib/server/signInMaxAge.server.js';
 import { apiTokenCodec, apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
 import { MCP_PATH } from '#lib/server/mcp/path.js';
+import { readShareToken } from '#lib/server/shareLinks/resolve.server.js';
+import { looksLikeShareToken } from '#lib/server/shareLinks/token.server.js';
 import { requestMemo } from '#lib/server/requestMemo.server.js';
 import { requestTiming } from '#lib/server/requestTiming.server.js';
 
@@ -220,8 +222,9 @@ const routeClassifier = createRouteClassifier({
 	// the asset-class registry (public branding serves to anyone, org/project
 	// assets 401 without a session). `/api/v1/solve-events` holds the SSE stream
 	// (requires a session, checked in the route) and the Compute callback (no
-	// session by nature — a per-solve bearer instead). Nothing else under
-	// `/api/*` carries its own authorization.
+	// session by nature — a per-solve bearer instead). The only other route that
+	// authorizes a request itself is `/api/v1/compute` with a share token: see
+	// `carriesShareToken`.
 	//
 	// No trailing slash on solve-events: the SSE route IS that path, with the
 	// stream in a query param, so a trailing slash would deny the stream while
@@ -235,6 +238,30 @@ const routeClassifier = createRouteClassifier({
 // Exported for tests: these predicates are the deny-by-default policy, and a
 // bug in either is security-relevant.
 export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
+
+// The only two routes that honour a share token. A share link is meant to work
+// without an account, so a request that carries one and has no session still
+// reaches the route, which accepts or refuses the token itself. The page serves
+// only the live pointer by token: a draft or version pick still needs a session.
+const SHARE_TOKEN_API = '/api/v1/compute';
+const SHARE_TOKEN_PAGE = /^\/library\/[^/]+$/;
+
+function carriesShareToken(request: Request, url: URL): boolean {
+	const onShareRoute =
+		url.pathname === SHARE_TOKEN_API ||
+		(SHARE_TOKEN_PAGE.test(url.pathname) &&
+			url.searchParams.get('channel') !== 'draft' &&
+			!url.searchParams.has('version'));
+	return onShareRoute && readShareToken(request, url) !== null;
+}
+
+// Kept out of `redirectTo`: the login URL lands in access logs and browser history.
+function withoutShareToken(url: URL): string {
+	const query = new URLSearchParams(
+		[...url.searchParams].filter(([key, value]) => !(key === 'token' && looksLikeShareToken(value)))
+	).toString();
+	return url.pathname + (query ? `?${query}` : '');
+}
 
 // Every request runs inside its read memo, so a layout and its page share repeated reads, and
 // inside its timing store; static assets skip the timing.
@@ -292,7 +319,7 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 	// SvelteKit's own check is off (vite.config.ts) because it can't exempt the
 	// token endpoint or bearer requests; this is the same check with those exemptions.
 	if (
-		!import.meta.env.DEV &&
+		!dev &&
 		isCrossSiteFormSubmission(event.request, {
 			exemptPaths: [OAUTH_TOKEN_PATH],
 			origin: publicUrl(event.url).origin
@@ -381,7 +408,8 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 		}
 	}
 
-	// Deny-by-default: any non-public, non-static path requires a valid session.
+	// Deny-by-default: any non-public, non-static path requires a valid session,
+	// unless it carries a share token the route checks itself.
 	const needsAuth = !publicRoute;
 	if (needsAuth) {
 		let token = event.cookies.get('admin_session') ?? '';
@@ -420,6 +448,10 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 			if (user) await bootstrapUserSession(user);
 		}
 
+		if (!user && carriesShareToken(event.request, event.url)) {
+			return applyResponseHeaders(await resolve(event), pathname, requestId);
+		}
+
 		if (!user) {
 			if (isJsonApiRoute) {
 				return applyResponseHeaders(
@@ -438,7 +470,7 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 				);
 			}
 			// With the query: an OAuth authorize request is nothing without it.
-			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname + event.url.search)}`);
+			redirect(303, `/login?redirectTo=${encodeURIComponent(withoutShareToken(event.url))}`);
 		}
 
 		attachSession(event, session ?? (await sessionFor(user, token)));

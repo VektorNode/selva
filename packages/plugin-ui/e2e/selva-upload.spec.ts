@@ -24,7 +24,7 @@ test.describe('Upload to Selva', () => {
 		await dialog.getByRole('button', { name: 'Upload', exact: true }).click();
 
 		await expect(dialog.getByText('Uploaded Facade panel, version 5')).toBeVisible();
-		await expect(dialog.getByText(/It's the draft/)).toBeVisible();
+		await expect(dialog.getByText(/Saved as a draft/)).toBeVisible();
 		await expect(dialog.getByRole('link', { name: 'Open in Selva' })).toHaveAttribute(
 			'href',
 			'https://selva.example.com/library/44444444-4444-4444-8444-444444444444'

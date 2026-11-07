@@ -30,12 +30,9 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgCompute, requireActingOrg } from '../access/index.js';
 import {
-	assertKeyNotRetargeted,
-	assertStoredKeysReadable,
 	evictChangedServers,
+	mergeApiKeys,
 	validateIncomingServers,
-	resolveApiKey,
-	storedKeysById,
 	type IncomingServerBase
 } from '../compute/index.js';
 
@@ -98,9 +95,7 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	const orgServers = existing.servers.filter(
 		(s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId
 	);
-	assertStoredKeysReadable(incoming.servers, orgServers);
-	assertKeyNotRetargeted(incoming.servers, orgServers);
-	const storedKeys = storedKeysById(orgServers);
+	const apiKeys = mergeApiKeys(incoming.servers, orgServers);
 
 	const next: OrgComputeServer[] = incoming.servers.map((s) => ({
 		id: s.id,
@@ -108,7 +103,7 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 		ownerOrgId: orgId,
 		label: s.label,
 		serverUrl: s.serverUrl,
-		apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
+		apiKey: apiKeys.get(s.id)
 	}));
 
 	// The requested org default must be visible to this org. The check runs

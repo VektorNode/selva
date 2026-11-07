@@ -1,8 +1,7 @@
 /**
- * M5 — `/api/files/[...path]` is locked to `definitions/{guid}/cover.{ext}`
- * and gated by `requireCanViewProject`. The original implementation was an
- * extension-allowlist open proxy; these tests pin the new contract so a
- * future refactor can't quietly re-open it.
+ * `/api/files/[...path]` serves only registered asset classes, and a cover only
+ * to a caller who can view its definition. These pin that contract so a
+ * refactor can't quietly turn it back into an open proxy.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -104,7 +103,8 @@ describe('GET /api/files/[...path] — per-resource authorization', () => {
 		expect(res.headers.get('cache-control')).toContain('private');
 	});
 
-	it("blocks a member of a different org from fetching another tenant's cover", async () => {
+	it("answers 404 to a member of a different org asking for another tenant's cover", async () => {
+		// The same answer as an unknown guid: a 403 would confirm the definition exists.
 		tp = await freshProviders();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const { carol } = await seedBigClient(tp);
@@ -116,10 +116,23 @@ describe('GET /api/files/[...path] — per-resource authorization', () => {
 			locals: carolLocals,
 			params: { path: `definitions/${def.record.guid}/cover.webp` }
 		});
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(404);
 	});
 
-	it("blocks a same-org member who isn't a project member (private project)", async () => {
+	it('answers 401 to an anonymous caller asking for a cover', async () => {
+		tp = await freshProviders();
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		await seedCover(tp, def.record.guid);
+
+		const res = await call(GET, {
+			locals: anon(tp),
+			params: { path: `definitions/${def.record.guid}/cover.webp` }
+		});
+		expect(res.status).toBe(401);
+	});
+
+	it("answers 404 to a same-org member who isn't a project member (private project)", async () => {
 		tp = await freshProviders();
 		const { alice, bob, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
@@ -131,7 +144,7 @@ describe('GET /api/files/[...path] — per-resource authorization', () => {
 			locals: bobLocals,
 			params: { path: `definitions/${def.record.guid}/cover.webp` }
 		});
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(404);
 	});
 
 	it('returns 404 for a well-formed but unknown definition guid', async () => {

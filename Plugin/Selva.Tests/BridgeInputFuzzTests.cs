@@ -34,18 +34,11 @@ public class BridgeInputFuzzTests
         "schema", "schemaOnly", "values", "inputs", "id", "x"
     };
 
-    private static readonly JsonSerializer Serializer = JsonSerializer.Create(
-        new JsonSerializerSettings
-        {
-            TypeNameHandling = TypeNameHandling.None,
-            MetadataPropertyHandling = MetadataPropertyHandling.Ignore
-        });
-
     [Fact]
     public void Parse_NeverThrows_OnRandomMessages()
     {
         var random = new Random(20261027);
-        var parser = new InboundMessageParser(Serializer);
+        var parser = new InboundMessageParser(WireJson.Serializer);
         for (var i = 0; i < Runs; i++)
         {
             var message = RandomMessage(random);

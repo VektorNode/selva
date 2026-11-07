@@ -22,6 +22,7 @@ import { LocalDataProvider } from '../LocalDataProvider.js';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 const EMAIL = 'leaver@x.io';
+const TOKEN_HASH = 'token-hash';
 
 let dir: string;
 let data: LocalDataProvider;
@@ -122,6 +123,19 @@ beforeEach(async () => {
 		createdBy: colleague,
 		createdAt: NOW
 	} as PlatformProjectGrant);
+	await data.apiTokens.create(S, {
+		id: randomUUID(),
+		userId: leaver,
+		createdBy: leaver,
+		orgId,
+		name: 'leaver laptop',
+		tokenHash: TOKEN_HASH,
+		scopes: ['read:all'],
+		createdAt: NOW,
+		expiresAt: '2099-01-01T00:00:00.000Z',
+		lastUsedAt: null,
+		revokedAt: null
+	});
 	await data.shareLinks.create(S, {
 		id: randomUUID(),
 		definitionId: guid,
@@ -151,6 +165,12 @@ describe('LocalDataProvider.onUserDeleted', () => {
 		const after = await diskContents();
 		expect(after).not.toContain(leaver);
 		expect(after).not.toContain(EMAIL);
+	});
+
+	it('stops their API token resolving', async () => {
+		expect(await data.apiTokens.getByTokenHash(S, TOKEN_HASH)).not.toBeNull();
+		await data.onUserDeleted(S, leaver, { email: EMAIL });
+		expect(await data.apiTokens.getByTokenHash(S, TOKEN_HASH)).toBeNull();
 	});
 
 	it('stops a pending invite to them resolving', async () => {

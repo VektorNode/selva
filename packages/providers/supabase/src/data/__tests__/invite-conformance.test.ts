@@ -38,9 +38,22 @@ if (!envCtx) {
 					permissions: [...DEFAULT_ORG_PERMISSIONS.owner],
 					joined_at: now
 				});
-				return { adminId, adminSessionToken, orgId };
+				// Owned by the admin but without a membership: the admin needn't belong to it.
+				const otherOrgId = crypto.randomUUID();
+				const other = await envCtx.adminClient.from('orgs').insert({
+					id: otherOrgId,
+					name: 'Invite Other Org',
+					slug: `invite-other-${otherOrgId.slice(0, 8)}`,
+					owner_id: adminId,
+					created_at: now,
+					updated_at: now
+				});
+				if (other.error) throw other.error;
+				return { adminId, adminSessionToken, orgId, otherOrgId };
 			},
 			seedUser: (id) => seedUser(envCtx, id),
+			orgScoping: true,
+			revokeAccepted: true,
 			reopen: true
 		});
 	});

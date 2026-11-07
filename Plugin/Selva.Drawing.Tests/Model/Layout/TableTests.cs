@@ -57,11 +57,20 @@ public class TableTests
 			Rows = new[] { new[] { Cell("body") } },
 			DefaultCellStyle = new TextStyle { FontSize = 3 },
 		};
-		// No public API exposes the resolved style directly, so this only checks that
-		// resolution succeeds — bold is applied internally inside the cell.
 		var resolved = table.Resolve(new LayoutContext(BoundingBox.Empty));
-		Assert.NotNull(resolved);
+
+		var texts = Texts(resolved).ToDictionary(t => t.Text);
+		Assert.Equal(FontWeight.Bold, texts["Title"].Style.Weight);
+		Assert.Equal(FontWeight.Normal, texts["body"].Style.Weight);
+		Assert.Equal(3, texts["Title"].Style.FontSize);
 	}
+
+	private static IEnumerable<TextElement> Texts(DrawElement element) => element switch
+	{
+		TextElement text => new[] { text },
+		GroupElement group => group.Children.SelectMany(Texts),
+		_ => Enumerable.Empty<TextElement>(),
+	};
 
 	[Fact]
 	public void Five_by_four_bom_table_renders_to_pdf_and_svg()

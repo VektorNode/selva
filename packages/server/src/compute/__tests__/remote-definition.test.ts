@@ -78,6 +78,18 @@ describe('createRemoteDefinitionFetcher — happy path', () => {
 		await fetcher.load('https://example.com/a.gh');
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
+
+	it('runs the SSRF guard on a cache hit too', async () => {
+		fetchMock.mockImplementation(async () => streamResponse(new Uint8Array([1])));
+		const fetcher = createRemoteDefinitionFetcher(baseConfig());
+		await fetcher.load('https://example.com/a.gh');
+
+		// The host now resolves somewhere the guard refuses; warm bytes must not bypass it.
+		assertSafe.mockRejectedValue(new Error('blocked private host'));
+		await expect(fetcher.load('https://example.com/a.gh')).rejects.toThrow('blocked private host');
+		expect(assertSafe).toHaveBeenCalledTimes(2);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('createRemoteDefinitionFetcher — rejections', () => {

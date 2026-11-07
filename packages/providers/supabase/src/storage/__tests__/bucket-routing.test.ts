@@ -45,3 +45,23 @@ describe('deletePrefix', () => {
 		expect(new Set(removed).size).toBe(2500);
 	});
 });
+
+describe('a path with a .. segment', () => {
+	const offline = () => {
+		const store = provider();
+		Object.assign(store, { client: { storage: { from: () => ({}) } } });
+		return store;
+	};
+
+	it.each(['../x.txt', 'definitions/g/../../x.txt', 'definitions/..'])(
+		'is refused with 400 by every method: %s',
+		async (path) => {
+			const store = offline();
+			const bytes = new TextEncoder().encode('x');
+			await expect(store.get(path)).rejects.toMatchObject({ statusCode: 400 });
+			await expect(store.put(path, bytes)).rejects.toMatchObject({ statusCode: 400 });
+			await expect(store.delete(path)).rejects.toMatchObject({ statusCode: 400 });
+			await expect(store.deletePrefix(path)).rejects.toMatchObject({ statusCode: 400 });
+		}
+	);
+});

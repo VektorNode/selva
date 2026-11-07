@@ -30,6 +30,16 @@ export interface SupabaseStorageProviderConfig {
 
 const LIST_PAGE_SIZE = 1000;
 
+/**
+ * Supabase Storage refuses to upload a `..` key but answers a read of one with
+ * not-found. Refusing here gives every method the local store's 400.
+ */
+function assertNoClimb(storagePath: string): void {
+	if (storagePath.split('/').includes('..')) {
+		throw new ProviderError(`Path escapes the store: ${JSON.stringify(storagePath)}`, 400);
+	}
+}
+
 export class SupabaseStorageProvider implements IStorageProvider {
 	private readonly client: SupabaseClient;
 	private readonly publicBucket: string;
@@ -74,6 +84,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	async get(storagePath: string): Promise<Uint8Array | null> {
+		assertNoClimb(storagePath);
 		const bucket = this.bucketFor(storagePath);
 		const { data, error } = await this.client.storage.from(bucket).download(storagePath);
 		if (error) {
@@ -87,6 +98,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<string> {
+		assertNoClimb(storagePath);
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const bucket = this.bucketFor(transcoded.path);
 		const { error } = await this.client.storage
@@ -103,12 +115,14 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	async delete(storagePath: string): Promise<void> {
+		assertNoClimb(storagePath);
 		const bucket = this.bucketFor(storagePath);
 		const { error } = await this.client.storage.from(bucket).remove([storagePath]);
 		if (error) throw error;
 	}
 
 	async deletePrefix(prefix: string): Promise<void> {
+		assertNoClimb(prefix);
 		if (trimTrailing(prefix, '/') === '') {
 			throw new ProviderError(
 				`Refusing to delete the whole store: prefix ${JSON.stringify(prefix)}`,

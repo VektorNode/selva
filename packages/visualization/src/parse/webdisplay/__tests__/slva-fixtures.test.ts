@@ -10,8 +10,10 @@ import {
 	FLAG_HAS_VERTEX_COLORS,
 	FLAG_PLANAR_BYTESPLIT,
 	FLAG_UINT16_INDICES,
-	parseBinaryMeshBatch
+	parseBinaryMeshBatch,
+	UV_FORMAT_FLOAT32
 } from '../binary-parser';
+import { maybeDecompress } from '../binary/geometry';
 
 import type { ParsedBinaryMeshBatch } from '../binary-parser';
 
@@ -65,6 +67,17 @@ function loadFixture(blobName: string): {
 		readFileSync(FIXTURES_DIR + expectedName, 'utf-8')
 	) as ExpectedFixture;
 	return { parsed, expected };
+}
+
+/** The UV chunk's format word, which sits right after the index stream. */
+function uvFormatOf(blobName: string, parsed: ParsedBinaryMeshBatch): number {
+	const bytes = maybeDecompress(new Uint8Array(readFileSync(FIXTURES_DIR + blobName)));
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	const metadataLen = view.getUint32(8, true);
+	const vertexBytes = parsed.vertices.length * ((parsed.flags & FLAG_FLOAT32) !== 0 ? 4 : 2);
+	const indexBytes = parsed.indices.length * ((parsed.flags & FLAG_UINT16_INDICES) !== 0 ? 2 : 4);
+	// preamble (12) + metadata + flags (4) + origin/scale (48) + vertexCount (4) + indexCount (4)
+	return view.getUint32(12 + metadataLen + 4 + 48 + 4 + vertexBytes + 4 + indexBytes, true);
 }
 
 /** World position from a parsed batch, applying dequantization when the blob is int16. */
@@ -168,6 +181,9 @@ describe('SLVA golden fixtures (C#-written blobs)', () => {
 		});
 
 		it('reconstructs UV and color chunks when present', () => {
+			if (expected.flags.hasUvs) {
+				expect(uvFormatOf(blobName, parsed) === UV_FORMAT_FLOAT32).toBe(expected.flags.float32Uvs);
+			}
 			if (expected.uvs) {
 				expect(parsed.uvs).not.toBeNull();
 				for (let i = 0; i < expected.uvs.length; i++) {

@@ -21,7 +21,8 @@ import {
 	LocalAuthProvider,
 	LocalDataProvider,
 	LocalStorageProvider,
-	createLocalAuthUserStore
+	createLocalAuthUserStore,
+	signHmacToken
 } from '@selvajs/local-provider';
 import {
 	type AuthUser,
@@ -140,7 +141,9 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 		events: events.events,
 		cleanup: async () => {
 			clearTestProviders();
-			await fs.rm(root, { recursive: true, force: true });
+			// Retried: a fire-and-forget write (a solve-count bump, a last-used touch) can
+			// still be renaming its temp file into the tree, which fails rm with ENOTEMPTY.
+			await fs.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 		}
 	};
 
@@ -197,6 +200,11 @@ export async function actAs(
 	userId: string
 ): Promise<Awaited<ReturnType<typeof actAsShared>> & { deps: AccessDeps }> {
 	return { ...(await actAsShared(tp, userId)), deps: accessDepsFromConfig(tp.config) };
+}
+
+/** An `admin_session` cookie value the local provider accepts for `userId`, as it mints at login. */
+export function sessionTokenFor(userId: string): string {
+	return signHmacToken(TEST_HMAC_KEY, userId, 60 * 60 * 1000);
 }
 
 // ============================================================================

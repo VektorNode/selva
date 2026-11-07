@@ -67,7 +67,8 @@ public class ContentRectInvariantTests
 
 		var resolved = LayoutPass.Resolve(content, new LayoutContext(rect));
 		var bounds = resolved?.ComputeBounds() ?? BoundingBox.Empty;
-		if (bounds.IsEmpty) return;
+		// Every case carries a view and text, so empty bounds mean the layout dropped them.
+		Assert.False(bounds.IsEmpty, $"[{container} depth={depth} scale={viewScale} captioned={captioned}] resolved to nothing");
 
 		Assert.True(bounds.Width <= RectWidth + Tolerance,
 			$"[{container} depth={depth} scale={viewScale} captioned={captioned}] " +

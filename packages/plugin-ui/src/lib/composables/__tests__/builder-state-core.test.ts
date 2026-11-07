@@ -260,6 +260,28 @@ describe('saveDraft', () => {
 		expect(notify.calls.success).toHaveLength(1);
 	});
 
+	it('sends a copy of the draft as edited', async () => {
+		const { state, deps, source } = setup();
+		state.draft = schema({
+			inputs: [{ id: 'in-a', paramType: 'number', default: 1 }],
+			outputs: [{ id: 'out-a', paramType: 'number' }],
+			layout: {
+				type: 'tabbed',
+				gap: 16,
+				tabs: [{ id: 't', label: 'Main', groups: [{ id: 'g', items: [] }] }]
+			}
+		} as unknown as Partial<UISchema>);
+		markDirty(state);
+
+		const pending = saveDraft(state, deps);
+		await resolveLastSave(source, true);
+		await pending;
+
+		expect(source.saves[0].draft).toEqual(state.draft);
+		// A copy, so an edit made while the save is in flight can't change what was sent.
+		expect(source.saves[0].draft).not.toBe(state.draft);
+	});
+
 	it('keeps dirty and toasts the reason on a rejected save', async () => {
 		const { state, deps, source, notify } = setup();
 		state.draft = schema();

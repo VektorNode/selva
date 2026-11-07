@@ -3,9 +3,8 @@ import { SLOW_SOLVE_COUNT, STUB_PORT, STUB_SECRET } from './ws-stub';
 
 const SESSION = 'e2e-session';
 
-// The chip's text, not its status region: the region has no box of its own, so it never counts
-// as visible.
-const solvingChip = (page: Page) => page.getByText(/Solving/);
+// The chip's text, not the status region beside it that announces the same words.
+const solvingChip = (page: Page) => page.getByTestId('solve-status').getByText(/Solving/);
 
 async function startSlowSolve(page: Page, hostQuery: string) {
 	await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}${hostQuery}#s=${STUB_SECRET}`);

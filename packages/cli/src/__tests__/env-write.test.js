@@ -6,7 +6,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseEnv as nodeParseEnv } from 'node:util';
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import {
+	linkSync,
+	lstatSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	statSync,
+	symlinkSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setEnvValues, renderEnvValues, writeEnvText } from '../env.js';
@@ -66,6 +75,39 @@ test(
 		writeEnvText(path, 'A=1\n');
 		assert.equal(statSync(path).mode & 0o777, 0o600);
 		assert.equal(readFileSync(path, 'utf8'), 'A=1\n');
+	}
+);
+
+test(
+	'writeEnvText never puts the new text in a file others can read, even for a moment',
+	{ skip: process.platform === 'win32' },
+	() => {
+		const dir = mkdtempSync(join(tmpdir(), 'selva-env-'));
+		const path = join(dir, '.env');
+		writeFileSync(path, 'OLD=1\n', { mode: 0o644 });
+		// A second name for the old file: it still holds the old text afterwards only if the
+		// secrets were written to a new, owner-only file rather than into the 0644 one.
+		linkSync(path, join(dir, 'old-inode'));
+		writeEnvText(path, 'SELVA_HMAC_KEY=secret\n');
+		assert.equal(readFileSync(join(dir, 'old-inode'), 'utf8'), 'OLD=1\n');
+		assert.equal(statSync(join(dir, 'old-inode')).mode & 0o777, 0o644);
+		assert.equal(readFileSync(path, 'utf8'), 'SELVA_HMAC_KEY=secret\n');
+		assert.equal(statSync(path).mode & 0o777, 0o600);
+		assert.deepEqual(readdirSync(dir).sort(), ['.env', 'old-inode']);
+	}
+);
+
+test(
+	'writeEnvText writes through a symlinked .env instead of replacing the link',
+	{ skip: process.platform === 'win32' },
+	() => {
+		const dir = mkdtempSync(join(tmpdir(), 'selva-env-'));
+		const target = join(dir, 'real.env');
+		writeFileSync(target, 'OLD=1\n', { mode: 0o600 });
+		symlinkSync(target, join(dir, '.env'));
+		writeEnvText(join(dir, '.env'), 'A=1\n');
+		assert.ok(lstatSync(join(dir, '.env')).isSymbolicLink());
+		assert.equal(readFileSync(target, 'utf8'), 'A=1\n');
 	}
 );
 

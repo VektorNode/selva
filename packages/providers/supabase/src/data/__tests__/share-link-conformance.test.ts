@@ -19,6 +19,7 @@ if (!envCtx) {
 		runShareLinkStoreConformance({
 			name: 'SupabaseShareLinkStore',
 			orgRoster: true,
+			revocationState: true,
 			createStore: () => new SupabaseShareLinkStore(envCtx.bundle),
 			createScope: async () => {
 				// Seed: 1 owner + 1 org + 1 project + 2 definitions. Share links

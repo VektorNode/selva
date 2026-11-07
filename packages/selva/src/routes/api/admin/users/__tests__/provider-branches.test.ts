@@ -118,21 +118,16 @@ describe('POST /api/admin/users — header-auth (no passwordAuth)', () => {
 		expect(row?.role).toBe('member');
 	});
 
-	it('reaches the platform-permission grant on the allowlist path', async () => {
-		// Promoting an Entra user to instance_admin goes through this same route,
-		// and the grant is out-of-band of the auth provider either way.
-		//
-		// Asserts the call, not the stored value: the permission store keys on a
-		// profile row that only `ensureUser` creates, and this stubbed provider
-		// creates the auth row alone. What matters here is that the allowlist
-		// branch doesn't skip the grant the password branch performs.
+	it('stores the requested platform permissions and records the grant', async () => {
+		// Promoting an Entra user to instance_admin goes through this same route.
+		// The new user has never signed in, so nothing has seeded the data-layer
+		// row the permission store writes to: the route has to.
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const locals = await actAs(tp, alice.id);
 
 		useProxyAuthProvider(tp);
-		const setPerms = vi.spyOn(tp.config.data.permissions, 'set');
 
 		const res = await call(POST, {
 			locals,
@@ -141,7 +136,41 @@ describe('POST /api/admin/users — header-auth (no passwordAuth)', () => {
 		expect(res.status).toBe(201);
 
 		const created = res.json as { id: string };
-		expect(setPerms).toHaveBeenCalledWith(expect.anything(), created.id, ['instance_admin']);
+		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, created.id)).toEqual([
+			'instance_admin'
+		]);
+		expect(tp.events).toContainEqual(
+			expect.objectContaining({
+				type: 'platform_permissions.changed',
+				userId: created.id,
+				actorId: alice.id,
+				permissions: ['instance_admin']
+			})
+		);
+	});
+
+	it('reports a grant the permission store refused instead of a clean 201', async () => {
+		tp = await freshProviders();
+		const { alice, acme } = await seedAcme(tp);
+		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
+		const locals = await actAs(tp, alice.id);
+
+		useProxyAuthProvider(tp);
+		vi.spyOn(tp.config.data.permissions, 'set').mockResolvedValueOnce('not_supported');
+
+		const res = await call(POST, {
+			locals,
+			body: { email: 'half-made@example.dev', permissions: ['manage_compute'] }
+		});
+
+		expect(res.status).toBe(500);
+		expect(res.json).toMatchObject({ message: expect.stringMatching(/platform permissions/i) });
+		expect(tp.events.map((e) => e.type)).not.toContain('platform_permissions.changed');
+		// The user exists and sits in the org, so the admin can grant again from the list.
+		const user = await tp.authUsers.findByEmail('half-made@example.dev');
+		expect(await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, user!.id)).toMatchObject(
+			{ role: 'member' }
+		);
 	});
 
 	it('refuses platform permissions from a caller who is not a platform admin', async () => {

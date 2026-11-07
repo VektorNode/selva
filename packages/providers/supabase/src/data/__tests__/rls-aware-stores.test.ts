@@ -19,19 +19,33 @@ function rpcBundle(result: { data: unknown; error: unknown }) {
 	return { bundle, rpc };
 }
 
-/** `revoke`'s update matches `updated`; the follow-up read sees `existing`. */
+/**
+ * `revoke`'s update matches `updated`; the follow-up read sees `existing`. `filters`
+ * records each filter the store sent, so a dropped one fails the test.
+ */
 function revokeBundle(updated: unknown[], existing: unknown) {
+	const filters: unknown[][] = [];
 	const chain = {
-		update: () => chain,
-		eq: () => chain,
-		is: () => chain,
+		update: (patch: unknown) => record('update', patch),
+		eq: (col: string, val: unknown) => record('eq', col, val),
+		is: (col: string, val: unknown) => record('is', col, val),
 		select: (columns: string) =>
 			columns === 'id'
 				? Promise.resolve({ data: updated, error: null })
-				: { eq: () => ({ maybeSingle: async () => ({ data: existing, error: null }) }) }
+				: {
+						eq: (col: string, val: unknown) => {
+							filters.push(['read eq', col, val]);
+							return { maybeSingle: async () => ({ data: existing, error: null }) };
+						}
+					}
 	};
-	const bundle = { forRequest: () => ({ from: () => chain }) } as unknown as ClientBundle;
-	return bundle;
+	function record(...call: unknown[]) {
+		filters.push(call);
+		return chain;
+	}
+	const from = vi.fn(() => chain);
+	const bundle = { forRequest: () => ({ from }) } as unknown as ClientBundle;
+	return Object.assign(bundle, { filters, from });
 }
 
 function recordingEvents() {
@@ -120,6 +134,24 @@ describe('SupabaseShareLinkStore.revoke', () => {
 		const store = new SupabaseShareLinkStore(revokeBundle([{ id: LINK_ID }], null), events);
 		await store.revoke(CTX, LINK_ID);
 		expect(events.emit).toHaveBeenCalledOnce();
+	});
+
+	it('revokes only that link, and only while it is unrevoked', async () => {
+		const bundle = revokeBundle([{ id: LINK_ID }], null);
+		await new SupabaseShareLinkStore(bundle, recordingEvents()).revoke(CTX, LINK_ID);
+
+		expect(bundle.from).toHaveBeenCalledWith('share_links');
+		expect(bundle.filters).toEqual([
+			['update', { revoked_at: expect.any(String) }],
+			['eq', 'id', LINK_ID],
+			['is', 'revoked_at', null]
+		]);
+	});
+
+	it('reads back the same link when the update matched nothing', async () => {
+		const bundle = revokeBundle([], { revoked_at: '2026-01-01T00:00:00Z' });
+		await new SupabaseShareLinkStore(bundle, recordingEvents()).revoke(CTX, LINK_ID);
+		expect(bundle.filters).toContainEqual(['read eq', 'id', LINK_ID]);
 	});
 
 	it('is a silent no-op on a link already revoked', async () => {

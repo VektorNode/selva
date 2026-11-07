@@ -214,6 +214,35 @@ internal static class BridgeAccess
         }
     }
 
+    /// <summary>
+    ///     Both gates a text frame passes before the transport acts on it. Kept here rather than in
+    ///     WebSocketTransport, which needs Rhino, so the decision is tested where it is made.
+    /// </summary>
+    /// <param name="host">What the socket declared when it authenticated; null for a browser tab.</param>
+    public static InboundRoute Route(InboundKind kind, BridgeRole role, string? host)
+    {
+        if (IsRefused(kind, role))
+        {
+            return InboundRoute.RefusedForRole;
+        }
+
+        return IsRefusedFrom(kind, host) ? InboundRoute.RefusedFromBrowserTab : InboundRoute.Dispatch;
+    }
+
+    /// <summary>
+    ///     The only binary frame a page sends is a file to save, so a browser tab is refused before
+    ///     its header counts for anything.
+    /// </summary>
+    public static InboundRoute RouteHostFile(InboundKind kind, string? host)
+    {
+        if (IsRefusedFrom(InboundKind.HostSaveFile, host))
+        {
+            return InboundRoute.RefusedFromBrowserTab;
+        }
+
+        return kind == InboundKind.HostSaveFile ? InboundRoute.Dispatch : InboundRoute.NotAHostFile;
+    }
+
     // CryptographicOperations.FixedTimeEquals isn't in net48.
     private static bool FixedTimeEquals(string presented, string expected)
     {

@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { getLayoutItems, type UISchema } from '@selvajs/schemas';
+
 import { STUB_PORT, STUB_SECRET } from './ws-stub';
 
 // Smoke: /builder loads a schema from the WebSocket stub and renders the editor. Proves the
@@ -35,6 +37,14 @@ test.describe('/builder', () => {
 	});
 
 	test('saves the schema through the stub', async ({ page }) => {
+		const saved: UISchema[] = [];
+		page.on('websocket', (ws) =>
+			ws.on('framesent', (frame) => {
+				if (typeof frame.payload !== 'string') return;
+				const message = JSON.parse(frame.payload) as { type?: string; schema?: UISchema };
+				if (message.type === 'saveSchema' && message.schema) saved.push(message.schema);
+			})
+		);
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading schema...')).toBeHidden({ timeout: 15_000 });
 
@@ -42,6 +52,11 @@ test.describe('/builder', () => {
 
 		// The stub acks with schemaSaved -> success toast.
 		await expect(page.getByText(/saved successfully/i)).toBeVisible({ timeout: 10_000 });
+		// What reached Grasshopper is the schema the builder holds, params and layout included.
+		expect(saved).toHaveLength(1);
+		expect(saved[0].inputs.map((input) => input.id)).toEqual(['in-count', 'in-timber']);
+		expect(saved[0].outputs.map((output) => output.id)).toEqual(['out-area']);
+		expect(getLayoutItems(saved[0]).map((item) => item.id)).toEqual(['item-1', 'item-2']);
 	});
 
 	test('refuses to connect without the secret from Grasshopper', async ({ page }) => {
@@ -58,7 +73,7 @@ test.describe('/builder', () => {
 
 	test('search reaches a placed parameter and a setting in a closed panel', async ({ page }) => {
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
-		await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeEnabled({
+		await expect(page.getByRole('button', { name: 'Search the builder' })).toBeEnabled({
 			timeout: 15_000
 		});
 
@@ -85,7 +100,6 @@ test.describe('/builder', () => {
 
 		const card = page.locator('[data-builder-item-id="item-2"]');
 		await card.getByRole('button', { name: 'Expand details' }).click();
-		await card.getByRole('button', { name: 'Advanced' }).click();
 		await expect(card.getByRole('button', { name: 'Buttons' })).toHaveClass(/bg-primary/);
 
 		await card.getByRole('button', { name: 'Picture for Larch' }).click();

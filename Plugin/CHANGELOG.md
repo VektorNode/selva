@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.
+- Bake Files creates nested folders for a file name with slashes, the way the web download already did. A file name whose last part can't be a file name (`C:x`, `..`, `plan:v2`, `nul`) fails the bake with an error instead of writing somewhere unexpected.
+- An older saved UI schema keeps its saved `lastModified` when loaded; it changes on the next save.
+
+### Security
+
+- Image and file URL inputs refuse an IPv6 address that wraps a private or link-local IPv4 address (NAT64, 6to4, IPv4-compatible, IPv4-translated, Teredo), which could reach a cloud metadata endpoint.
+- Get Server File refuses a path that leaves the data folder through a symlink or junction.
+- Bake Files keeps every file inside its base folder: a Sub Folder segment containing `: < > " | ? *` or a control character, ending in a dot, or naming a Windows device (`CON`, `NUL`, `COM1`) is dropped, and a file name like `../../x` can no longer escape.
 
 ## [0.25.0] - 2026-11-05
 

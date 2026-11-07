@@ -66,6 +66,11 @@ jobs:
             exit 1
           }
 
+      # A changed param list behind a released GUID rewires saved definitions
+      # silently; test.yml catches it on PRs, but a tag can sit on any commit.
+      - name: Check component signatures
+        run: node scripts/plugin/check-component-signatures.mjs --check
+
       # Before the build, so a tag pushed by hand without a changelog section
       # fails here instead of publishing to Yak. `pnpm release:plugin` cuts it.
       - name: Extract release notes from Plugin/CHANGELOG.md
@@ -75,20 +80,10 @@ jobs:
           node scripts/release/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
-      # built-in cache can't be used.
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+      # Gates the release on the .NET tests, for the same reason as the signature
+      # check: a tag can sit on a commit test.yml never ran on. Also installs the
+      # .NET SDKs the build below uses.
+      - uses: ./.github/actions/dotnet-test
 
       - uses: pnpm/action-setup@v6.0.10
 

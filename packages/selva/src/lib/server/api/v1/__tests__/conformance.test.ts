@@ -486,10 +486,6 @@ describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', (
 		'GET api/admin/system/throughput', // streams random bytes downstream
 		'POST api/admin/system/throughput', // reads the body as a stream
 		'GET api/admin/system/health', // every check self-reports its own status
-		'GET api/admin/compute', // maps its catch to a deliberate logged 500
-		'PUT api/admin/compute',
-		'POST api/admin/compute/actions',
-		'GET api/admin/compute/status',
 		'POST api/v1/compute', // solve paths: streaming + their own metric marks
 		'POST api/v1/compute/schema',
 		'POST api/v1/definitions/[guid]/solve',

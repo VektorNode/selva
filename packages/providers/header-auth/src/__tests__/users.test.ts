@@ -85,6 +85,46 @@ describe('createAllowlistStore — rebindUpn', () => {
 		// Unchanged — collision is left for the operator to resolve.
 		expect((await store.findById(alice.id))?.upn).toBe('alice@example.com');
 	});
+
+	it('moves the claim with the UPN', async () => {
+		const created = await store.createUser('alice@company.com');
+		await store.claim(created.id, 'alice@old-tenant.example');
+		await store.rebindUpn(created.id, 'Alice@New-Tenant.example');
+		expect((await store.findById(created.id))?.claimedByUpn).toBe('alice@new-tenant.example');
+	});
+});
+
+describe('createAllowlistStore — claim', () => {
+	it('records the first claimant, case-folded, and keeps it', async () => {
+		const created = await store.createUser('alice@company.com');
+		expect(await store.claim(created.id, ' Alice@Tenant.example ')).toBe('alice@tenant.example');
+		expect(await store.claim(created.id, 'someone-else@tenant.example')).toBe(
+			'alice@tenant.example'
+		);
+		expect((await store.findById(created.id))?.claimedByUpn).toBe('alice@tenant.example');
+	});
+
+	it('lets exactly one of two concurrent first sign-ins win', async () => {
+		const created = await store.createUser('alice@company.com');
+		const [a, b] = await Promise.all([
+			store.claim(created.id, 'a@tenant.example'),
+			store.claim(created.id, 'b@tenant.example')
+		]);
+		expect(a).toBe(b);
+	});
+
+	it('replaces the claimant only when asked to', async () => {
+		const created = await store.createUser('alice@company.com');
+		await store.claim(created.id, 'old@tenant.example');
+		expect(await store.claim(created.id, 'new@tenant.example', { replace: true })).toBe(
+			'new@tenant.example'
+		);
+		expect((await store.findById(created.id))?.claimedByUpn).toBe('new@tenant.example');
+	});
+
+	it('returns null for a missing row', async () => {
+		expect(await store.claim('missing', 'a@tenant.example')).toBeNull();
+	});
 });
 
 describe('createAllowlistStore — syncFromHeaders', () => {

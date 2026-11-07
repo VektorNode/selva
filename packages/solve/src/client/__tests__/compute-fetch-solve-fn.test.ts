@@ -69,6 +69,24 @@ describe('createComputeFetchSolveFn — happy path', () => {
 		expect(result.meshes).toEqual([]);
 	});
 
+	it('sends a bearer token in the Authorization header, never the URL', async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ values: [] }));
+		const solve = createComputeFetchSolveFn(baseOpts({ bearerToken: () => 'share_abc' }));
+		await solve({}, new AbortController().signal);
+
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/compute');
+		expect(new Headers(init.headers).get('authorization')).toBe('Bearer share_abc');
+	});
+
+	it('sends no Authorization header without a bearer token', async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ values: [] }));
+		const solve = createComputeFetchSolveFn(baseOpts({ bearerToken: () => null }));
+		await solve({}, new AbortController().signal);
+
+		expect(new Headers(fetchMock.mock.calls[0][1].headers).has('authorization')).toBe(false);
+	});
+
 	it('leaves an output neither its id nor its nickname finds undefined', async () => {
 		fetchMock.mockResolvedValue(
 			jsonResponse({ values: [{ ParamName: 'Other', InnerTree: { '{0}': [{ data: '5' }] } }] })

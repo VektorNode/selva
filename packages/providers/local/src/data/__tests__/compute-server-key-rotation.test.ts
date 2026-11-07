@@ -1,7 +1,7 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SYSTEM_CONTEXT, type PlatformComputeServer } from '@selvajs/platform';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 
@@ -9,6 +9,16 @@ import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 // previous key still opens it, boot re-seals it, and only then can the
 // previous key go.
 describe('rotating SELVA_AT_REST_KEY', () => {
+	let dir: string;
+
+	beforeEach(async () => {
+		dir = await mkdtemp(join(tmpdir(), 'selva-rotate-'));
+	});
+
+	afterEach(async () => {
+		await rm(dir, { recursive: true, force: true });
+	});
+
 	const oldKey = Buffer.alloc(32, 1);
 	const newKey = Buffer.alloc(32, 2);
 	const server: PlatformComputeServer = {
@@ -21,7 +31,7 @@ describe('rotating SELVA_AT_REST_KEY', () => {
 	};
 
 	it('keeps the API key readable through the rotation and after the previous key is dropped', async () => {
-		const file = join(mkdtempSync(join(tmpdir(), 'selva-rotate-')), 'compute.config.json');
+		const file = join(dir, 'compute.config.json');
 		await new LocalComputeServerStore(file, oldKey).savePlatformServers(
 			SYSTEM_CONTEXT,
 			[server],

@@ -54,7 +54,8 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 	};
 });
 
-vi.mock('@selvajs/compute/core', () => {
+vi.mock('@selvajs/compute/core', async (importOriginal) => {
+	const { ErrorCodes } = await importOriginal<typeof import('@selvajs/compute/core')>();
 	class MockComputeError extends Error {
 		code: string;
 		constructor(message: string, code: string) {
@@ -71,13 +72,7 @@ vi.mock('@selvajs/compute/core', () => {
 			typeof (d as Recorded).key === 'string' &&
 			typeof (d as Recorded).load === 'function',
 		ComputeError: MockComputeError,
-		ErrorCodes: {
-			QUEUE_FULL: 'QUEUE_FULL',
-			QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
-			ABORTED: 'ABORTED',
-			TIMEOUT_ERROR: 'TIMEOUT_ERROR',
-			RESPONSE_TOO_LARGE: 'RESPONSE_TOO_LARGE'
-		}
+		ErrorCodes
 	};
 });
 

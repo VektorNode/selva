@@ -206,8 +206,7 @@ export async function runMigrate(
 			return;
 		}
 		const bak = backupPathFor(envPath, backupStamp());
-		copyFileSync(envPath, bak);
-		writeEnvText(bak, readFileSync(bak, 'utf8'));
+		writeEnvText(bak, readFileSync(envPath, 'utf8'));
 		writeEnvText(envPath, envPlan.text);
 		p.outro(
 			pc.green('.env migrated. ') +
@@ -263,8 +262,7 @@ export async function runMigrate(
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
 
 	if (envChanged) {
-		copyFileSync(envPath, envBak);
-		writeEnvText(envBak, readFileSync(envBak, 'utf8'));
+		writeEnvText(envBak, readFileSync(envPath, 'utf8'));
 		writeEnvText(envPath, envPlan.text);
 	}
 
@@ -292,7 +290,7 @@ export async function runMigrate(
 		s.stop(pc.red('npm install failed — rolling back'));
 		copyFileSync(bakPath, pkgPath);
 		if (envChanged && existsSync(envBak)) {
-			copyFileSync(envBak, envPath);
+			writeEnvText(envPath, readFileSync(envBak, 'utf8'));
 		}
 
 		// A half-installed node_modules from the failed attempt is worse than the old

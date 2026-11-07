@@ -8,17 +8,14 @@ import {
 	type ComputeServerConfig,
 	type PlatformComputeServer
 } from '@selvajs/platform';
+import { apiRoute, noContent } from '#lib/server/api/http.js';
 import { evictChangedServers } from '#lib/server/compute/evictChangedServers.js';
 import { serverResolver } from '#lib/server/compute/serverResolver.server.js';
 import {
-	assertStoredKeysReadable,
-	assertKeyNotRetargeted,
+	mergeApiKeys,
 	validateIncomingServers,
-	resolveApiKey,
-	storedKeysById,
 	type IncomingServerBase
 } from '@selvajs/server/compute';
-import { renderThrown } from '@selvajs/server/logging';
 
 /**
  * Admin platform-server endpoint. `manage_compute` only. Reads/writes the
@@ -39,102 +36,87 @@ interface IncomingConfig {
 
 // GET — return platform servers + global default. API keys are stripped and
 // replaced with a `hasApiKey` flag.
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = apiRoute('Failed to load compute config', async ({ locals }) => {
 	requireManageCompute(locals);
-	try {
-		const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
-		const servers = platformServers(config).map(
-			({ apiKey: _apiKey, hasApiKey, ...rest }): ServerPayload => ({
-				...rest,
-				hasApiKey: !!hasApiKey
-			})
-		);
-		return json({
-			servers,
-			defaultServerId: config.defaultServerId
-		});
-	} catch (err) {
-		locals.log.error('Failed to load compute config', {
-			component: 'Compute GET',
-			err: renderThrown(err)
-		});
-		apiError(500, ApiErrorCode.INTERNAL, 'Failed to load compute config');
-	}
-};
+	const config = await getComputeServerConfigStore().getConfig(locals.ctx!);
+	const servers = platformServers(config).map(
+		({ apiKey: _apiKey, hasApiKey, ...rest }): ServerPayload => ({
+			...rest,
+			hasApiKey: !!hasApiKey
+		})
+	);
+	return json({
+		servers,
+		defaultServerId: config.defaultServerId
+	});
+});
 
 // PUT — replace the full set of platform servers + global default.
 // apiKey field semantics:
 //   omitted / undefined  → preserve the currently stored key (matched by id)
 //   null                 → explicitly clear the key
 //   non-empty string     → replace with new value
-export const PUT: RequestHandler = async ({ request, locals }) => {
-	requireManageCompute(locals);
-	const body = await request.json().catch(() => null);
-	if (!body || typeof body !== 'object')
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
+export const PUT: RequestHandler = apiRoute(
+	'Failed to save compute config',
+	async ({ request, locals }) => {
+		requireManageCompute(locals);
+		const body = await request.json().catch(() => null);
+		if (!body || typeof body !== 'object')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
 
-	const incoming = body as IncomingConfig;
-	if (!Array.isArray(incoming.servers))
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
+		const incoming = body as IncomingConfig;
+		if (!Array.isArray(incoming.servers))
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'servers must be an array');
 
-	validateIncomingServers(incoming.servers);
+		validateIncomingServers(incoming.servers);
 
-	// Platform-only: org servers have an owner instead of a share list.
-	for (const s of incoming.servers) {
-		if (s.sharedWith !== 'all' && !Array.isArray(s.sharedWith)) {
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				'sharedWith must be "all" or an array of org ids'
-			);
+		// Platform-only: org servers have an owner instead of a share list.
+		for (const s of incoming.servers) {
+			if (s.sharedWith !== 'all' && !Array.isArray(s.sharedWith)) {
+				apiError(
+					400,
+					ApiErrorCode.VALIDATION_FAILED,
+					'sharedWith must be "all" or an array of org ids'
+				);
+			}
+			if (Array.isArray(s.sharedWith) && s.sharedWith.some((x) => typeof x !== 'string')) {
+				apiError(400, ApiErrorCode.VALIDATION_FAILED, 'sharedWith array must contain strings');
+			}
 		}
-		if (Array.isArray(s.sharedWith) && s.sharedWith.some((x) => typeof x !== 'string')) {
-			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'sharedWith array must contain strings');
+
+		if (incoming.defaultServerId) {
+			const found = incoming.servers.find((s) => s.id === incoming.defaultServerId);
+			if (!found)
+				apiError(
+					400,
+					ApiErrorCode.VALIDATION_FAILED,
+					'defaultServerId must reference one of the submitted servers'
+				);
 		}
-	}
 
-	if (incoming.defaultServerId) {
-		const found = incoming.servers.find((s) => s.id === incoming.defaultServerId);
-		if (!found)
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				'defaultServerId must reference one of the submitted servers'
-			);
-	}
-
-	try {
 		const provider = getComputeServerConfigStore();
 		// One of the few reads that genuinely needs every key: unchanged servers
 		// keep their stored key, and `evictChangedServers` diffs on key rotation.
 		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
-		assertStoredKeysReadable(incoming.servers, platformServers(existing));
-		assertKeyNotRetargeted(incoming.servers, platformServers(existing));
-		const storedKeys = storedKeysById(platformServers(existing));
+		const apiKeys = mergeApiKeys(incoming.servers, platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
 			// Named fields only: anything else in the body would be written to the store as-is.
-			({ id, label, serverUrl, apiKey, sharedWith }): PlatformComputeServer => ({
+			({ id, label, serverUrl, sharedWith }): PlatformComputeServer => ({
 				id,
 				label,
 				serverUrl,
 				scope: 'platform',
 				sharedWith: sharedWith === 'all' ? 'all' : [...sharedWith],
-				apiKey: resolveApiKey(apiKey, storedKeys.get(id))
+				apiKey: apiKeys.get(id)
 			})
 		);
 
 		await provider.savePlatformServers(locals.ctx!, next, incoming.defaultServerId);
 		serverResolver.forget();
-		// Drop warm clients for servers whose URL/key rotated or that were removed —
-		// keyed on `id`, they wouldn't age out on their own (ADR 0004).
+		// Drop warm clients for servers whose URL or key rotated, or that were
+		// removed: keyed on `id`, they wouldn't age out on their own.
 		evictChangedServers(platformServers(existing), next);
-		return new Response(null, { status: 204 });
-	} catch (err) {
-		locals.log.error('Failed to save compute config', {
-			component: 'Compute PUT',
-			err: renderThrown(err)
-		});
-		apiError(500, ApiErrorCode.INTERNAL, 'Failed to save compute config');
+		return noContent();
 	}
-};
+);

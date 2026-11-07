@@ -80,7 +80,7 @@ until a subject is erased.
 a collector and may be indexed by a third party. Personal data in a log line outlives every guarantee
 above, so never log whole domain objects.
 
-The pino redaction list (`packages/server/src/logging/PinoLogger.ts`) matches **credential field
+The log redaction list (`packages/server/src/logging/PinoLogger.ts`) matches **credential field
 names** (`token`, `apiKey`, ...). It won't catch an email nested in a payload. See
 [security & limits § Logging and personal data](../deployment/security-and-limits.md#logging-and-personal-data)
 for the matched names and depth.

@@ -20,8 +20,8 @@ function toSlug(path) {
 		.replace(/\.md$/, '')
 		.split('/')
 		.filter((s) => s && s !== '.')
-		.map((s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase())
-		.join('/');
+		.join('/')
+		.toLowerCase();
 }
 
 /**

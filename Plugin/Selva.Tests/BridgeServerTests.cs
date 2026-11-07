@@ -160,6 +160,56 @@ public sealed class BridgeServerTests : IAsyncLifetime
         Assert.Empty(_received);
     }
 
+    // The timed-out receive aborts the server's socket, so the page sees the connection drop
+    // rather than a close frame.
+    [Fact]
+    public async Task Socket_ThatNeverAuthenticates_IsDroppedAfterTheAuthTimeout()
+    {
+        using var socket = await ConnectAsync();
+        var started = DateTime.UtcNow;
+
+        using var wait = new CancellationTokenSource(Selva.GH.Config.AppConfig.WebSocket.AuthTimeoutMs + 5_000);
+        var dropped = await Record.ExceptionAsync(
+            () => socket.ReceiveAsync(new ArraySegment<byte>(new byte[256]), wait.Token));
+
+        Assert.IsType<WebSocketException>(dropped);
+        Assert.True(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(Selva.GH.Config.AppConfig.WebSocket.AuthTimeoutMs - 500));
+        Assert.Empty(_received);
+    }
+
+    // JSON allows whitespace anywhere between tokens, so padding keeps the secret valid and the
+    // size alone decides.
+    private static string AuthenticatePaddedTo(int bytes)
+    {
+        var message = "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}";
+        return message.Insert(1, new string(' ', bytes - message.Length));
+    }
+
+    [Fact]
+    public async Task Authenticate_AtTheSizeLimit_IsAcknowledged()
+    {
+        using var socket = await ConnectAsync();
+        await SendAsync(socket, AuthenticatePaddedTo(BridgeAccess.MaxAuthenticateBytes));
+
+        Assert.Equal(BridgeAccess.AuthenticatedMessage(BridgeRole.Author), await ReceiveTextAsync(socket));
+    }
+
+    // Refused as soon as the buffer fills, not when the auth timeout runs out.
+    [Fact]
+    public async Task Authenticate_OverTheSizeLimit_IsClosedAtOnce()
+    {
+        using var socket = await ConnectAsync();
+        var started = DateTime.UtcNow;
+        await SendAsync(socket, AuthenticatePaddedTo(BridgeAccess.MaxAuthenticateBytes + 1));
+
+        var result = await socket.ReceiveAsync(new ArraySegment<byte>(new byte[256]), Timeout());
+
+        Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+        Assert.Equal(BridgeAccess.UnauthorizedCloseCode, (int?)result.CloseStatus);
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(Selva.GH.Config.AppConfig.WebSocket.AuthTimeoutMs / 2));
+        Assert.Empty(_received);
+    }
+
     [Fact]
     public async Task Broadcast_SkipsASocketThatHasNotAuthenticated()
     {

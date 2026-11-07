@@ -48,6 +48,7 @@ import * as orgRoute from '../../../../routes/api/v1/orgs/[orgId]/+server.js';
 import * as orgMembersRoute from '../../../../routes/api/v1/orgs/[orgId]/members/+server.js';
 import * as orgMemberRoute from '../../../../routes/api/v1/orgs/[orgId]/members/[userId]/+server.js';
 import * as invitesRoute from '../../../../routes/api/v1/orgs/[orgId]/invites/+server.js';
+import * as inviteRoute from '../../../../routes/api/v1/orgs/[orgId]/invites/[id]/+server.js';
 import * as orgComputeRoute from '../../../../routes/api/v1/orgs/[orgId]/compute/+server.js';
 
 let tp: TestProviders;
@@ -278,6 +279,53 @@ describe('API token org boundary, every route addressed by id', () => {
 			expect(text).not.toContain(ids.bigClient.id);
 		}
 	);
+});
+
+describe('invites with an API key, in its own org', () => {
+	async function acmeWithInvite() {
+		tp = await freshProviders();
+		const { alice, acme } = await seedAcme(tp);
+		const created = await call(invitesRoute.POST as never, {
+			locals: await actAs(tp, alice.id),
+			params: { orgId: acme.id },
+			body: { email: 'newcomer@acme.test' }
+		});
+		expect(created.status).toBe(201);
+		return { alice, acme, inviteId: (created.json as { id: string }).id };
+	}
+
+	it('cannot list them: invitee emails are personal data', async () => {
+		const { alice, acme } = await acmeWithInvite();
+		const keyed = await keyLocals(await mint(alice.id, acme.id, ['read:all']));
+
+		const res = await call(invitesRoute.GET as never, {
+			locals: keyed,
+			params: { orgId: acme.id }
+		});
+
+		expect(res.status).toBe(403);
+		expect(JSON.stringify(res.json)).not.toContain('newcomer@acme.test');
+		const fromSession = await call(invitesRoute.GET as never, {
+			locals: await actAs(tp, alice.id),
+			params: { orgId: acme.id }
+		});
+		expect(fromSession.status).toBe(200);
+	});
+
+	it('may revoke one: revoking only removes access', async () => {
+		const { alice, acme, inviteId } = await acmeWithInvite();
+		const keyed = await keyLocals(await mint(alice.id, acme.id));
+
+		const res = await call(inviteRoute.DELETE as never, {
+			locals: keyed,
+			method: 'DELETE',
+			params: { orgId: acme.id, id: inviteId }
+		});
+
+		expect(res.status).toBe(204);
+		const pending = await tp.config.data.invites.listByOrg(SYSTEM_CONTEXT, acme.id);
+		expect(pending.items.map((i) => i.id)).not.toContain(inviteId);
+	});
 });
 
 describe('moving a definition', () => {

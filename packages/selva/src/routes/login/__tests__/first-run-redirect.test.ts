@@ -1,11 +1,7 @@
-// `/login` and `/setup` are meant to be mutually exclusive: exactly one is live
-// depending on whether an instance admin exists. The `/setup` → `/login` half
-// was implemented; this half was not.
-//
-// `/login` sits on the public-route allowlist, so the first-run redirect in
-// hooks.server.ts skips it. A fresh deployment therefore rendered a working
-// login form on which every credential fails, with no path to the bootstrap
-// flow short of guessing the /setup URL.
+// `/login` and `/setup` are mutually exclusive: exactly one is live, depending on
+// whether an instance admin exists. `/login` is on the public-route allowlist, so the
+// first-run redirect in hooks.server.ts skips it and the page redirects itself.
+// Without that, a fresh deployment shows a login form on which every credential fails.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

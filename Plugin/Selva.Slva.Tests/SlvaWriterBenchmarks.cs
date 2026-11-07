@@ -9,9 +9,12 @@ using Xunit.Abstractions;
 namespace Selva.Slva.Tests;
 
 // Compares SlvaWriter output against the old gzip(float32 + int32) format on synthetic
-// meshes approximating real WebDisplay payloads. Run manually when validating performance changes.
+// meshes approximating real WebDisplay payloads. Run manually when validating performance changes:
+// remove the Skip locally. The layout probe's guarantee is tested in SlvaWriterTests.
 public class SlvaWriterBenchmarks
 {
+    private const string Manual = "Benchmark: run manually when validating performance changes.";
+
     private readonly ITestOutputHelper _output;
 
     public SlvaWriterBenchmarks(ITestOutputHelper output)
@@ -19,19 +22,19 @@ public class SlvaWriterBenchmarks
         _output = output;
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Compare_SmallMesh()
     {
         Run("Small (10k vertices, 30k indices)", vertexCount: 10_000, indexCount: 30_000, bboxSize: 10f);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Compare_MediumMesh()
     {
         Run("Medium (250k vertices, 750k indices)", vertexCount: 250_000, indexCount: 750_000, bboxSize: 50f);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Compare_HeavyMesh()
     {
         Run("Heavy (1.5M vertices, 4.5M indices)", vertexCount: 1_500_000, indexCount: 4_500_000, bboxSize: 100f);
@@ -289,21 +292,21 @@ public class SlvaWriterBenchmarks
         return (vertices, indices);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Ratio_WeldedGrid()
     {
         // Measured 9.1% on net8 (the v3 interleaved layout produced 12.4%).
         RunRatio("welded grid 256x256 (65k verts, 130k tris)", WeldedGrid(256), maxRatio: 0.11);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Ratio_PartScatter()
     {
         // Measured 6.8% on net8 (v3: ~14%).
         RunRatio("part scatter 3000 boxes (72k verts, 36k tris)", PartScatter(3000), maxRatio: 0.09);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Ratio_InstancedParts()
     {
         // Repeated byte-identical parts: the regime where the writer's layout probe picks
@@ -312,7 +315,7 @@ public class SlvaWriterBenchmarks
         RunRatio("instanced part x2000 (48k verts, 24k tris)", InstancedParts(2000), maxRatio: 0.05);
     }
 
-    [Fact]
+    [Fact(Skip = Manual)]
     public void Ratio_LayoutProbeNeverLosesToEitherFixedLayout()
     {
         // The guarantee the per-blob probe makes: on every shape, the blob it emits is no larger

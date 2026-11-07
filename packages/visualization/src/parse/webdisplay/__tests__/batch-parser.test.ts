@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
 import type { MeshBatchBuilderOptions } from '@tests/helpers/mesh-batch-builder';
-import { OWN_EMISSIVE, decodeBase64ToBinary, getLogger, setLogger } from '../../../shared/index.js';
+import {
+	OWN_EMISSIVE,
+	VisualizationError,
+	decodeBase64ToBinary,
+	getLogger,
+	setLogger
+} from '../../../shared/index.js';
 import { getTrackingKey } from '../../../scene/identity.js';
 
 import {
@@ -12,6 +18,7 @@ import {
 	parseMeshBatchBlob,
 	resetUnmergedWarning
 } from '../batch-parser';
+import { ASSEMBLY_WORKER_MIN_TRIANGLES } from '../batch/assembly-worker';
 import { createMaterial } from '../batch/materials';
 
 const COORD_TRANSFORM_TOLERANCE = 1e-5;
@@ -618,6 +625,70 @@ describe('group metadata validation (issue 19)', () => {
 		await expect(parseMeshBatchObject(built.batch, { mergeByMaterial: false })).rejects.toThrow(
 			/outside its mesh/i
 		);
+	});
+});
+
+describe('parseMeshBatchBlob error contract', () => {
+	function blobWithMetadata(metadataJson: string): Uint8Array {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
+		return decodeBase64ToBinary(
+			encodeBatchPayload(built.rawVertices, built.rawFaces, {
+				materials: [],
+				groups: [],
+				metadataJson
+			})
+		);
+	}
+
+	it.each([
+		'null',
+		'5',
+		'[]',
+		'{"materials":5,"groups":[]}',
+		'{"materials":[{}],"groups":5}',
+		'{"materials":[{}],"groups":[null]}',
+		'{"materials":[{}],"groups":[{"materialId":0}]}',
+		'{"materials":[{}],"groups":[{"materialId":0,"meshes":[null]}]}',
+		'{"materials":[null],"groups":[{"materialId":0,"meshes":[{"vertexStart":0,"vertexCount":3,"indexStart":0,"indexCount":3}]}]}',
+		'{"materials":["red"],"groups":[{"materialId":0,"meshes":[{"vertexStart":0,"vertexCount":3,"indexStart":0,"indexCount":3}]}]}'
+	])('rejects metadata %s with a VisualizationError', async (metadataJson) => {
+		await expect(parseMeshBatchBlob(blobWithMetadata(metadataJson))).rejects.toBeInstanceOf(
+			VisualizationError
+		);
+	});
+
+	/** One batch past the threshold where assembly takes over from the synchronous path. */
+	function heavyBatch(meshCount: number): ReturnType<typeof buildMeshBatch> {
+		return buildMeshBatch({
+			materialCount: 1,
+			meshCount,
+			vertsPerMesh: Math.ceil(ASSEMBLY_WORKER_MIN_TRIANGLES / meshCount) + 2,
+			layerCount: 1
+		});
+	}
+
+	function encode(built: ReturnType<typeof buildMeshBatch>): Uint8Array {
+		return decodeBase64ToBinary(
+			encodeBatchPayload(built.rawVertices, built.rawFaces, {
+				materials: built.batch.materials,
+				groups: built.batch.groups
+			})
+		);
+	}
+
+	it('rejects an index past the vertex buffer on a heavy batch', async () => {
+		const built = heavyBatch(1);
+		built.rawFaces[0] = built.rawVertices.length / 3 + 5;
+
+		await expect(parseMeshBatchBlob(encode(built))).rejects.toBeInstanceOf(VisualizationError);
+	});
+
+	it('rejects an index outside its mesh window on a heavy batch', async () => {
+		const built = heavyBatch(2);
+		const [meshA, meshB] = built.batch.groups[0]!.meshes;
+		[meshA!.vertexStart, meshB!.vertexStart] = [meshB!.vertexStart, meshA!.vertexStart];
+
+		await expect(parseMeshBatchBlob(encode(built))).rejects.toBeInstanceOf(VisualizationError);
 	});
 });
 

@@ -13,15 +13,8 @@ public class InboundMessageParserTests
 {
     private const string Session = "session-1";
 
-    private static readonly JsonSerializer Serializer = JsonSerializer.Create(
-        new JsonSerializerSettings
-        {
-            TypeNameHandling = TypeNameHandling.None,
-            MetadataPropertyHandling = MetadataPropertyHandling.Ignore
-        });
-
     private static InboundMessage Parse(string json, string session = Session) =>
-        new InboundMessageParser(Serializer).Parse(json, session);
+        new InboundMessageParser(WireJson.Serializer).Parse(json, session);
 
     // -------------------------------------------------------------------------
     // valueUpdate

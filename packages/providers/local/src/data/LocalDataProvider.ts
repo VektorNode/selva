@@ -119,14 +119,6 @@ export class LocalDataProvider implements IDataProvider {
 			// Already absent — nothing to clean up.
 		}
 		await this.apiTokens.eraseUser(ctx, userId);
-		// `findUserMembership` returns one live membership at a time; removing it
-		// surfaces the next. 100 is far above any real org count — a ceiling in
-		// case a store bug ever turns removal into a no-op.
-		for (let i = 0; i < 100; i++) {
-			const membership = await this.orgs.findUserMembership(ctx, userId);
-			if (!membership) break;
-			await this.orgs.removeOrgMember(ctx, membership.org.id, userId);
-		}
 		await this.erasable.orgs.eraseUser(userId);
 		await this.erasable.definitions.eraseUser(userId);
 		await this.erasable.invites.eraseUser(userId, opts?.email);

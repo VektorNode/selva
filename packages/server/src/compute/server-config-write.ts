@@ -190,3 +190,19 @@ export function storedKeysById(
 ): Map<string, string | undefined> {
 	return new Map(scopedServers.map((s) => [s.id, s.apiKey]));
 }
+
+/**
+ * The whole apiKey merge for one scope's write: refuses an unreadable or
+ * retargeted key with 409, then returns the key to store for each submitted id.
+ * `scopedStored` must be read with `includeApiKeys` and hold only the caller's
+ * scope.
+ */
+export function mergeApiKeys(
+	incoming: readonly Pick<IncomingServerBase, 'id' | 'serverUrl' | 'apiKey'>[],
+	scopedStored: readonly { id: string; serverUrl: string; apiKey?: string; hasApiKey?: boolean }[]
+): Map<string, string | undefined> {
+	assertStoredKeysReadable(incoming, scopedStored);
+	assertKeyNotRetargeted(incoming, scopedStored);
+	const stored = storedKeysById(scopedStored);
+	return new Map(incoming.map((s) => [s.id, resolveApiKey(s.apiKey, stored.get(s.id))]));
+}

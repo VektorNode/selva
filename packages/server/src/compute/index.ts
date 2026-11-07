@@ -55,11 +55,10 @@ export {
 } from './resolve-server.js';
 export { ComputeServerUnconfiguredError } from './errors.js';
 export { evictChangedServers, type ServerConnection } from './evict-changed-servers.js';
+// Only the whole merge is exported: one rebuilt from its pieces can skip a check
+// and send a stored key to a new URL.
 export {
-	assertStoredKeysReadable,
-	assertKeyNotRetargeted,
 	validateIncomingServers,
-	resolveApiKey,
-	storedKeysById,
+	mergeApiKeys,
 	type IncomingServerBase
 } from './server-config-write.js';

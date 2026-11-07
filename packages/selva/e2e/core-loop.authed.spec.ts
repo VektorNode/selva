@@ -1,4 +1,11 @@
-import { expect, test } from '@playwright/test';
+import {
+	expect,
+	test,
+	type APIRequestContext,
+	type Locator,
+	type Response
+} from '@playwright/test';
+import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { meshCountForInput, startFakeCompute, type FakeCompute } from './helpers/fake-compute';
 
@@ -24,6 +31,10 @@ const REAL_COMPUTE_KEY = process.env.E2E_COMPUTE_KEY ?? process.env.RHINO_COMPUT
 
 let fake: FakeCompute | null = null;
 
+// Each test points the instance-wide compute config at this worker's fake, so
+// the tests in this file must not run side by side.
+test.describe.configure({ mode: 'default' });
+
 test.beforeAll(async () => {
 	if (!REAL_COMPUTE_URL) fake = await startFakeCompute();
 });
@@ -37,14 +48,24 @@ function isSolveResponse(url: string, method: string): boolean {
 	return method === 'POST' && new URL(url).pathname === '/api/v1/compute';
 }
 
-test('core loop: upload → solve → binary geometry renders and tracks input', async ({
-	page,
-	request
-}) => {
-	// Real solves ship multi-MB payloads; give the whole loop room.
-	test.setTimeout(240_000);
+/**
+ * Clicks `button` only if it shows before `solve` answers. The fake's schema
+ * auto-solves and renders no button; a live server's schema may wait for a click.
+ */
+async function solveOrClick(solve: Promise<Response>, button: Locator): Promise<Response> {
+	const manual = await Promise.race([
+		solve.then(() => false),
+		button.waitFor().then(
+			() => true,
+			// The page closes under the losing wait once the test ends.
+			() => false
+		)
+	]);
+	if (manual) await button.click();
+	return solve;
+}
 
-	// -- Register the compute server (fake by default, live via env) -----------
+async function registerCompute(request: APIRequestContext): Promise<void> {
 	const serverId = '00000000-0000-4000-8000-0000000000e2';
 	const put = await request.put('/api/admin/compute', {
 		data: {
@@ -61,6 +82,17 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 		}
 	});
 	expect(put.status(), await put.text().catch(() => '')).toBe(204);
+}
+
+test('core loop: upload → solve → binary geometry renders and tracks input', async ({
+	page,
+	request
+}) => {
+	// Real solves ship multi-MB payloads; give the whole loop room.
+	test.setTimeout(240_000);
+
+	// -- Register the compute server (fake by default, live via env) -----------
+	await registerCompute(request);
 
 	// -- Upload through the real dialog (schema gate runs against compute) -----
 	await page.goto('/projects');
@@ -86,11 +118,10 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 		timeout: 180_000
 	});
 	await page.goto(`/library/${guid}`);
-	await page
-		.getByRole('button', { name: /press to calculate/i })
-		.click({ timeout: 10_000 })
-		.catch(() => {}); // auto-solve schemas render no button — the solve is already in flight
-	const solved = await firstSolve;
+	const solved = await solveOrClick(
+		firstSolve,
+		page.getByRole('button', { name: /press to calculate/i })
+	);
 	expect(solved.status(), await solved.text().catch(() => '')).toBe(200);
 
 	// -- Binary geometry rendered ----------------------------------------------
@@ -115,13 +146,10 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	const countSlider = page.getByRole('slider').first();
 	await countSlider.focus();
 	await countSlider.press('End');
-	// A live compute server may ship a manual-solve schema even though the fake's
-	// bench-schema.json auto-solves; press Calculate if it appears.
-	await page
-		.getByRole('button', { name: /^calculate$/i })
-		.click({ timeout: 10_000 })
-		.catch(() => {});
-	const resolved = await nextSolve;
+	const resolved = await solveOrClick(
+		nextSolve,
+		page.getByRole('button', { name: /^calculate$/i })
+	);
 	expect(resolved.status(), await resolved.text().catch(() => '')).toBe(200);
 
 	if (fake) {
@@ -134,5 +162,62 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	} else {
 		// Live compute: assert the second solve still produced renderable meshes.
 		await expect(canvas).not.toHaveAttribute('data-mesh-count', '0', { timeout: 60_000 });
+	}
+});
+
+test('share link: a signed-out visitor opens the page and solves', async ({
+	browser,
+	request,
+	baseURL
+}) => {
+	test.setTimeout(240_000);
+	await registerCompute(request);
+
+	// The multipart upload is a form post, so it needs the Origin the CSRF check expects.
+	const upload = await request.post('/api/v1/definitions', {
+		headers: { origin: baseURL! },
+		multipart: {
+			file: {
+				name: 'bench-display.gh',
+				mimeType: 'application/octet-stream',
+				buffer: fs.readFileSync(GH_FIXTURE)
+			},
+			displayName: 'E2E shared definition'
+		}
+	});
+	expect(upload.status(), await upload.text().catch(() => '')).toBe(201);
+	const { guid } = (await upload.json()) as { guid: string };
+
+	const mint = await request.post(`/api/v1/definitions/${guid}/share-links`, { data: {} });
+	expect(mint.status(), await mint.text().catch(() => '')).toBe(201);
+	const { token } = (await mint.json()) as { token: string };
+
+	// A context of its own, with no cookies: the visitor has never signed in.
+	const visitor = await browser.newContext({
+		baseURL,
+		storageState: { cookies: [], origins: [] }
+	});
+	try {
+		const page = await visitor.newPage();
+		const firstSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
+			timeout: 180_000
+		});
+		await page.goto(`/library/${guid}?token=${token}`);
+		await expect(page).toHaveURL(new RegExp(`/library/${guid}\\?`));
+
+		const solved = await solveOrClick(
+			firstSolve,
+			page.getByRole('button', { name: /press to calculate/i })
+		);
+		expect(solved.status(), await solved.text().catch(() => '')).toBe(200);
+		// The token rides in a header, not the solve URL, so it stays out of access logs.
+		expect(solved.request().headers()['authorization']).toBe(`Bearer ${token}`);
+		expect(new URL(solved.url()).search).toBe('');
+
+		await expect(page.getByTestId('viewer-canvas')).not.toHaveAttribute('data-mesh-count', '0', {
+			timeout: 60_000
+		});
+	} finally {
+		await visitor.close();
 	}
 });

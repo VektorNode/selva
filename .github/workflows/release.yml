@@ -31,7 +31,7 @@ jobs:
     # A manual run from any other branch would fall through to the main path and publish.
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write
@@ -93,13 +93,19 @@ jobs:
             # In pre mode `changeset version` does NOT delete a consumed .md —
             # it moves it to `.changeset/pre/`. See the script for why this is
             # not read out of pre.json.
-            unconsumed=$(node scripts/release/unconsumed-changesets.mjs | grep -c . || true)
-            if [ "$unconsumed" -gt 0 ]; then
-              echo "Found $unconsumed unconsumed changeset(s) — version + publish."
+            #
+            # Each script's output is assigned before use: under bash -e a bare
+            # assignment fails the step when the script crashes. Through a pipe
+            # or `< <(...)` the exit status is lost and a crash reads as an
+            # empty list.
+            unconsumed=$(node scripts/release/unconsumed-changesets.mjs)
+            if [ -n "$unconsumed" ]; then
+              echo "Found $(grep -c . <<< "$unconsumed") unconsumed changeset(s) — version + publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               echo "needs_version=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
+            packages=$(node scripts/release/publishable-packages.mjs --list)
             while IFS=$'\t' read -r name local_ver _dir; do
               beta_ver=$(npm view "$name@$local_ver" version 2>/dev/null || echo "")
               if [ "$local_ver" != "$beta_ver" ]; then
@@ -108,7 +114,7 @@ jobs:
                 echo "needs_version=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            done < <(node scripts/release/publishable-packages.mjs --list)
+            done <<< "$packages"
             echo "No unconsumed changesets and all beta versions match npm — skipping."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -141,6 +147,7 @@ jobs:
           fi
           # publishable-packages.mjs must stay dependency-free: this runs on the
           # runner's system node, before pnpm install.
+          packages=$(node scripts/release/publishable-packages.mjs --list)
           while IFS=$'\t' read -r name local_ver _dir; do
             # Query the EXACT version, not the `latest` dist-tag — `latest` is a
             # cached read, so a just-published version can still read as the old
@@ -151,7 +158,7 @@ jobs:
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-          done < <(node scripts/release/publishable-packages.mjs --list)
+          done <<< "$packages"
           echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
@@ -204,7 +211,18 @@ jobs:
         run: pnpm changeset version
 
       # Gates the publish: on main, catches regressions in the version-PR merge
-      # commit; on beta, runs against the freshly versioned tree.
+      # commit; on beta, runs against the freshly versioned tree. test.yml runs
+      # the same checks, but this workflow does not wait for it.
+      - name: Check component signatures and generated code
+        if: steps.check.outputs.should_run == 'true'
+        run: |
+          node scripts/plugin/check-component-signatures.mjs --check
+          pnpm check:generated
+
+      - name: Lint
+        if: steps.check.outputs.should_run == 'true'
+        run: pnpm lint
+
       - name: Type-check
         if: steps.check.outputs.should_run == 'true'
         run: pnpm type-check
@@ -218,6 +236,9 @@ jobs:
       - name: Test
         if: steps.check.outputs.should_run == 'true'
         run: pnpm exec turbo run test
+
+      - uses: ./.github/actions/dotnet-test
+        if: steps.check.outputs.should_run == 'true'
 
       - name: Commit beta version bumps
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
@@ -261,12 +282,13 @@ jobs:
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
         run: |
           stable=""
+          packages=$(node scripts/release/publishable-packages.mjs --list)
           while IFS=$'\t' read -r name ver _dir; do
             case "$ver" in *-*) continue ;; esac
             if [ "$(npm view "$name@$ver" version 2>/dev/null)" != "$ver" ]; then
               stable="$stable $name@$ver"
             fi
-          done < <(node scripts/release/publishable-packages.mjs --list)
+          done <<< "$packages"
           if [ -n "$stable" ]; then
             echo "::error::Beta would publish stable versions to latest: $(echo $stable)"
             echo "Stable versions are cut on main. Re-enter pre mode or release through main."
@@ -292,11 +314,12 @@ jobs:
             exit 0
           fi
           leftover=0
+          unconsumed=$(node scripts/release/unconsumed-changesets.mjs)
           while IFS= read -r name; do
             [ -n "$name" ] || continue
             echo "::error::Changeset '$name' is still unconsumed after the release."
             leftover=$((leftover + 1))
-          done < <(node scripts/release/unconsumed-changesets.mjs)
+          done <<< "$unconsumed"
           if [ "$leftover" -gt 0 ]; then
             echo "::error::$leftover changeset(s) were not released. The run checked out \
           $(git rev-parse --short HEAD); if newer commits exist on beta, re-run against the tip."

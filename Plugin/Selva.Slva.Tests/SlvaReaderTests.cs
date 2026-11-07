@@ -361,6 +361,58 @@ public class SlvaReaderTests
         Assert.ThrowsAny<Exception>(() => SlvaReader.Read(ms.ToArray()));
     }
 
+    // Blobs from before the delta flag store raw values. The writer never emits one, and the frozen
+    // fixtures are all delta-encoded, so this hand-built blob is the only thing reaching that path.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Read_DecodesABlobFromBeforeTheDeltaFilter(bool uint16Indices)
+    {
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(SlvaWriter.Magic);
+        w.Write(1u);
+        var meta = System.Text.Encoding.UTF8.GetBytes("{}");
+        w.Write((uint)meta.Length);
+        w.Write(meta);
+        w.Write((uint16Indices ? SlvaWriter.FlagUint16Indices : 0)
+                | SlvaWriter.FlagHasUvs | SlvaWriter.FlagHasVertexColors);
+        w.Write(10.0); w.Write(20.0); w.Write(30.0); // origin
+        w.Write(0.5); w.Write(0.25); w.Write(2.0);   // scale
+        w.Write(3u);
+        foreach (var q in new short[] { -32767, 0, 100, -32000, 5, -7, 32767, -1, 1 })
+        {
+            w.Write(q);
+        }
+
+        w.Write(3u);
+        foreach (var index in new[] { 2, 0, 1 })
+        {
+            if (uint16Indices) w.Write((ushort)index);
+            else w.Write((uint)index);
+        }
+
+        w.Write(SlvaWriter.UvFormatUint16);
+        w.Write(0.0); w.Write(1.0); // uv origin
+        w.Write(0.5); w.Write(0.25); // uv scale
+        foreach (var q in new ushort[] { 0, 4, 2, 8, 65535, 1 })
+        {
+            w.Write(q);
+        }
+
+        w.Write(new byte[] { 255, 0, 10, 20, 30, 40, 7, 8, 9 });
+        w.Flush();
+
+        var decoded = SlvaReader.Read(ms.ToArray());
+
+        // world = origin + (q + 32767) * scale
+        Assert.Equal(new[] { 10f, 8211.75f, 65764f, 393.5f, 8213f, 65550f, 32777f, 8211.5f, 65566f },
+            decoded.Vertices);
+        Assert.Equal(new[] { 2, 0, 1 }, decoded.Indices);
+        Assert.Equal(new[] { 0f, 2f, 1f, 3f, 32767.5f, 1.25f }, decoded.Uvs);
+        Assert.Equal(new byte[] { 255, 0, 10, 20, 30, 40, 7, 8, 9 }, decoded.Colors);
+    }
+
     [Fact]
     public void Read_HandlesAnEmptyBatch()
     {

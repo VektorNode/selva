@@ -170,6 +170,8 @@ interface EncodeOptions {
 	uvs?: Float32Array | null;
 	/** Optional r,g,b bytes per vertex (length = vertexCount * 3) → trailing color chunk. */
 	colors?: Uint8Array | null;
+	/** Written verbatim in place of `{materials, groups}`, to feed the parser malformed metadata. */
+	metadataJson?: string;
 }
 
 /**
@@ -183,10 +185,15 @@ export function encodeBatchPayload(
 	faces: Uint32Array,
 	encodeOptions: EncodeOptions
 ): string {
-	const { materials, groups, forceFloat32 = false, uvs = null, colors = null } = encodeOptions;
+	const {
+		materials,
+		groups,
+		forceFloat32 = false,
+		uvs = null,
+		colors = null,
+		metadataJson = JSON.stringify({ materials, groups })
+	} = encodeOptions;
 
-	const metadataObject = { materials, groups };
-	const metadataJson = JSON.stringify(metadataObject);
 	const metadataBytes = utf8Encode(metadataJson);
 
 	const vertexCount = vertices.length / 3;

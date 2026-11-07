@@ -4,6 +4,7 @@ import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '#lib/server/access.server.js';
+import { apiRoute } from '#lib/server/api/http.js';
 import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	clearSolveResultCache,
@@ -40,57 +41,66 @@ interface ActionBody {
 	action?: Action;
 }
 
-export const POST: RequestHandler = async ({ request, locals }) => {
-	requireManageCompute(locals);
+export const POST: RequestHandler = apiRoute(
+	'Failed to run compute action',
+	async ({ request, locals }) => {
+		requireManageCompute(locals);
 
-	const body = (await request.json().catch(() => null)) as ActionBody | null;
-	if (!body || typeof body !== 'object')
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
+		const body = (await request.json().catch(() => null)) as ActionBody | null;
+		if (!body || typeof body !== 'object')
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
 
-	const { serverId, action } = body;
-	if (!action || !ACTIONS.includes(action))
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, `action must be one of: ${ACTIONS.join(', ')}`);
+		const { serverId, action } = body;
+		if (!action || !ACTIONS.includes(action))
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `action must be one of: ${ACTIONS.join(', ')}`);
 
-	// Selva's own in-memory caches — process-wide, so no server to target. Report
-	// what was dropped by reading the counters before clearing.
-	if (action === 'clear-solve-cache') {
-		const { entries, bytes } = solveCacheStats();
-		clearSolveResultCache();
-		return json({ action, entries, bytes });
-	}
-
-	if (action === 'clear-definition-cache') {
-		const { entries, bytes } = definitionByteCacheStats();
-		clearDefinitionCache();
-		return json({ action, entries, bytes });
-	}
-
-	if (!serverId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'serverId required');
-
-	// Admin route — read the full config; admin can act on any server. Only the
-	// targeted server's key is decrypted.
-	const store = getComputeServerConfigStore();
-	const config = await store.getConfig(locals.ctx!);
-	const server = findServerById(config, serverId);
-	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
-
-	const apiKey = server.hasApiKey ? await store.getServerApiKey(locals.ctx!, server.id) : undefined;
-	const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey);
-	if (!stats) apiError(422, ApiErrorCode.UNPROCESSABLE, misconfigured);
-	try {
-		if (action === 'purge') {
-			const result = await stats.purgeAllChildren();
-			if (result === null)
-				apiError(502, ApiErrorCode.INTERNAL, 'Could not reach the server to purge its cache');
-			return json({ action, ...result });
+		// Selva's own in-memory caches — process-wide, so no server to target. Report
+		// what was dropped by reading the counters before clearing.
+		if (action === 'clear-solve-cache') {
+			const { entries, bytes } = solveCacheStats();
+			clearSolveResultCache();
+			return json({ action, entries, bytes });
 		}
 
-		// action === 'shutdown' — no port filter, so the server shuts down every child.
-		const result = await stats.shutdownChildren();
-		if (result === null)
-			apiError(502, ApiErrorCode.INTERNAL, 'Could not reach the server to shut down its children');
-		return json({ action, ...result });
-	} finally {
-		await stats.dispose();
+		if (action === 'clear-definition-cache') {
+			const { entries, bytes } = definitionByteCacheStats();
+			clearDefinitionCache();
+			return json({ action, entries, bytes });
+		}
+
+		if (!serverId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'serverId required');
+
+		// Admin route — read the full config; admin can act on any server. Only the
+		// targeted server's key is decrypted.
+		const store = getComputeServerConfigStore();
+		const config = await store.getConfig(locals.ctx!);
+		const server = findServerById(config, serverId);
+		if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
+
+		const apiKey = server.hasApiKey
+			? await store.getServerApiKey(locals.ctx!, server.id)
+			: undefined;
+		const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey);
+		if (!stats) apiError(422, ApiErrorCode.UNPROCESSABLE, misconfigured);
+		try {
+			if (action === 'purge') {
+				const result = await stats.purgeAllChildren();
+				if (result === null)
+					apiError(502, ApiErrorCode.INTERNAL, 'Could not reach the server to purge its cache');
+				return json({ action, ...result });
+			}
+
+			// action === 'shutdown' — no port filter, so the server shuts down every child.
+			const result = await stats.shutdownChildren();
+			if (result === null)
+				apiError(
+					502,
+					ApiErrorCode.INTERNAL,
+					'Could not reach the server to shut down its children'
+				);
+			return json({ action, ...result });
+		} finally {
+			await stats.dispose();
+		}
 	}
-};
+);

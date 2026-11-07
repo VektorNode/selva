@@ -3,6 +3,7 @@ import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { getAuthProvider } from '#lib/server/providers.server.js';
 import {
+	getDataProvider,
 	getEventSink,
 	getOrganizationProvider,
 	getPermissionStore
@@ -99,10 +100,9 @@ export const POST: RequestHandler = apiRoute(
 			actorId: actorFrom(locals.ctx!)
 		});
 
-		// Grant platform permissions out-of-band via the data-layer store.
-		if (platform.length > 0) {
-			await setUserPlatformPermissions(locals.ctx!, user.id, platform);
-		}
+		// The permission store writes to the data-layer row, which the hook seeds
+		// only on the user's first request.
+		await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
 
 		// Attach to the active org as a bare member. Under header-auth this is the
 		// only way in — the IdP holds the credential, so there is no invite to
@@ -120,6 +120,18 @@ export const POST: RequestHandler = apiRoute(
 				updatedBy: locals.user?.id ?? user.id,
 				deletedAt: null
 			});
+		}
+
+		// Last, so a refused grant leaves an admitted user the admin can grant again from the list.
+		if (platform.length > 0) {
+			const granted = await setUserPlatformPermissions(locals.ctx!, user.id, platform);
+			if (granted !== 'ok') {
+				apiError(
+					500,
+					ApiErrorCode.INTERNAL,
+					`The user was created, but their platform permissions were not granted (${granted}). Grant them from the user list.`
+				);
+			}
 		}
 
 		return created(user);

@@ -14,7 +14,7 @@ import * as path from 'node:path';
 // Projects:
 //   • setup    — drives the real /setup form once, creating the admin and
 //                saving its session to storageState (see e2e/.auth/admin.json).
-//   • smoke    — unauthenticated public surface (no storageState).
+//   • smoke    — signed-out public surface (no storageState); depends on `setup`.
 //   • authed   — reuses the admin session; depends on `setup`.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -48,7 +48,8 @@ export default defineConfig({
 		{
 			name: 'smoke',
 			testMatch: /smoke\.spec\.ts/,
-			use: { ...devices['Desktop Chrome'] }
+			use: { ...devices['Desktop Chrome'] },
+			dependencies: ['setup']
 		},
 		{
 			name: 'authed',
@@ -71,7 +72,8 @@ export default defineConfig({
 			SELVA_STORAGE_PROVIDER: 'local',
 			DATA_PATH: './.e2e/data',
 			SELVA_HMAC_KEY: TEST_KEY,
-			SELVA_AT_REST_KEY: TEST_KEY
+			SELVA_AT_REST_KEY: TEST_KEY,
+			SELVA_FLAG_ENABLE_SHARING: 'true'
 		}
 	}
 });

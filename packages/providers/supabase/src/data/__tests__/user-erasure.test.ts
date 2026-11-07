@@ -118,6 +118,18 @@ describe('SupabaseDataProvider.onUserDeleted — erasure (audit P1)', () => {
 		});
 	});
 
+	it('matches the stored lowercase address whatever case the identity provider reports', async () => {
+		const { bundle, ops } = recordingBundle();
+		await SupabaseDataProvider.fromBundle(bundle).onUserDeleted(CTX, USER, {
+			email: ' Gone@Example.COM '
+		});
+
+		const inviteDelete = ops.find((o) => o.table === 'invites' && o.kind === 'delete');
+		expect(inviteDelete).toMatchObject({ filterCol: 'email', filterVal: EMAIL });
+		const redact = ops.find((o) => o.kind === 'rpc');
+		expect(redact).toMatchObject({ rpcArgs: { p_email: EMAIL } });
+	});
+
 	it('surfaces a failed audit scrub instead of silently swallowing it', async () => {
 		const { bundle } = recordingBundle('delete:audit_events');
 		await expect(SupabaseDataProvider.fromBundle(bundle).onUserDeleted(CTX, USER)).rejects.toThrow(

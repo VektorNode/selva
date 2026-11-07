@@ -20,8 +20,14 @@ const stores = (h: HandlerHarness) => ({
 	storage: h.config.storage
 });
 
-async function seedBlob(h: HandlerHarness, projectId: string, ownerId: string): Promise<string> {
+async function seedBlob(
+	h: HandlerHarness,
+	projectId: string,
+	ownerId: string,
+	status?: 'archived' | 'pending'
+): Promise<string> {
 	const { record } = await seedDefinition(h, { projectId, ownerId, displayName: 'D' });
+	if (status) await h.config.data.definitions.update(SYSTEM_CONTEXT, record.guid, { status });
 	const path = definitionPaths.version(record.guid, 1, 'gh');
 	await h.config.storage.put(path, new Uint8Array([1]));
 	return path;
@@ -38,6 +44,19 @@ describe('deleteProjectWithBlobs', () => {
 
 		expect(await tp.config.storage.get(doomed)).toBeNull();
 		expect(await tp.config.storage.get(kept)).not.toBeNull();
+	});
+
+	// Both are hidden from a default listing, so a lookup without the flags would skip them.
+	it('wipes the blobs of archived and pending definitions too', async () => {
+		tp = await freshHarness();
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const archived = await seedBlob(tp, alicesPrivate.id, alice.id, 'archived');
+		const pending = await seedBlob(tp, alicesPrivate.id, alice.id, 'pending');
+
+		await deleteProjectWithBlobs(stores(tp), SYSTEM_CONTEXT, alicesPrivate.id);
+
+		expect(await tp.config.storage.get(archived)).toBeNull();
+		expect(await tp.config.storage.get(pending)).toBeNull();
 	});
 
 	it('leaves blobs alone when the delete is refused', async () => {

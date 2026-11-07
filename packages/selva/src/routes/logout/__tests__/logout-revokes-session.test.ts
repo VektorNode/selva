@@ -1,14 +1,13 @@
 /**
- * Finding 7 — logout must revoke the session provider-side, not just drop the
- * cookie.
+ * Logout revokes the session at the auth provider, then drops the cookies.
  *
  * Deleting the cookie stops this browser from sending the token; it does
  * nothing to the token itself. On Supabase the access token stays valid at
  * GoTrue and the refresh token lives 30 days, so anyone who captured either
- * keeps a working session after the user believes they signed out.
+ * would keep a working session after the user believes they signed out.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
 	freshProviders,
 	installSessionRefreshShim,
@@ -26,7 +25,7 @@ afterEach(async () => {
 });
 
 /** Minimal `Cookies` stand-in — logout only reads one and deletes two. */
-function fakeCookies(initial: Record<string, string> = {}) {
+function fakeCookies(initial: Record<string, string> = {}, timeline: string[] = []) {
 	const jar = new Map(Object.entries(initial));
 	return {
 		deleted: [] as string[],
@@ -36,6 +35,7 @@ function fakeCookies(initial: Record<string, string> = {}) {
 		delete(this: { deleted: string[] }, name: string) {
 			jar.delete(name);
 			this.deleted.push(name);
+			timeline.push(`delete ${name}`);
 		}
 	};
 }
@@ -51,18 +51,27 @@ async function runLogout(cookies: ReturnType<typeof fakeCookies>) {
 	throw new Error('logout did not redirect');
 }
 
-describe('finding 7 — logout revokes server-side', () => {
+describe('logout revokes server-side', () => {
 	it('revokes the session token before clearing cookies', async () => {
 		tp = await freshProviders();
 		const shim = installSessionRefreshShim(tp);
-		const cookies = fakeCookies({ admin_session: 'live-token', admin_refresh: 'live-refresh' });
+		const timeline: string[] = [];
+		const refresh = tp.config.auth.sessionRefresh!;
+		const revoke = refresh.revokeSession.bind(refresh);
+		vi.spyOn(refresh, 'revokeSession').mockImplementation(async (token) => {
+			timeline.push('revoke');
+			return revoke(token);
+		});
+		const cookies = fakeCookies(
+			{ admin_session: 'live-token', admin_refresh: 'live-refresh' },
+			timeline
+		);
 
 		const res = await runLogout(cookies);
 		expect(res.status).toBe(303);
 
 		expect(shim.revoked).toEqual(['live-token']);
-		expect(cookies.deleted).toContain('admin_session');
-		expect(cookies.deleted).toContain('admin_refresh');
+		expect(timeline).toEqual(['revoke', 'delete admin_session', 'delete admin_refresh']);
 	});
 
 	it('still logs out when the provider cannot revoke', async () => {

@@ -1,6 +1,6 @@
 import { VisualizationError, ErrorCodes } from '../../../shared/index.js';
 
-import type { MaterialGroup, MeshMetadata } from '../types.js';
+import type { MaterialGroup, MeshMetadata, SerializableMaterial } from '../types.js';
 
 export function metadataFail(
 	message: string,
@@ -9,18 +9,43 @@ export function metadataFail(
 	return new VisualizationError(message, ErrorCodes.VALIDATION_ERROR, { context });
 }
 
+export const isObject = (value: unknown): value is Record<string, unknown> =>
+	typeof value === 'object' && value !== null && !Array.isArray(value);
+
 /**
- * Validates the batch's group/mesh metadata against the decoded geometry buffers before any of it
- * is used arithmetically. Throws on the first inconsistency — out-of-range `materialId`,
- * non-integer or negative offsets/counts, or a vertex/index window that overruns the buffers — so
- * malformed or version-skewed metadata fails the parse loudly instead of corrupting the render.
+ * Validates the batch's material and group/mesh metadata against the decoded geometry buffers
+ * before any of it is used arithmetically. Throws on the first inconsistency — a material, group or
+ * mesh that isn't an object, out-of-range `materialId`, non-integer or negative offsets/counts, or a
+ * vertex/index window that overruns the buffers — so malformed or version-skewed metadata fails the
+ * parse loudly instead of corrupting the render.
  */
-export function validateGroupMetadata(
+export function validateBatchMetadata(
+	materials: SerializableMaterial[],
 	groups: MaterialGroup[],
-	materialCount: number,
 	totalVertexCount: number,
 	totalIndexCount: number
 ): void {
+	if (!Array.isArray(materials)) {
+		throw metadataFail('Batch materials must be an array.', { materials: typeof materials });
+	}
+	const badMaterial = (materials as unknown[]).findIndex((material) => !isObject(material));
+	if (badMaterial !== -1) {
+		throw metadataFail('Each material entry must be an object.', { materialIndex: badMaterial });
+	}
+	const materialCount = materials.length;
+
+	if (!Array.isArray(groups)) {
+		throw metadataFail('Batch groups must be an array.', { groups: typeof groups });
+	}
+	(groups as unknown[]).forEach((group, groupIndex) => {
+		if (!isObject(group) || !Array.isArray(group.meshes)) {
+			throw metadataFail('Each group must be an object with a meshes array.', { groupIndex });
+		}
+		if (!(group.meshes as unknown[]).every(isObject)) {
+			throw metadataFail('Each mesh entry must be an object.', { groupIndex });
+		}
+	});
+
 	for (const group of groups) {
 		if (
 			!Number.isInteger(group.materialId) ||

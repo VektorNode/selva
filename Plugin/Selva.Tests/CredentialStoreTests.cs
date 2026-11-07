@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Selva.GH.Features.SelvaUpload.Services;
 
 namespace Selva.Tests;
@@ -22,15 +21,9 @@ public class CredentialStoreTests
     ///     Writes to the real login keychain or Credential Manager, so it runs only on request:
     ///     SELVA_CREDENTIAL_STORE_TEST=1 dotnet test --filter CredentialStoreTests
     /// </summary>
-    [Fact]
+    [OsCredentialStoreFact]
     public void OsStore_RoundTrips()
     {
-        if (Environment.GetEnvironmentVariable("SELVA_CREDENTIAL_STORE_TEST") != "1" ||
-            !(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) || RuntimeInformation.IsOSPlatform(OSPlatform.Windows)))
-        {
-            return;
-        }
-
         var store = CredentialStores.ForThisMachine();
         const string origin = "https://credential-store-test.invalid";
         try

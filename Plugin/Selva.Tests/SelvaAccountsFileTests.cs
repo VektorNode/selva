@@ -32,8 +32,10 @@ public sealed class SelvaAccountsFileTests : IDisposable
         Assert.Empty(SelvaAccountsFile.Load(FilePath).Accounts);
     }
 
+    // That no token reaches this file is SelvaAccountManager's job, tested there: the record has
+    // no field that could hold one.
     [Fact]
-    public void SavedAccounts_RoundTripWithoutAnySecret()
+    public void SavedAccounts_RoundTrip()
     {
         var file = SelvaAccountsFile.Load(FilePath);
         file.ActiveOrigin = "https://selva.example.com";
@@ -51,8 +53,11 @@ public sealed class SelvaAccountsFileTests : IDisposable
 
         var loaded = SelvaAccountsFile.Load(FilePath);
         Assert.Equal("https://selva.example.com", loaded.ActiveOrigin);
-        Assert.Equal("Studio", Assert.Single(loaded.Accounts).OrgName);
-        Assert.DoesNotContain("selva_", File.ReadAllText(FilePath));
+        var account = Assert.Single(loaded.Accounts);
+        Assert.Equal(
+            ("https://selva.example.com", "ada@example.com", "org-1", "Studio", "2026-02-14T12:00:00Z", "keychain"),
+            (account.Origin, account.Email, account.OrgId, account.OrgName, account.ExpiresAt, account.Storage));
+        Assert.Equal(new[] { "upload:all" }, account.Scopes);
     }
 
     [Fact]

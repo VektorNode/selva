@@ -1,28 +1,13 @@
 /**
- * Audit Q4/Q5 — compute-solve accounting: share-link solve caps and
- * definition solve-count increments.
+ * The two store methods a solve charges: `shareLinks.tryIncrementSolveCount`, an
+ * atomic check-and-increment that returns `null` at the cap, and
+ * `definitions.incrementSolveCount`. Whether the route calls them, and what it
+ * answers, is pinned in solve-side-effects.test.ts and
+ * endpoint-share-cap-and-rate-limit.test.ts.
  *
- * These are the **extraction safety net** for the embeddable-server-layer plan
- * (K3): the `/api/compute` POST handler enforces the share cap and bumps the
- * solve count by delegating to two store methods —
- * `shareLinks.tryIncrementSolveCount` (atomic check-and-increment, returns
- * `null` at the cap → the route maps that to HTTP 429) and
- * `definitions.incrementSolveCount`. They must keep behaving identically after
- * the solve pipeline is lifted out of the route, so these tests target the
- * exact methods the route calls, not the route's HTTP shell (which needs a live
- * compute server). Written against the store contract *before* K3 so they pass
- * unchanged across the pipeline/adapter split.
- *
- * The route call sites this pins:
- *   - share cap:  routes/api/compute/+server.ts (tryIncrementSolveCount → 429)
- *   - solve count: routes/api/compute/+server.ts (incrementSolveCount, best-effort)
- *
- * Scope: these run against the local provider (via `freshProviders`), so they
- * pin *sequential* semantics — the cap→null→429 mapping and loss-free counting.
- * The **concurrent** no-overshoot / no-lost-update guarantee is a store
- * atomicity property (Supabase's SECURITY DEFINER RPC + `increment_run_count`)
- * and is asserted in the Supabase share-link conformance suite, which is the
- * only backend that actually provides it. See
+ * These run on the local provider, so they pin sequential behaviour only. No
+ * overshoot and no lost update under concurrency is a property of the Supabase
+ * store, asserted in
  * `packages/providers/supabase/src/data/__tests__/share-link-concurrency.test.ts`.
  */
 

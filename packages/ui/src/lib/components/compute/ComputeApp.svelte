@@ -6,7 +6,7 @@
 	import type { SolveFn } from '@selvajs/solve/shared';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
-	import { createRequestResponseDriver } from '@selvajs/solve/client';
+	import { createComputeDriver } from '../../compute/computeDriver';
 	import type {
 		RetainedSolveResult,
 		SolveEventSource,
@@ -14,7 +14,6 @@
 		SolveSettlement
 	} from '@selvajs/solve/client';
 	import SolveMessages from './SolveMessages.svelte';
-	import { meshPolicy } from '@selvajs/visualization/parse';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
 	import { useFooterItem } from '../../composables/useFooterItem.svelte';
@@ -171,13 +170,8 @@
 	// The session owns the value/lifecycle state machine; the driver is its transport. The
 	// session is passed as a getter because the two reference each other.
 	// svelte-ignore state_referenced_locally
-	const driver = createRequestResponseDriver(onSolve, () => session, {
+	const driver = createComputeDriver(onSolve, () => session, {
 		solveDeadlineMs,
-		// The driver's memo caches whole solve results, meshes included, and the viewer disposes
-		// what it renders on the next scene update. `@selvajs/solve` keeps meshes opaque, so the
-		// three.js clone/dispose rules come from the renderer that owns them. Without this, a memo
-		// hit serves an already-disposed mesh.
-		meshPolicy,
 		// `isSolving` lives on the driver, which the session can't observe — republish so the
 		// spinner and disabled states track it.
 		onChange: () => session.notify(),

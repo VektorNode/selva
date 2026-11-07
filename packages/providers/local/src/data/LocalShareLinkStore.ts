@@ -27,9 +27,9 @@ export interface LocalShareLinkStoreOptions {
 }
 
 /**
- * `tryIncrementSolveCount` is race-sensitive: this store does a plain
- * read-modify-write, fine at single-node scale. Postgres adapters use a true
- * atomic UPDATE instead.
+ * Writes queue on `withFileLock`, so `tryIncrementSolveCount` checks the cap and
+ * counts as one step, but only within this process: two processes sharing
+ * `share-links.json` can both admit the last solve under the cap.
  */
 export class LocalShareLinkStore implements IShareLinkStore {
 	private definitionProvider?: IDefinitionStore;

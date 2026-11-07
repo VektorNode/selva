@@ -58,24 +58,101 @@ async function apiOutcome(run: () => Promise<unknown> | unknown): Promise<unknow
 	}
 }
 
+/**
+ * Fails when a generator stops reaching a branch, so a property can't go on
+ * passing while it tests only the fallback.
+ */
+function expectBothBranches(hits: number, misses: number): void {
+	const share = RUNS.numRuns / 5;
+	expect(hits, 'too few inputs reached the accepting branch').toBeGreaterThan(share);
+	expect(misses, 'too few inputs reached the refusing branch').toBeGreaterThan(share);
+}
+
+/** A same-origin path, the input a real login link carries. */
+const appPath = fc
+	.tuple(
+		fc.array(fc.webSegment(), { minLength: 1, maxLength: 4 }),
+		fc.option(fc.webQueryParameters()),
+		fc.option(fc.webFragments())
+	)
+	.map(
+		([segments, query, fragment]) =>
+			`/${segments.join('/')}${query === null ? '' : `?${query}`}${fragment === null ? '' : `#${fragment}`}`
+	)
+	.filter((path) => path.length >= 2);
+
+/** A leading slash, then characters a browser drops or rewrites, then another host. */
+const smuggledHost = fc
+	.tuple(
+		fc.array(fc.constantFrom('\t', '\n', '\r', ' ', '%09'), { maxLength: 2 }),
+		fc.constantFrom('/', '\\', '//', '%2F', '／', '@'),
+		fc.constantFrom('evil.test', 'evil.test/login', ':443@evil.test')
+	)
+	.map(([gap, slash, host]) => `/${gap.join('')}${slash}${host}`);
+
 describe('safeRedirectTarget', () => {
 	// Judged by the WHATWG parser browsers use, not by the function's own idea of a path.
 	it('only ever returns a target on this origin', () => {
+		let kept = 0;
+		let refused = 0;
 		fc.assert(
-			fc.property(tricky(URL_CHARS), (raw) => {
-				const target = safeRedirectTarget(raw, '/fallback');
-				expect(new URL(target, ORIGIN).origin).toBe(ORIGIN);
-			}),
+			fc.property(
+				fc.oneof(
+					appPath,
+					{ arbitrary: smuggledHost, weight: 2 },
+					// A leading slash gets past the first guard, so the later ones do the work.
+					tricky(URL_CHARS).map((rest) => `/${rest}`),
+					fc.tuple(appPath, tricky(URL_CHARS)).map(([path, rest]) => path + rest),
+					tricky(URL_CHARS)
+				),
+				(raw) => {
+					const target = safeRedirectTarget(raw, '/fallback');
+					expect(new URL(target, ORIGIN).origin).toBe(ORIGIN);
+					if (target === raw) kept++;
+					else refused++;
+				}
+			),
 			RUNS
 		);
+		expectBothBranches(kept, refused);
 	});
 });
 
 describe('the CSRF exemption and key auth read the same bearer', () => {
+	const keyChars = fc.string({ unit: fc.constantFrom(...'aZ9-_.=,'), maxLength: 20 });
+	const SPACE = [' ', '\t', '  ', ' \t'];
+
+	// A header that parses as a `selva_` bearer.
+	const selvaBearer = fc
+		.tuple(
+			fc.constantFrom('Bearer', 'bearer', 'BEARER'),
+			fc.constantFrom(...SPACE),
+			keyChars,
+			fc.constantFrom('', ...SPACE)
+		)
+		.map(([scheme, gap, key, tail]) => `${scheme}${gap}selva_${key}${tail}`);
+
+	// The same shape with some parts swapped for near misses.
+	const nearMiss = fc
+		.tuple(
+			fc.constantFrom('Bearer', 'bearer', 'Bearer:', 'Basic', 'Bearerx', ''),
+			fc.constantFrom('', ...SPACE),
+			fc.constantFrom('selva_', 'Selva_', 'selva', 'xselva_', ' selva_'),
+			tricky(['abc', 'Z9', '_', ',', ' ', '\t', '=']),
+			fc.constantFrom('', ' ', ' extra', ',selva_x')
+		)
+		.map((parts) => parts.join(''));
+
 	it('skips the Origin check only for a header key auth reads as a Selva key', () => {
+		let exemptions = 0;
+		let checks = 0;
 		fc.assert(
 			fc.property(
-				tricky(['Bearer', 'bearer', ' ', '\t', 'selva_', 'abc', ',', 'Basic ']),
+				fc.oneof(
+					selvaBearer,
+					nearMiss,
+					tricky(['Bearer', 'bearer', ' ', '\t', 'selva_', 'abc', ',', 'Basic '])
+				),
 				(auth) => {
 					let request: Request;
 					try {
@@ -93,10 +170,13 @@ describe('the CSRF exemption and key auth read the same bearer', () => {
 					}
 					const exempt = !isCrossSiteFormSubmission(request);
 					expect(exempt).toBe(bearerOf(request)?.startsWith('selva_') ?? false);
+					if (exempt) exemptions++;
+					else checks++;
 				}
 			),
 			RUNS
 		);
+		expectBothBranches(exemptions, checks);
 	});
 });
 

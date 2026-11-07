@@ -79,7 +79,10 @@ if (_adminClient === null) {
 					serviceRoleKey: SERVICE_ROLE_KEY!,
 					publicBucket: PUBLIC_BUCKET,
 					privateBucket: PRIVATE_BUCKET
-				})
+				}),
+			strictDenials: true,
+			segmentPrefix: true,
+			pathContainment: true
 		});
 
 		// ============================================================================

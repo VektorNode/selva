@@ -96,4 +96,4 @@ pnpm test          # vitest run
 pnpm test:watch
 ```
 
-`src/**/__tests__/*-conformance.test.ts` covers the org, project, definition, invite, share-link, compute-server, event-sink, and platform-project-grant stores, plus auth, permissions, storage, and user-profile. A new store is wired up by pointing its suite at a temp directory.
+`src/**/__tests__/*-conformance.test.ts` covers the org, project, definition, invite, share-link, compute-server, event-sink, and platform-project-grant stores, plus auth, permissions, storage, user-profile, and user erasure. A new store is wired up by pointing its suite at a temp directory.

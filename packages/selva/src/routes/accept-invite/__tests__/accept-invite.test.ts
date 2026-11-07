@@ -237,19 +237,12 @@ describe('accept-invite submit', () => {
 	});
 
 	/**
-	 * Characterization, not a guarantee — same posture as the local provider's
-	 * `concurrent-writes.test.ts`. Two simultaneous submits both read the invite
-	 * before either consumes it, and `createLocalAuthUserStore.createUser` checks
-	 * email uniqueness with a read-modify-write, so under true concurrency both
-	 * pass that check and TWO accounts are created for one invite. Supabase
-	 * enforces uniqueness in the database, so the window is local-provider-only.
-	 *
-	 * The realistic double-click is sequential, and that is caught by the
-	 * `!invite` guard (pinned above). This test records the concurrent window
-	 * rather than asserting it away; if the local store ever gains per-file
-	 * locking it should tighten into "exactly one account".
+	 * Two simultaneous submits can both read the invite before either claims it.
+	 * The claim is atomic, so exactly one signup completes. The loser may still
+	 * have created a duplicate account first: the local user store checks email
+	 * uniqueness with a read-modify-write. Supabase enforces it in the database.
 	 */
-	it('concurrent double-submit: the local provider admits both (known window)', async () => {
+	it('concurrent double-submit: exactly one signup succeeds', async () => {
 		tp = await freshProviders();
 		const token = await mintFor(tp);
 
@@ -258,31 +251,17 @@ describe('accept-invite submit', () => {
 			submit(token, { password: PASSWORD, confirm: PASSWORD })
 		]);
 
-		// At least one must succeed — the invite is never lost to a race.
-		expect(results.some((r) => r.redirected === '/admin')).toBe(true);
-
-		// Whatever happened, the invite is consumed and cannot be replayed.
+		expect(results.filter((r) => r.redirected === '/admin')).toHaveLength(1);
 		expect(
 			await tp.config.data.invites.getByTokenHash(SYSTEM_CONTEXT, hashToken(token))
 		).toBeNull();
 
-		// The loser's status depends on where in the sequence it lost, and all
-		// three outcomes are reachable from one interleaving or another:
-		//
-		//   410 — it re-read the invite after the winner consumed it
-		//   400 — both passed the invite guard; user creation rejected the dupe
-		//   500 — both created a user; joining the org rejected the dupe
-		//
-		// Pinning a single code here made this test fail roughly one run in
-		// three. What actually matters is the invariant: a loser is rejected
-		// with a message aimed at the visitor, never a blank error, and never a
-		// second successful signup.
-		const losers = results.filter((r) => !r.redirected);
-		expect(losers.length).toBeLessThanOrEqual(1);
-		for (const r of losers) {
-			expect([400, 410, 500]).toContain(r.status);
-			expect(r.error).toBeTruthy();
-		}
+		// Where the loser lost decides its status: 410 when the invite was already
+		// claimed, 400 when the user store rejected the duplicate email. Either way
+		// it carries a message for the visitor.
+		const [loser] = results.filter((r) => !r.redirected);
+		expect([400, 410]).toContain(loser.status);
+		expect(loser.error).toBeTruthy();
 	});
 });
 

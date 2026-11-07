@@ -1,0 +1,167 @@
+{
+	"_comment": "Schema fixture for v2.17.0, taken from that version's ui-schema.json: value lists with optionMedia and the 'tiles' and 'segmented' modes, the assets table, a dynamic value list pair, a geometry input, a button checkbox, a client 'slot' source and a hidden tab. Nothing in it changes on load except the version.",
+	"schemaVersion": "2.17.0",
+	"id": "fixture-v2170",
+	"name": "Fixture v2.17.0",
+	"pluginVersion": "0.24.0",
+	"minPluginVersion": "0.20.0",
+	"created": "2026-10-25T08:00:00Z",
+	"lastModified": "2026-10-26T16:45:00Z",
+	"instanceSolve": true,
+	"viewerOptions": {
+		"enableLocal": true,
+		"enableRemote": true
+	},
+	"assets": {
+		"roof-flat": { "img": "data:image/png;base64,iVBORw0KGgo=", "w": 64, "h": 48 },
+		"roof-gable": { "d": "M3 12l9-9 9 9" }
+	},
+	"inputs": [
+		{
+			"id": "21700000-0000-4000-8000-000000000001",
+			"nickname": "Roof",
+			"paramType": "valueList",
+			"inputStructure": "item"
+		},
+		{
+			"id": "21700000-0000-4000-8000-000000000002",
+			"nickname": "Facing",
+			"paramType": "valueList",
+			"inputStructure": "item"
+		},
+		{
+			"id": "21700000-0000-4000-8000-000000000003",
+			"nickname": "Profile",
+			"paramType": "dynamicValueList",
+			"inputStructure": "item"
+		},
+		{
+			"id": "21700000-0000-4000-8000-000000000004",
+			"nickname": "Site",
+			"paramType": "geometry",
+			"inputStructure": "list"
+		},
+		{
+			"id": "21700000-0000-4000-8000-000000000005",
+			"nickname": "Rebuild",
+			"paramType": "boolean",
+			"inputStructure": "item"
+		},
+		{
+			"id": "21700000-0000-4000-8000-000000000006",
+			"nickname": "Sketch",
+			"paramType": "text",
+			"inputStructure": "item"
+		}
+	],
+	"outputs": [
+		{
+			"id": "21700000-0000-4000-8000-0000000000b1",
+			"nickname": "Profiles",
+			"type": "dynamicValueList",
+			"targetInputId": "21700000-0000-4000-8000-000000000003"
+		},
+		{
+			"id": "21700000-0000-4000-8000-0000000000b2",
+			"nickname": "Area",
+			"type": "number"
+		}
+	],
+	"layout": {
+		"type": "tabbed",
+		"tabs": [
+			{
+				"id": "tab-design",
+				"label": "Design",
+				"groups": [
+					{
+						"id": "g-roof",
+						"label": "Roof",
+						"items": [
+							{
+								"id": "item-roof",
+								"paramId": "21700000-0000-4000-8000-000000000001",
+								"type": "input",
+								"widgetType": "dropdown",
+								"config": {
+									"options": { "Flat": "flat", "Gable": "gable" },
+									"displayAs": "tiles",
+									"optionMedia": {
+										"Flat": { "image": "roof-flat" },
+										"Gable": { "icon": "roof-gable", "iconName": "lucide:house" }
+									}
+								}
+							},
+							{
+								"id": "item-facing",
+								"paramId": "21700000-0000-4000-8000-000000000002",
+								"type": "input",
+								"widgetType": "dropdown",
+								"config": {
+									"options": { "North": "n", "South": "s" },
+									"displayAs": "segmented"
+								}
+							},
+							{
+								"id": "item-profile",
+								"paramId": "21700000-0000-4000-8000-000000000003",
+								"type": "input",
+								"widgetType": "dynamicValueList",
+								"config": {}
+							},
+							{
+								"id": "item-site",
+								"paramId": "21700000-0000-4000-8000-000000000004",
+								"type": "input",
+								"widgetType": "text"
+							},
+							{
+								"id": "item-rebuild",
+								"paramId": "21700000-0000-4000-8000-000000000005",
+								"type": "input",
+								"widgetType": "checkbox",
+								"config": { "displayAs": "button" }
+							},
+							{
+								"id": "item-sketch",
+								"paramId": "21700000-0000-4000-8000-000000000006",
+								"type": "input",
+								"widgetType": "text",
+								"source": {
+									"kind": "client",
+									"key": "sketch-app",
+									"client": { "presentation": "slot" }
+								}
+							}
+						]
+					}
+				]
+			},
+			{
+				"id": "tab-internal",
+				"label": "Internal",
+				"visible": false,
+				"groups": [
+					{
+						"id": "g-outputs",
+						"label": "Outputs",
+						"items": [
+							{
+								"id": "item-profiles",
+								"paramId": "21700000-0000-4000-8000-0000000000b1",
+								"type": "output",
+								"widgetType": "dynamicValueList"
+							},
+							{
+								"id": "item-area",
+								"paramId": "21700000-0000-4000-8000-0000000000b2",
+								"type": "output",
+								"widgetType": "number"
+							}
+						]
+					}
+				]
+			}
+		]
+	}
+}

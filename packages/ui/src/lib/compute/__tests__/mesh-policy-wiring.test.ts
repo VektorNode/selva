@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 import { createRequestResponseDriver, type SolveReporter } from '@selvajs/solve/client';
 import type { SolveResult } from '@selvajs/solve/shared';
-import { meshPolicy } from '@selvajs/visualization/parse';
 
-// The C1 seam test. `@selvajs/solve` keeps meshes opaque and `@selvajs/visualization` owns the
-// three.js clone/dispose rules; neither package can prove they compose, because neither may
-// import the other. This is the only place both are in scope — it exists to catch a
-// `ComputeApp` that forgets to pass `meshPolicy`, or a policy whose shape drifts from
-// `MeshPolicy`.
+import { createComputeDriver } from '../computeDriver';
+
+// `@selvajs/solve` keeps meshes opaque and `@selvajs/visualization` owns the three.js
+// clone/dispose rules; neither package can prove they compose, because neither may import the
+// other. This is the only place both are in scope. It drives `createComputeDriver`, the factory
+// `ComputeApp` solves through, so it fails if that stops passing `meshPolicy` or the policy's
+// shape drifts from `MeshPolicy`.
 
 function meshResult(tag: string): SolveResult<THREE.Object3D> {
 	const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
@@ -38,14 +39,11 @@ function collectingReporter(): SolveReporter<THREE.Object3D> & {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('mesh policy wiring (audit C1)', () => {
+describe('mesh policy wiring', () => {
 	it('a memo hit serves a live mesh after the viewer disposed the previous one', async () => {
 		const onSolve = async () => meshResult('a');
 		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter, {
-			meshPolicy,
-			solveDeadlineMs: 100_000
-		});
+		const driver = createComputeDriver(onSolve, () => reporter, { solveDeadlineMs: 100_000 });
 
 		driver.solve({ a: 1 });
 		await flush();

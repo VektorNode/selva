@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { ILogger } from '@selvajs/platform';
 import { ConsoleLogger, createLogger } from '../PinoLogger.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -74,12 +75,69 @@ describe('ConsoleLogger', () => {
 	});
 });
 
+/** One record carrying every kind of credential the redaction list names. */
+function logSecrets(logger: ILogger): void {
+	logger.child({ requestId: 'r-1', authorization: 'Bearer bound-secret' }).warn('rejected', {
+		apiKey: 'top-secret',
+		password: 'hunter2',
+		cookie: 'sid=cookie-secret',
+		headers: { Authorization: 'Bearer nested-secret' },
+		server: { id: 's-1', apiKey: 'nested-key' }
+	});
+}
+
+function expectRedacted(output: string): void {
+	for (const secret of [
+		'bound-secret',
+		'top-secret',
+		'hunter2',
+		'cookie-secret',
+		'nested-secret',
+		'nested-key'
+	]) {
+		expect(output).not.toContain(secret);
+	}
+	expect(output).toContain('[redacted]');
+	expect(output).toContain('"requestId":"r-1"');
+	expect(output).toContain('"id":"s-1"');
+}
+
+describe('redaction', () => {
+	it('scrubs credentials from console output, bound fields included', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		logSecrets(new ConsoleLogger({}, 'info'));
+		expectRedacted(warn.mock.calls.map((c) => String(c[0])).join('\n'));
+	});
+
+	it("leaves the caller's fields untouched", () => {
+		vi.spyOn(console, 'info').mockImplementation(() => {});
+		const fields = { apiKey: 'k', server: { apiKey: 'k' } };
+		new ConsoleLogger({}, 'info').info('x', fields);
+		expect(fields).toEqual({ apiKey: 'k', server: { apiKey: 'k' } });
+	});
+
+	it('scrubs credentials from pino output', async () => {
+		const lines: string[] = [];
+		vi.doMock('pino', async () => {
+			const real = ((await vi.importActual('pino')) as { default: (...a: unknown[]) => unknown })
+				.default;
+			return { default: (opts: unknown) => real(opts, { write: (l: string) => lines.push(l) }) };
+		});
+		try {
+			logSecrets(await createLogger());
+		} finally {
+			vi.doUnmock('pino');
+		}
+		expect(lines).toHaveLength(1);
+		expectRedacted(lines[0]);
+	});
+});
+
 describe('createLogger', () => {
 	it('returns a working logger (pino when installed, console otherwise)', async () => {
 		// Asserted loosely on purpose: pino is an optional peer, so which backend
 		// you get varies by install. Always an ILogger, never null, never a throw.
 		const logger = await createLogger({ level: 'debug' });
 		expect(() => logger.info('boot', { component: 'test' })).not.toThrow();
-		expect(logger.child({ requestId: 'r-1' })).toBeDefined();
 	});
 });

@@ -33,6 +33,7 @@ import {
 } from './binary/geometry.js';
 import { parseColorChunk, parseUvChunk } from './binary/textures.js';
 import { isSlvmContainer, parseSlvmContainer } from './binary/slvm.js';
+import { isObject } from './batch/metadata.js';
 
 import type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.js';
 
@@ -68,7 +69,8 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (JSON-envelope transport).
- * @throws {VisualizationError} On invalid magic, unknown version, or truncated input.
+ * @throws {VisualizationError} On invalid magic, unknown version, truncated input, or metadata
+ *   that is not an object.
  */
 export function parseBinaryMeshBatch(
 	input: ArrayBuffer | Uint8Array | string
@@ -230,6 +232,11 @@ export function parseBinaryMeshBatchRaw(
 			{ metadataLen }
 		);
 	}
+	if (!isMetadataShape(metadata)) {
+		throw fail('Metadata JSON must be an object whose materials and groups are arrays.', {
+			metadataLen
+		});
+	}
 
 	if (offset + GEOMETRY_HEADER_BYTES > bytes.byteLength) {
 		throw fail('Insufficient data to read geometry header.', {
@@ -355,4 +362,14 @@ export function parseBinaryMeshBatchRaw(
 		uvs,
 		colors
 	};
+}
+
+/** Missing `materials`/`groups` are allowed: the JSON envelope's copies fill them in. */
+function isMetadataShape(value: unknown): value is BinaryMeshMetadata {
+	if (!isObject(value)) return false;
+	const { materials, groups } = value;
+	return (
+		(materials === undefined || Array.isArray(materials)) &&
+		(groups === undefined || Array.isArray(groups))
+	);
 }

@@ -98,23 +98,77 @@ export function schemaVersionOf(schema) {
 // Guard
 // ============================================================================
 
+// The same pattern ui-schema.json puts on schemaVersion: no prerelease or build suffix.
+const SCHEMA_VERSION = /^\d+\.\d+\.\d+$/;
+
+/** Negative, zero or positive as `a` is below, equal to or above `b`. */
+function compareVersions(a, b) {
+	for (const version of [a, b]) {
+		if (!SCHEMA_VERSION.test(version)) {
+			throw new Error(`schemaVersion "${version}" is not MAJOR.MINOR.PATCH.`);
+		}
+	}
+	const pa = a.split('.').map(Number);
+	const pb = b.split('.').map(Number);
+	for (let i = 0; i < 3; i++) {
+		const d = pa[i] - pb[i];
+		if (d !== 0) return d;
+	}
+	return 0;
+}
+
 /**
- * Pure comparison: did the definitions change, and was the version bumped?
+ * Pure comparison: did the definitions change, and which way did the version move?
  * Split from the git plumbing so it is unit-testable.
  */
 export function compareSchemas(baseSchema, workingSchema) {
+	const direction = compareVersions(schemaVersionOf(workingSchema), schemaVersionOf(baseSchema));
 	return {
 		definitionsChanged:
 			canonicaliseDefinitions(baseSchema) !== canonicaliseDefinitions(workingSchema),
-		versionBumped: schemaVersionOf(baseSchema) !== schemaVersionOf(workingSchema)
+		versionBumped: direction > 0,
+		versionDowngraded: direction < 0
 	};
 }
 
 /**
- * Exits the process when definitions changed against the base ref without a
- * schemaVersion bump. The base ref defaults to HEAD (catches uncommitted local
- * edits); CI sets SCHEMA_GUARD_BASE_REF to the PR base branch, since in CI the
- * working tree always matches HEAD and a HEAD comparison can never fire.
+ * Why the working schema may not be generated from, or null. A downgrade always fails: .gh files
+ * already saved at the higher version would claim a format the plugin no longer writes.
+ */
+export function schemaGuardError(baseSchema, workingSchema, baseRef) {
+	const working = schemaVersionOf(workingSchema);
+	if (!SCHEMA_VERSION.test(working)) {
+		return `schemaVersion must be MAJOR.MINOR.PATCH, with no prerelease or build suffix: got ${working}.`;
+	}
+	const { definitionsChanged, versionBumped, versionDowngraded } = compareSchemas(
+		baseSchema,
+		workingSchema
+	);
+	const from = schemaVersionOf(baseSchema);
+	const to = schemaVersionOf(workingSchema);
+	if (versionDowngraded) {
+		return [
+			`schemaVersion went backwards (vs ${baseRef}): ${from} -> ${to}.`,
+			'Restore it to at least the base version; bump it if the definitions changed.'
+		].join('\n  ');
+	}
+	if (definitionsChanged && !versionBumped) {
+		return [
+			`Schema definitions changed (vs ${baseRef}) but schemaVersion was not bumped.`,
+			`Current version: ${to}`,
+			'',
+			'Update the "schemaVersion" default in UISchema (e.g. 2.13.0 -> 2.14.0),',
+			'add a migration entry in SchemaMigrator.cs, and add a changeset.'
+		].join('\n  ');
+	}
+	return null;
+}
+
+/**
+ * Exits the process when the working schema fails {@link schemaGuardError} against the base ref.
+ * The base ref defaults to HEAD (catches uncommitted local edits); CI sets SCHEMA_GUARD_BASE_REF
+ * to the PR base branch, since in CI the working tree always matches HEAD and a HEAD comparison
+ * can never fire.
  */
 export function checkSchemaVersionBumped({ workingSchema, repoRoot, schemaRepoPath }) {
 	const baseRef = process.env.SCHEMA_GUARD_BASE_REF || 'HEAD';
@@ -132,23 +186,13 @@ export function checkSchemaVersionBumped({ workingSchema, repoRoot, schemaRepoPa
 	}
 
 	const baseSchema = JSON.parse(baseSchemaStr);
-	const { definitionsChanged, versionBumped } = compareSchemas(baseSchema, workingSchema);
-
-	if (definitionsChanged && !versionBumped) {
-		const version = schemaVersionOf(workingSchema);
-		console.error('');
-		console.error(
-			`  ERROR: Schema definitions changed (vs ${baseRef}) but schemaVersion was not bumped.`
-		);
-		console.error(`  Current version: ${version}`);
-		console.error('');
-		console.error('  Update the "schemaVersion" default in UISchema (e.g. 2.13.0 -> 2.14.0),');
-		console.error('  add a migration entry in SchemaMigrator.cs, and add a changeset.');
-		console.error('');
+	const error = schemaGuardError(baseSchema, workingSchema, baseRef);
+	if (error) {
+		console.error(`\n  ERROR: ${error}\n`);
 		process.exit(1);
 	}
 
-	if (definitionsChanged) {
+	if (compareSchemas(baseSchema, workingSchema).definitionsChanged) {
 		console.info(
 			`  Schema version bumped: ${schemaVersionOf(baseSchema)} -> ${schemaVersionOf(workingSchema)}`
 		);

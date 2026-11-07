@@ -303,6 +303,15 @@ describe('parseBinaryMeshBatch', () => {
 
 			expect(() => parseBinaryMeshBatch(wrapped)).toThrow(/SLVZ/);
 		});
+
+		it('rejects a declared length no deflate stream could reach before allocating it', () => {
+			const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]);
+			const base64 = encodeBatchPayload(vertices, new Uint32Array([0, 1, 2]), EMPTY_METADATA);
+			const wrapped = wrapSlvz(new Uint8Array(Buffer.from(base64, 'base64')));
+			new DataView(wrapped.buffer).setUint32(4, 0xffffffff, true);
+
+			expect(() => parseBinaryMeshBatch(wrapped)).toThrow(/implausible/);
+		});
 	});
 
 	describe('input forms', () => {
@@ -342,11 +351,11 @@ describe('parseBinaryMeshBatch', () => {
 			expect(() => parseBinaryMeshBatch(buf)).toThrow(/magic/i);
 		});
 
-		it('rejects unknown version', () => {
+		it.each([0, BINARY_MESH_VERSION + 1, 999])('rejects version %i', (version) => {
 			const buf = new ArrayBuffer(12);
 			const view = new DataView(buf);
 			view.setUint32(0, BINARY_MESH_MAGIC, true);
-			view.setUint32(4, 999, true);
+			view.setUint32(4, version, true);
 			view.setUint32(8, 0, true);
 			expect(() => parseBinaryMeshBatch(buf)).toThrow(/version/i);
 		});

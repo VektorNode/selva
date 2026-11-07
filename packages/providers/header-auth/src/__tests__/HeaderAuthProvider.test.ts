@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { AuthUser } from '@selvajs/platform';
 import { runAuthCoreConformance } from '@selvajs/platform/testing';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -215,26 +216,161 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		expect(second?.id).toBe(created.id);
 	});
 
-	it('does not rewrite the stored UPN from headers on an email-fallback match', async () => {
-		// The identity-takeover primitive: if this rebound, one request bearing a
-		// spoofable email header would permanently repoint a real user's lookup
-		// key at an attacker-chosen UPN.
+	it('binds an email-fallback row to the first UPN that signs in to it', async () => {
 		const created = await provider.createUser('alice@company.com');
-		await provider.proxyAuth.identifyFromHeaders(
+		const alice = {
+			[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+			[DEFAULT_HEADERS.email]: 'alice@company.com'
+		};
+		expect((await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(alice)))?.id).toBe(
+			created.id
+		);
+
+		const spoofed = await provider.proxyAuth.identifyFromHeaders(
 			makeRequestHeaders({
 				[DEFAULT_HEADERS.upn]: 'attacker@evil.example',
 				[DEFAULT_HEADERS.email]: 'alice@company.com'
 			})
 		);
+		expect(spoofed).toBeNull();
 
-		const stored = await provider.getUser(created.id);
-		expect(stored?.metadata?.upn).toBe('alice@company.com');
-
-		// And the injected UPN alone still authenticates nobody.
-		const byInjected = await provider.proxyAuth.identifyFromHeaders(
-			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'attacker@evil.example' })
+		// The lookup key is untouched, and Alice still gets in.
+		expect((await provider.getUser(created.id))?.metadata?.upn).toBe('alice@company.com');
+		expect((await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(alice)))?.id).toBe(
+			created.id
 		);
-		expect(byInjected).toBeNull();
+	});
+
+	it("refuses an unlisted UPN that presents a signed-in user's email", async () => {
+		// Most rows' UPN is an address, so without the claim any of them, admins
+		// included, would open to an email header the proxy failed to strip.
+		const warn = vi.fn();
+		const p = new HeaderAuthProvider({
+			allowlistFilePath,
+			logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } as never
+		});
+		const admin = await p.createUser('admin@corp.example');
+		await p.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'admin@corp.example' })
+		);
+
+		const intern = await p.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'intern@corp.example',
+				[DEFAULT_HEADERS.email]: 'admin@corp.example'
+			})
+		);
+
+		expect(intern).toBeNull();
+		expect(warn).toHaveBeenCalledOnce();
+		// Identifiers only: the log can't be erased, so no addresses in it.
+		expect(warn.mock.calls[0][1]).toEqual({ component: 'HeaderAuth', userId: admin.id });
+	});
+
+	it('logs every refused claim, each with the user it refused', async () => {
+		const warn = vi.fn();
+		const p = new HeaderAuthProvider({
+			allowlistFilePath,
+			logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } as never
+		});
+		const admin = await p.createUser('admin@corp.example');
+		const bob = await p.createUser('bob@corp.example');
+		for (const upn of ['admin@corp.example', 'bob@corp.example']) {
+			await p.proxyAuth.identifyFromHeaders(makeRequestHeaders({ [DEFAULT_HEADERS.upn]: upn }));
+		}
+
+		for (const target of ['admin@corp.example', 'bob@corp.example', 'admin@corp.example']) {
+			await p.proxyAuth.identifyFromHeaders(
+				makeRequestHeaders({
+					[DEFAULT_HEADERS.upn]: 'intern@corp.example',
+					[DEFAULT_HEADERS.email]: target
+				})
+			);
+		}
+
+		expect(warn.mock.calls.map(([, meta]) => meta.userId)).toEqual([admin.id, bob.id, admin.id]);
+	});
+
+	it('lets a direct UPN match take the claim over, as after a UPN cleanup', async () => {
+		// Allowlisted by mail; first sign-in on the onmicrosoft UPN claims it.
+		const created = await provider.createUser('alice@company.com');
+		const before = {
+			[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+			[DEFAULT_HEADERS.email]: 'alice@company.com'
+		};
+		expect((await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(before)))?.id).toBe(
+			created.id
+		);
+
+		// The tenant moves her UPN onto the company domain: it now matches the row itself.
+		const after = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({
+				[DEFAULT_HEADERS.upn]: 'alice@company.com',
+				[DEFAULT_HEADERS.email]: 'alice@company.com'
+			})
+		);
+		expect(after?.id).toBe(created.id);
+
+		// The claim moved, so the old UPN no longer gets in through the email.
+		expect(await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(before))).toBeNull();
+	});
+
+	it("evicts a spoofed claim once the row's real owner signs in", async () => {
+		const created = await provider.createUser('alice@company.com');
+		const spoofed = {
+			[DEFAULT_HEADERS.upn]: 'attacker@evil.example',
+			[DEFAULT_HEADERS.email]: 'alice@company.com'
+		};
+		await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(spoofed));
+
+		const alice = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@company.com' })
+		);
+
+		expect(alice?.id).toBe(created.id);
+		expect(await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(spoofed))).toBeNull();
+	});
+
+	it('needs only the new upn on the row after a UPN rename', async () => {
+		const created = await provider.createUser('alice@corp.example');
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@corp.example' })
+		);
+		const file = JSON.parse(await fs.readFile(allowlistFilePath, 'utf-8'));
+		file.users[0].upn = 'alice.smith@corp.example';
+		await fs.writeFile(allowlistFilePath, JSON.stringify(file));
+
+		const renamed = await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'Alice.Smith@corp.example' })
+		);
+
+		expect(renamed?.id).toBe(created.id);
+	});
+
+	it('claims a row from before claims existed on its next sign-in', async () => {
+		await fs.writeFile(
+			allowlistFilePath,
+			JSON.stringify({
+				users: [
+					{
+						id: 'legacy-row',
+						upn: 'alice@company.com',
+						createdAt: '2026-01-01T00:00:00.000Z',
+						lastLoginAt: '2026-06-01T00:00:00.000Z'
+					}
+				]
+			})
+		);
+		const alice = {
+			[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+			[DEFAULT_HEADERS.email]: 'alice@company.com'
+		};
+
+		expect((await provider.proxyAuth.identifyFromHeaders(makeRequestHeaders(alice)))?.id).toBe(
+			'legacy-row'
+		);
+		const stored = JSON.parse(await fs.readFile(allowlistFilePath, 'utf-8'));
+		expect(stored.users[0].claimedByUpn).toBe('alice@tenant.onmicrosoft.com');
 	});
 
 	it('refuses to identify a disabled user even with valid headers', async () => {
@@ -306,9 +442,7 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		expect(result?.metadata?.displayName).toBe('Anderson, Alice');
 	});
 
-	it('does not reject a duplicated email header when the UPN is single-valued', async () => {
-		// Only the UPN decides identity, so a repeated email header is noise
-		// rather than a spoofing signal — it must not lock the user out.
+	it('ignores a duplicated email header, so a matching UPN still identifies', async () => {
 		const created = await provider.createUser('alice@company.com');
 		const h = new Headers();
 		h.append(DEFAULT_HEADERS.upn, 'alice@company.com');
@@ -316,6 +450,24 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		h.append(DEFAULT_HEADERS.email, 'spoof@evil.example');
 
 		expect((await provider.proxyAuth.identifyFromHeaders(h))?.id).toBe(created.id);
+		expect((await provider.getUser(created.id))?.email).not.toContain('spoof');
+	});
+
+	it('names the non-stripping proxy when the email header carries two values', async () => {
+		const warn = vi.fn();
+		const p = new HeaderAuthProvider({
+			allowlistFilePath,
+			logger: { debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() } as never
+		});
+		const h = new Headers();
+		h.append(DEFAULT_HEADERS.upn, 'attacker@evil.example');
+		h.append(DEFAULT_HEADERS.email, 'alice@company.com');
+		h.append(DEFAULT_HEADERS.email, 'attacker@evil.example');
+
+		await p.proxyAuth.identifyFromHeaders(h);
+		await p.proxyAuth.identifyFromHeaders(h);
+		expect(warn).toHaveBeenCalledOnce();
+		expect(warn.mock.calls[0][1]).toMatchObject({ header: DEFAULT_HEADERS.email });
 	});
 
 	it('does NOT auto-create rows when no bootstrap policy is configured', async () => {
@@ -329,6 +481,31 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		const all = await provider.listUsers();
 		expect(all?.items).toEqual([]);
 	});
+
+	// Root ignores directory permissions, so the write would succeed and prove nothing.
+	it.skipIf(process.getuid?.() === 0)(
+		'still signs in an unclaimed user when the allowlist cannot be written',
+		async () => {
+			const alice = await provider.createUser('alice@company.com');
+			await fs.chmod(tempDir, 0o555);
+			try {
+				const byUpn = await provider.proxyAuth.identifyFromHeaders(
+					makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'alice@company.com' })
+				);
+				expect(byUpn?.id).toBe(alice.id);
+
+				const byEmail = await provider.proxyAuth.identifyFromHeaders(
+					makeRequestHeaders({
+						[DEFAULT_HEADERS.upn]: 'alice@tenant.onmicrosoft.com',
+						[DEFAULT_HEADERS.email]: 'alice@company.com'
+					})
+				);
+				expect(byEmail?.id).toBe(alice.id);
+			} finally {
+				await fs.chmod(tempDir, 0o755);
+			}
+		}
+	);
 });
 
 // ============================================================================
@@ -414,17 +591,21 @@ describe('HeaderAuthProvider — bootstrap policy', () => {
 	});
 
 	it('handles a concurrent-race where another caller created the row first', async () => {
-		// Simulate the race: the policy says yes, but between the findByUpn
-		// miss and the createUser call, another request has already created
-		// the row. The provider should fall back to re-reading rather than
-		// surfacing the 409.
-		await provider.createUser('first-admin@example.com');
-		provider.setBootstrapAllowlistPolicy(async () => true);
+		// The policy runs between the lookup miss and the bootstrap create, so a
+		// policy that creates the row stands in for the request that got there first:
+		// the create then meets a 409 and has to re-read.
+		let raced: AuthUser | undefined;
+		provider.setBootstrapAllowlistPolicy(async ({ upn }) => {
+			raced = await provider.createUser(upn);
+			return true;
+		});
 
 		const result = await provider.proxyAuth.identifyFromHeaders(
 			makeRequestHeaders({ [DEFAULT_HEADERS.upn]: 'first-admin@example.com' })
 		);
-		expect(result?.metadata?.upn).toBe('first-admin@example.com');
+		expect(raced).toBeDefined();
+		expect(result?.id).toBe(raced?.id);
+		expect((await provider.listUsers())?.items).toHaveLength(1);
 	});
 });
 

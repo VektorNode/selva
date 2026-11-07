@@ -44,30 +44,36 @@ describe('LocalProjectStore', () => {
 			});
 			const store = new LocalProjectStore({ loader, grants });
 			const ownerId = randomUUID();
-			const orgId = randomUUID();
 			const now = new Date().toISOString();
-			await orgs.createOrg(
-				{
-					userId: ownerId,
-					platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-					orgPermissions: [...ALL_ORG_PERMISSIONS]
-				},
-				{
-					id: orgId,
-					name: 'Test Org',
-					slug: 'test',
-					ownerId,
-					createdBy: ownerId,
-					updatedBy: ownerId,
-					createdAt: now,
-					updatedAt: now,
-					deletedAt: null
-				}
-			);
-			return { store, orgId, ownerId };
+			const createOrg = async (slug: string): Promise<string> => {
+				const id = randomUUID();
+				await orgs.createOrg(
+					{
+						userId: ownerId,
+						platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
+						orgPermissions: [...ALL_ORG_PERMISSIONS]
+					},
+					{
+						id,
+						name: `Org ${slug}`,
+						slug,
+						ownerId,
+						createdBy: ownerId,
+						updatedBy: ownerId,
+						createdAt: now,
+						updatedAt: now,
+						deletedAt: null
+					}
+				);
+				return id;
+			};
+			const orgId = await createOrg('test');
+			const otherOrgId = await createOrg('other');
+			return { store, orgId, otherOrgId, ownerId };
 		},
 		strictDenials: true,
 		nonAdminCtx: true,
-		auditStamps: true
+		auditStamps: true,
+		orgScoping: true
 	});
 });

@@ -941,11 +941,12 @@ describe('SolveScheduler — concurrency limit', () => {
 				release.push(() => resolve({ response: makeResponse('r'), cacheKey: null, missed: false }));
 			});
 		const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-		const solves = [scheduler.solve('a', []), scheduler.solve('b', [])];
+		const solves = ['a', 'b', 'c', 'd'].map((d) => scheduler.solve(d, []));
 		expect(scheduler.inFlightCount).toBe(1);
 
-		scheduler.setMaxConcurrent(2);
-		expect(scheduler.inFlightCount).toBe(2);
+		// Raising by more than one with several queued must start all of them at once.
+		scheduler.setMaxConcurrent(4);
+		expect(scheduler.inFlightCount).toBe(4);
 
 		scheduler.setMaxConcurrent(0);
 		release.splice(0).forEach((settle) => settle());

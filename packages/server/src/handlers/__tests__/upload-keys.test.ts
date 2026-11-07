@@ -27,7 +27,7 @@ import { createApiTokenResolutionCache, resolveApiToken } from '../../http/index
 import { createApiToken, listApiTokens, revokeApiToken, revokeOwnApiToken } from '../apiTokens.js';
 import { listProjects } from '../projects.js';
 import { getDefinition, listDefinitions } from '../definitions.js';
-import { consentOrgs, mintConsentToken } from '../oauthConsent.js';
+import { consentOrgs, mintConsentToken, revokeUnredeemedConsentToken } from '../oauthConsent.js';
 
 const codec = createApiTokenCodec('k'.repeat(32));
 
@@ -422,18 +422,23 @@ describe('a key revoking itself', () => {
 		const w = await world();
 		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
 		const other = await mintedSecret(w, w.dana.id, ['upload:all']);
+		const locals = await asKey(w, raw);
+		const keyId = locals.ctx.apiScope!.tokenId;
 		const res = await callHandler(revokeOwnApiToken, {
-			locals: await asKey(w, raw),
+			locals,
 			method: 'DELETE',
 			mount: { anyScope: true }
 		});
 		expect(res.status).toBe(204);
 		expect(await resolve(w, raw)).toMatchObject({ kind: 'rejected', status: 401 });
 		expect((await resolve(w, other)).kind).toBe('ok');
-		const [row] = (
+		const revoked = (
 			await w.h.config.data.apiTokens!.listByOrg(SYSTEM_CONTEXT, w.acme.id, { userId: w.dana.id })
 		).items.filter((t) => t.revokedAt);
-		expect(row).toBeDefined();
+		expect(revoked.map((t) => t.id)).toEqual([keyId]);
+		expect(w.h.events.filter((e) => e.type === 'api_token.revoked')).toEqual([
+			expect.objectContaining({ apiTokenId: keyId, reason: 'owner' })
+		]);
 	});
 
 	it('works for a key scoped to one project, which no org-level route takes', async () => {
@@ -486,6 +491,9 @@ describe('a key revoking itself', () => {
 // Consent
 // ============================================================================
 
+const run = <T>(locals: ActingLocals, fn: (req: ApiRequest) => Promise<T>) =>
+	callHandler(async (req) => ({ body: await fn(req) }), { locals });
+
 // The token page lists and revokes keys in the acting org only.
 describe('consent in the acting org', () => {
 	async function twoOrgs() {
@@ -494,9 +502,6 @@ describe('consent in the acting org', () => {
 		await seedOrgMember(w.h, { orgId: big.bigClient.id, userId: w.dana.id, role: 'member' });
 		return { ...w, big };
 	}
-
-	const run = <T>(locals: ActingLocals, fn: (req: ApiRequest) => Promise<T>) =>
-		callHandler(async (req) => ({ body: await fn(req) }), { locals });
 
 	it('offers the acting org, and only where the user may hold the key', async () => {
 		const w = await twoOrgs();
@@ -540,5 +545,64 @@ describe('consent in the acting org', () => {
 			);
 			expect(res.status).toBe(403);
 		}
+	});
+});
+
+// An abandoned sign-in must not leave a live key nobody holds.
+describe('revoking an unredeemed consent key', () => {
+	async function minted() {
+		const w = await world();
+		const cache = createApiTokenResolutionCache();
+		w.h.deps = { ...w.h.deps, tokens: { ...w.h.deps!.tokens, resolutionCache: cache } };
+		const res = await run(await actAs(w.h, w.dana.id), (req) =>
+			mintConsentToken(req, w.acme.id, { name: 'x', scopes: ['upload:all'], expiresInDays: 30 })
+		);
+		expect(res.status).toBe(200);
+		const { token, secret } = res.json as { token: { id: string }; secret: string };
+		const resolveCached = () => {
+			vi.spyOn(w.h.config.data.apiTokens!, 'touchLastUsed').mockResolvedValue();
+			return resolveApiToken(
+				new Request('http://selva.test/api/v1/projects', {
+					headers: { authorization: `Bearer ${secret}` }
+				}),
+				{ codec, auth: w.h.config.auth, data: w.h.config.data, resolutionCache: cache }
+			);
+		};
+		const revokeUnredeemed = async () =>
+			run(await actAs(w.h, w.dana.id), async (req) => {
+				await revokeUnredeemedConsentToken(req, token.id);
+				return null;
+			});
+		const stored = async () =>
+			(
+				await w.h.config.data.apiTokens!.listByOrg(SYSTEM_CONTEXT, w.acme.id, {
+					userId: w.dana.id
+				})
+			).items.find((t) => t.id === token.id);
+		return { w, tokenId: token.id, resolveCached, revokeUnredeemed, stored };
+	}
+
+	it('revokes a key nobody has used, and drops it from the cache at once', async () => {
+		const { w, tokenId, resolveCached, revokeUnredeemed, stored } = await minted();
+		expect((await resolveCached()).kind).toBe('ok');
+		expect((await revokeUnredeemed()).status).toBe(200);
+		expect((await stored())?.revokedAt).toBeTruthy();
+		expect(w.h.events).toContainEqual(
+			expect.objectContaining({ type: 'api_token.revoked', apiTokenId: tokenId, reason: 'owner' })
+		);
+		expect(await resolveCached()).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	// Its code may have been redeemed on another replica.
+	it('keeps a key that has been used', async () => {
+		const { w, tokenId, revokeUnredeemed, stored } = await minted();
+		await w.h.config.data.apiTokens!.touchLastUsed(
+			SYSTEM_CONTEXT,
+			tokenId,
+			new Date().toISOString()
+		);
+		expect((await revokeUnredeemed()).status).toBe(200);
+		expect((await stored())?.revokedAt).toBeNull();
+		expect(w.h.events.some((e) => e.type === 'api_token.revoked')).toBe(false);
 	});
 });

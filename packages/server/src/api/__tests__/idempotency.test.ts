@@ -40,8 +40,13 @@ const create: ApiHandler = async (req) => {
 	return { status: 201, body: { id: `p${created}`, name: body.name } };
 };
 
-function request(ctx: RequestContext, body: unknown, key?: string): ApiRequest {
-	const url = new URL('http://selva.test/api/v1/projects');
+function request(
+	ctx: RequestContext,
+	body: unknown,
+	key?: string,
+	path = '/api/v1/projects'
+): ApiRequest {
+	const url = new URL(path, 'http://selva.test');
 	const headers: Record<string, string> = { 'content-type': 'application/json' };
 	if (key !== undefined) headers['Idempotency-Key'] = key;
 	return {
@@ -73,6 +78,13 @@ describe('runHandler idempotency', () => {
 		const res = await run(request(session(), { name: 'B' }, 'k1'));
 		expect(res.status).toBe(422);
 		expect((await res.json()).code).toBe(ApiErrorCode.UNPROCESSABLE);
+		expect(created).toBe(1);
+	});
+
+	it('refuses a reused key with a different query string with 422', async () => {
+		await run(request(session(), { name: 'A' }, 'k1', '/api/v1/projects?orgId=a'));
+		const res = await run(request(session(), { name: 'A' }, 'k1', '/api/v1/projects?orgId=b'));
+		expect(res.status).toBe(422);
 		expect(created).toBe(1);
 	});
 

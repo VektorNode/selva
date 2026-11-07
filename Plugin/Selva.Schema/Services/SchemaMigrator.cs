@@ -40,7 +40,19 @@ public static class SchemaMigrator
         };
 
     /// <summary>
-    ///     Migrates raw JSON before deserialization, for structural changes the C# model can't handle on its own.
+    ///     Loads a saved schema: the JSON pass, then every typed step after the version it was saved
+    ///     at. The typed steps read <c>schemaVersion</c>, so the JSON pass leaves it alone.
+    /// </summary>
+    public static (UISchema Schema, List<string> Changes) Migrate(JObject json, Version currentPluginVersion)
+    {
+        var migrated = MigrateJson(json, currentPluginVersion);
+        return MigrateWithTracking(migrated.ToObject<UISchema>(), currentPluginVersion);
+    }
+
+    /// <summary>
+    ///     Migrates raw JSON before deserialization, for structural changes the C# model can't handle
+    ///     on its own. Leaves <c>schemaVersion</c> as saved (a missing one becomes 1.0.0); call
+    ///     <see cref="Migrate" /> to load.
     /// </summary>
     /// <param name="currentPluginVersion">
     ///     When set, a schema whose <c>minPluginVersion</c> is newer is refused here, before typed
@@ -128,7 +140,6 @@ public static class SchemaMigrator
 
             RenameInputSourceKinds(json);
             UnifyInputSourceKey(json);
-            json["schemaVersion"] = SchemaVersion.CURRENT_STRING;
         }
 
         return json;
@@ -472,7 +483,6 @@ public static class SchemaMigrator
         }
 
         migratedSchema.SchemaVersion = SchemaVersion.CURRENT.ToString();
-        migratedSchema.LastModified = DateTime.UtcNow;
 
         return (migratedSchema, changes);
     }

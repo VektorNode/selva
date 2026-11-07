@@ -7,7 +7,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { DataTree, GrasshopperClient, SolveScheduler } from '@selvajs/compute/grasshopper';
 
-vi.mock('@selvajs/compute/core', () => {
+vi.mock('@selvajs/compute/core', async (importOriginal) => {
+	const { ErrorCodes } = await importOriginal<typeof import('@selvajs/compute/core')>();
 	class MockComputeError extends Error {
 		code: string;
 		statusCode?: number;
@@ -26,14 +27,7 @@ vi.mock('@selvajs/compute/core', () => {
 	}
 	return {
 		ComputeError: MockComputeError,
-		ErrorCodes: {
-			QUEUE_FULL: 'QUEUE_FULL',
-			QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
-			ABORTED: 'ABORTED',
-			TIMEOUT_ERROR: 'TIMEOUT_ERROR',
-			RESPONSE_TOO_LARGE: 'RESPONSE_TOO_LARGE',
-			UNKNOWN_ERROR: 'UNKNOWN_ERROR'
-		}
+		ErrorCodes
 	};
 });
 

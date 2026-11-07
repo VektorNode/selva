@@ -138,7 +138,7 @@ A feature folder may also have a small growth area beyond this base layout (e.g.
 
 Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this: only changes to the number, order, type, or access of params do.
 
-**CI enforces this.** `scripts/plugin/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/plugin/check-component-signatures.mjs --update`.
+**CI enforces this.** `scripts/plugin/check-component-signatures.mjs --check` compares every component's param signature, live and `OBSOLETE/`, against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID, including a renamed or reordered param, and on any change to an `OBSOLETE/` snapshot. After following the procedure below (or adding a new component), bless the new state with `node scripts/plugin/check-component-signatures.mjs --update`.
 
 The procedure:
 

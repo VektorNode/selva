@@ -236,6 +236,79 @@ public class WebSocketHandshakeTests
     }
 
     // -------------------------------------------------------------------------
+    // HttpRequestParser — size limits
+    // -------------------------------------------------------------------------
+
+    private static string RequestLineOfLength(int length)
+    {
+        const string head = "GET /";
+        const string tail = " HTTP/1.1";
+        return head + new string('a', length - head.Length - tail.Length) + tail;
+    }
+
+    [Fact]
+    public async Task ReadAsync_RequestLineAtTheLimit_Parses()
+    {
+        var line = RequestLineOfLength(HttpRequestParser.MaxRequestLineBytes - 2);
+        var request = await ReadFromString(line + "\r\nHost: localhost\r\n\r\n");
+        Assert.Equal("GET", request.Method);
+    }
+
+    [Fact]
+    public async Task ReadAsync_RequestLineOneByteOver_Throws()
+    {
+        var line = RequestLineOfLength(HttpRequestParser.MaxRequestLineBytes - 1);
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadFromString(line + "\r\nHost: localhost\r\n\r\n"));
+    }
+
+    private static string HeaderOfLength(string name, int length)
+    {
+        return name + ": " + new string('v', length - name.Length - 2);
+    }
+
+    [Fact]
+    public async Task ReadAsync_HeadersFillingTheTotal_Parse()
+    {
+        var half = HttpRequestParser.MaxHeaderBytes / 2;
+        var raw = "GET / HTTP/1.1\r\n" + HeaderOfLength("X-A", half) + "\r\n" + HeaderOfLength("X-B", half) + "\r\n\r\n";
+
+        var request = await ReadFromString(raw);
+
+        Assert.Equal(half - 5, request.GetHeader("X-B")!.Length);
+    }
+
+    // Each line is under the per-line limit; only the sum is too much.
+    [Fact]
+    public async Task ReadAsync_HeadersOneByteOverTheTotal_Throw()
+    {
+        var half = HttpRequestParser.MaxHeaderBytes / 2;
+        var raw = "GET / HTTP/1.1\r\n" + HeaderOfLength("X-A", half) + "\r\n" + HeaderOfLength("X-B", half + 1) + "\r\n\r\n";
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadFromString(raw));
+    }
+
+    [Fact]
+    public async Task ReadAsync_OneHeaderLineOverTheLimit_Throws()
+    {
+        var raw = "GET / HTTP/1.1\r\n" + HeaderOfLength("X-A", HttpRequestParser.MaxHeaderBytes) + "\r\n\r\n";
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => ReadFromString(raw));
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    public async Task ReadAsync_HeaderCount_IsCapped(int extra, bool throws)
+    {
+        var headers = Enumerable.Range(0, HttpRequestParser.MaxHeaderCount + extra).Select(i => $"X-{i}: v\r\n");
+        var raw = "GET / HTTP/1.1\r\n" + string.Concat(headers) + "\r\n";
+
+        var ex = await Record.ExceptionAsync(() => ReadFromString(raw));
+
+        Assert.Equal(throws, ex is InvalidDataException);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

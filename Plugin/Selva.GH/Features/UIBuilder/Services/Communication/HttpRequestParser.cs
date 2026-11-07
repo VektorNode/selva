@@ -38,10 +38,11 @@ internal sealed class HttpRequest
 
 internal static class HttpRequestParser
 {
-    // Bounds request size so a misbehaving client can't make us read forever.
-    private const int MaxRequestLineBytes = 8 * 1024;
-    private const int MaxHeaderBytes = 16 * 1024;
-    private const int MaxHeaderCount = 100;
+    // Bounds request size so a misbehaving client can't make us read forever. A line's limit
+    // counts its CRLF; the header total doesn't.
+    internal const int MaxRequestLineBytes = 8 * 1024;
+    internal const int MaxHeaderBytes = 16 * 1024;
+    internal const int MaxHeaderCount = 100;
 
     public static async Task<HttpRequest> ReadAsync(Stream stream, CancellationToken cancellationToken)
     {

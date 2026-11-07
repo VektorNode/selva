@@ -24,6 +24,7 @@ if (!envCtx) {
 			seedUser: (id) => seedUser(envCtx, id),
 			seedOutsider: (id) => seedPlainUser(envCtx, id),
 			ctxIsolation: true,
+			auditStamps: true,
 			createCompanionStores: () => ({
 				invites: new SupabaseInviteStore(envCtx.bundle),
 				// The cascade test saves an org server carrying an apiKey, which the

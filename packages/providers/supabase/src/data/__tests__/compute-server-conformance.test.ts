@@ -40,7 +40,8 @@ if (!envCtx) {
 					updated_at: now
 				});
 				if (error) throw error;
-			}
+			},
+			orgScopedReads: true
 		});
 	});
 }

@@ -7,8 +7,9 @@ import {
 	getProjectProvider,
 	getOrganizationProvider
 } from '#lib/server/providers.server.js';
+import { isApiError } from '@selvajs/server/api';
 import { asHttpError, requireCanSolve, scoped } from '#lib/server/access.server.js';
-import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
+import { readShareToken, tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { getClient } from '#lib/server/compute/engine.server.js';
 import {
 	loadDefinitionForRender,
@@ -30,9 +31,14 @@ export const load = (async ({ params, locals, request, url }) => {
 
 	try {
 		// Draft channel and explicit-version picks are editor-only — share tokens
-		// are always live channel on the pointer.
+		// are always live channel on the pointer. A signed-in viewer who can solve
+		// anyway ignores the token: a share-token solve gets no live events and
+		// counts against the link's solve cap.
 		const sharedAccess =
-			channel === 'live' && !explicitVersionId
+			channel === 'live' &&
+			!explicitVersionId &&
+			readShareToken(request, url) !== null &&
+			!(await sessionCanSolve(locals, guid))
 				? await tryResolveShareToken(request, url, guid, 'live', { requireSolve: false })
 				: null;
 		if (sharedAccess) {
@@ -137,6 +143,19 @@ export const load = (async ({ params, locals, request, url }) => {
 		throw err;
 	}
 }) satisfies PageServerLoad;
+
+async function sessionCanSolve(locals: App.Locals, guid: string): Promise<boolean> {
+	if (!locals.ctx || !locals.user) return false;
+	const record = await getDefinitionMeta().get(locals.ctx, guid);
+	if (!record) return false;
+	try {
+		await requireCanSolve(scoped(locals), record.projectId);
+		return true;
+	} catch (err) {
+		if (isApiError(err)) return false;
+		throw err;
+	}
+}
 
 /**
  * Resolve the owning org's logo URL for viewer branding. definition → project →

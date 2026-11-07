@@ -400,7 +400,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'GET',
 		path: '/orgs/{orgId}/invites',
 		scope: 'read',
-		summary: 'List pending invites.',
+		summary: 'List pending invites. Browser session only: an API key gets 403.',
 		response: 'collection',
 		errors: [403]
 	},
@@ -408,7 +408,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'POST',
 		path: '/orgs/{orgId}/invites',
 		scope: 'write',
-		summary: 'Invite someone to the org. The accept URL is returned once.',
+		summary:
+			'Invite someone to the org. The accept URL is returned once. Browser session only: an API key gets 403.',
 		response: 'object',
 		status: 201,
 		requestBody: CreateInviteBodySchema,
@@ -427,7 +428,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		path: '/orgs/{orgId}/invites/{id}/resend',
 		scope: 'write',
 		summary:
-			'Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working.',
+			'Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working. Browser session only: an API key gets 403.',
 		response: 'object',
 		status: 201,
 		errors: [403, 404, 409]

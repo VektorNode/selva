@@ -26,7 +26,9 @@ if (!envCtx) {
 					},
 					sink
 				),
-			createActorId: () => seedUser(envCtx, '')
+			createActorId: () => seedUser(envCtx, ''),
+			strictDenials: true,
+			silentNoops: true
 		});
 	});
 }

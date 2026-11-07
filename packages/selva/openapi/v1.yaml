@@ -2527,7 +2527,7 @@ paths:
                 $ref: "#/components/schemas/Error"
   "/api/v1/orgs/{orgId}/invites":
     get:
-      summary: List pending invites.
+      summary: "List pending invites. Browser session only: an API key gets 403."
       operationId: getOrgsByOrgIdInvites
       tags:
         - Orgs
@@ -2580,7 +2580,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
     post:
-      summary: Invite someone to the org. The accept URL is returned once.
+      summary: "Invite someone to the org. The accept URL is returned once. Browser session only: an API key gets 403."
       operationId: postOrgsByOrgIdInvites
       tags:
         - Orgs
@@ -2737,7 +2737,7 @@ paths:
                 $ref: "#/components/schemas/Error"
   "/api/v1/orgs/{orgId}/invites/{id}/resend":
     post:
-      summary: "Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working."
+      summary: "Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working. Browser session only: an API key gets 403."
       operationId: postOrgsByOrgIdInvitesByIdResend
       tags:
         - Orgs

@@ -28,6 +28,8 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	versionId?: () => string | null | undefined;
 	/** The tab's live-event stream id (`createSolveEventStream().streamId`), so the server routes this solve's events to it. */
 	streamId?: () => string | null | undefined;
+	/** Sent as `Authorization: Bearer …`, e.g. a share-link token. A header, not the URL, so it stays out of access logs. */
+	bearerToken?: () => string | null | undefined;
 	/** Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. */
 	meshes?: {
 		extract: (
@@ -131,6 +133,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const channel = opts.channel?.();
 		const versionId = opts.versionId?.();
 		const streamId = opts.streamId?.();
+		const bearerToken = opts.bearerToken?.();
 
 		const payload = JSON.stringify({
 			inputs,
@@ -144,7 +147,10 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		try {
 			res = await fetch(opts.endpoint, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: {
+					'Content-Type': 'application/json',
+					...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {})
+				},
 				body: payload,
 				signal
 			});

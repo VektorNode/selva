@@ -13,3 +13,5 @@ On Windows, `vite build` can occasionally fail with `ENOTEMPTY` in `@selvajs/ui`
 ## When to edit turbo.json
 
 Only when a task needs explicit deps, outputs, inputs, or env tracking. Adding a script to a package is usually enough. A package can override the root config with its own `turbo.json` that `extends: ["//"]`; `packages/schemas` does this so `build` waits for `generate`.
+
+A test that reads a file outside its own package (a shared fixture, a doc, another package's schema) must list it in that task's `inputs`. Otherwise a change to that file alone replays a cached pass, in CI too, since CI restores the turbo cache.

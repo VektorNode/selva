@@ -20,11 +20,9 @@ public class RasterSanitizerTests
         return ms.ToArray();
     }
 
-    [Fact]
+    [WindowsFact]
     public void Png_and_jpeg_come_back_reencoded_in_their_own_format()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         Assert.Equal(SanitizeResult.Ok, RasterSanitizer.TryReencode(Encode(ImageFormat.Png), DrawImageFormat.Png, out var png));
         Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, png[..4]);
 
@@ -32,21 +30,17 @@ public class RasterSanitizerTests
         Assert.Equal(new byte[] { 0xFF, 0xD8, 0xFF }, jpeg[..3]);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Corrupt_data_and_webp_are_refused()
     {
-        if (!OperatingSystem.IsWindows()) return;
-
         var truncated = Encode(ImageFormat.Png)[..40];
         Assert.Equal(SanitizeResult.Undecodable, RasterSanitizer.TryReencode(truncated, DrawImageFormat.Png, out _));
         Assert.Equal(SanitizeResult.Undecodable, RasterSanitizer.TryReencode("RIFF\0\0\0\0WEBPVP8 "u8.ToArray(), DrawImageFormat.Webp, out _));
     }
 
-    [Fact]
+    [NotWindowsFact]
     public void Missing_system_drawing_is_reported_as_platform_not_image()
     {
-        if (OperatingSystem.IsWindows()) return;
-
         var pngSignature = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         Assert.Equal(SanitizeResult.PlatformUnsupported, RasterSanitizer.TryReencode(pngSignature, DrawImageFormat.Png, out _));
     }

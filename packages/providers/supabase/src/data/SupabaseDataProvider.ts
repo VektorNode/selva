@@ -242,7 +242,8 @@ export class SupabaseDataProvider implements IDataProvider {
 		opts?: UserErasureOptions
 	): Promise<void> {
 		const client = this.clients.serviceClient;
-		const email = opts?.email;
+		// Invites, and the `invite.created` payloads that copy them, hold the address lowercased.
+		const email = opts?.email?.trim().toLowerCase();
 
 		const deletedActions = await client.from('audit_events').delete().eq('actor_id', userId);
 		if (deletedActions.error) {

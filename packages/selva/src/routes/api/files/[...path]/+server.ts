@@ -6,8 +6,9 @@ import {
 	classifyAssetPath,
 	COVER_IMAGE_CONTENT_TYPES
 } from '@selvajs/platform';
-import { getDefinitionMeta, getStorageProvider } from '#lib/server/providers.server.js';
-import { asHttpError, requireCanViewProject, scoped } from '#lib/server/access.server.js';
+import { getVisibleDefinition } from '@selvajs/server/definitions';
+import { getStorageProvider } from '#lib/server/providers.server.js';
+import { accessDepsFromConfig } from '#lib/server/access.server.js';
 
 /**
  * Authenticated/­public blob proxy. The set of servable paths is the closed
@@ -18,8 +19,8 @@ import { asHttpError, requireCanViewProject, scoped } from '#lib/server/access.s
  *   - `public`  (org branding — logo/favicon): served to anyone, incl.
  *     logged-out visitors, with no auth. Cacheable. The bytes are always a
  *     rasterized WebP, so there is no XSS surface to gate.
- *   - `project` (definition covers): `requireCanViewProject(projectId)` — the
- *     M5 hardening, unchanged.
+ *   - `project` (definition covers): the caller must be able to view the
+ *     definition's project, by the same rule as definition reads.
  *
  * Anything that classifies to no asset class 404s. New blob types are opt-in:
  * add a registry entry with the right visibility — never a generic
@@ -73,9 +74,13 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			const guidParsed = GuidSchema.safeParse(guid);
 			if (!guidParsed.success) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
 
-			const record = await getDefinitionMeta().get(locals.ctx, guidParsed.data);
+			// 404, not 403, for a cover the caller can't view: a 403 would confirm the guid exists.
+			const record = await getVisibleDefinition(
+				locals.ctx,
+				guidParsed.data,
+				accessDepsFromConfig(locals.providers)
+			);
 			if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-			await asHttpError(() => requireCanViewProject(scoped(locals), record.projectId));
 
 			canonicalPath = definitionPaths.image(guidParsed.data);
 			break;

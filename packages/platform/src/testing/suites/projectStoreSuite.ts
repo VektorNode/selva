@@ -27,6 +27,8 @@ export interface ProjectStoreConformanceOptions {
 	createStore: () => Promise<{
 		store: IProjectStore;
 		orgId: string;
+		/** A second org the owner can create projects in, for the `orgScoping` cases. */
+		otherOrgId?: string;
 		ownerId: string;
 		ownerSessionToken?: string;
 	}>;
@@ -53,6 +55,11 @@ export interface ProjectStoreConformanceOptions {
 	nonAdminCtx?: boolean;
 	/** `createProject` keeps the `createdBy` of a creator who isn't the owner. */
 	auditStamps?: boolean;
+	/**
+	 * `getProjectBySlug` and `listProjects` stay inside the org asked for, when another
+	 * org uses the same slug. Needs `otherOrgId` from `createStore`.
+	 */
+	orgScoping?: boolean;
 }
 
 function project(orgId: string, ownerId: string, overrides: Partial<Project> = {}): Project {
@@ -96,7 +103,8 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		ctxIsolation = false,
 		strictDenials = false,
 		nonAdminCtx = false,
-		auditStamps = false
+		auditStamps = false,
+		orgScoping = false
 	} = opts;
 	const { seed, ctx, remember } = makeSeedHelpers(seedUser, { nonAdminCtx });
 	const outsider = makeSeedHelpers(seedOutsider);
@@ -187,6 +195,51 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			const page = await store.listProjects(ctx(ownerId), orgId, { limit: 2 });
 			expect(page.items.length).toBe(2);
 		});
+
+		if (orgScoping) {
+			const otherOrgOf = (store: { otherOrgId?: string }): string => {
+				if (!store.otherOrgId)
+					throw new Error('orgScoping requires createStore to return otherOrgId');
+				return store.otherOrgId;
+			};
+
+			it('getProjectBySlug answers from the org asked, when another org uses the same slug', async () => {
+				const created = await createStore();
+				const { store, orgId, ownerId } = created;
+				const otherOrgId = otherOrgOf(created);
+				const mine = project(orgId, ownerId, { slug: 'shared-slug' });
+				const theirs = project(otherOrgId, ownerId, { slug: 'shared-slug' });
+				await store.createProject(ctx(ownerId), mine);
+				await store.createProject(ctx(ownerId), theirs);
+
+				expect((await store.getProjectBySlug(ctx(ownerId), orgId, 'shared-slug'))?.id).toBe(
+					mine.id
+				);
+				expect((await store.getProjectBySlug(ctx(ownerId), otherOrgId, 'shared-slug'))?.id).toBe(
+					theirs.id
+				);
+			});
+
+			it('getProjectBySlug returns null for a slug only another org uses', async () => {
+				const created = await createStore();
+				const { store, orgId, ownerId } = created;
+				const elsewhere = project(otherOrgOf(created), ownerId, { slug: 'elsewhere' });
+				await store.createProject(ctx(ownerId), elsewhere);
+				expect(await store.getProjectBySlug(ctx(ownerId), orgId, 'elsewhere')).toBeNull();
+			});
+
+			it('listProjects leaves out another org’s projects', async () => {
+				const created = await createStore();
+				const { store, orgId, ownerId } = created;
+				const a = project(orgId, ownerId, { name: 'Mine A' });
+				const b = project(orgId, ownerId, { name: 'Mine B' });
+				const theirs = project(otherOrgOf(created), ownerId, { name: 'Theirs' });
+				for (const p of [a, b, theirs]) await store.createProject(ctx(ownerId), p);
+
+				const page = await store.listProjects(ctx(ownerId), orgId, { limit: 100 });
+				expect(page.items.map((p) => p.id).sort()).toEqual([a.id, b.id].sort());
+			});
+		}
 
 		// ============================================================================
 		// Project Members

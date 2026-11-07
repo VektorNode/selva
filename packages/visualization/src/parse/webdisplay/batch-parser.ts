@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '../../shared/index.js';
+import { ErrorCodes, getLogger, VisualizationError } from '../../shared/index.js';
 
 import { decodeRawMeshBatch, FLAG_FLOAT32, parseBinaryMeshBatchRaw } from './binary-parser.js';
 import { inflateSlvzAsync, slvzInflatedBytes, toUint8Array } from './binary/geometry.js';
@@ -27,9 +27,14 @@ import {
 	type BuiltBatch,
 	type FinishedBatch
 } from './batch/finished-cache.js';
-import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
+import { dequantizeInt16, validateBatchMetadata } from './batch/metadata.js';
 
-import type { AssemblyJob, AssemblyWindow, FinishedGeometry } from './mesh-assembly.js';
+import type {
+	AssembledGeometry,
+	AssemblyJob,
+	AssemblyWindow,
+	FinishedGeometry
+} from './mesh-assembly.js';
 import type { ParsedBinaryMeshBatch, RawBinaryMeshBatch } from './binary-parser.js';
 import type {
 	DisplayBatch,
@@ -254,12 +259,7 @@ function buildMeshesFromParsed(
 	// rebased indices into a Uint32Array, `subarray` silently clamps, and an out-of-range
 	// materialId feeds `undefined` into `new THREE.Mesh`. Fail the parse instead of corrupting
 	// the render silently.
-	validateGroupMetadata(
-		groups,
-		materialsSrc.length,
-		parsed.vertices.length / 3,
-		parsed.indices.length
-	);
+	validateBatchMetadata(materialsSrc, groups, parsed.vertices.length / 3, parsed.indices.length);
 
 	// Dequantize once up front into a single Float32Array — downstream code (per-group merging,
 	// computeVertexNormals, ground-offset) expects world-unit floats, and one linear pass over the
@@ -431,7 +431,7 @@ function buildFromFinishedCache(
 	if (!cached) return null;
 
 	// Equal jobs mean equal windows, but the material ids are this batch's own.
-	validateGroupMetadata(groups, materialsSrc.length, cached.vertexCount, cached.indexCount);
+	validateBatchMetadata(materialsSrc, groups, cached.vertexCount, cached.indexCount);
 	return meshesFromBuilt(cached, jobRefs, materialsSrc, opts.material);
 }
 
@@ -484,7 +484,7 @@ async function tryBuildViaAssembly(
 
 	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
 	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
-	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
+	validateBatchMetadata(materialsSrc, groups, raw.vertexCount, indexCount);
 
 	const { jobs, jobRefs } = planJobs(groups, opts.mergeByMaterial);
 	const assembled = await assemble(raw, jobs, opened.source);
@@ -540,9 +540,18 @@ async function assemble(
 	};
 
 	if (!worker) {
-		return assembleGeometries(input).map((geometry, i) =>
-			finishGeometry(geometry, jobs[i]!.windows)
-		);
+		let geometries: AssembledGeometry[];
+		try {
+			geometries = assembleGeometries(input);
+		} catch (error) {
+			// Plain Errors: `assembleGeometries` is stringified into the worker, so it can't import ours.
+			throw new VisualizationError(
+				error instanceof Error ? error.message : String(error),
+				ErrorCodes.VALIDATION_ERROR,
+				{ originalError: error instanceof Error ? error : undefined }
+			);
+		}
+		return geometries.map((geometry, i) => finishGeometry(geometry, jobs[i]!.windows));
 	}
 
 	// Transferring detaches. An inflated buffer is ours to give away; an uncompressed chunk's arrays

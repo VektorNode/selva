@@ -31,17 +31,16 @@ type PinoFactory = (options: {
 }) => PinoLike;
 
 /**
- * Field paths scrubbed before a record is written. A backstop for accidents,
- * NOT a licence to log objects: call sites are required not to log secrets in
- * the first place (see `LogFields`). This catches the case where a whole object
- * is spread into fields and happens to carry a credential.
+ * Field names scrubbed before a record is written, by both backends. A backstop
+ * for accidents, NOT a licence to log objects: call sites are required not to
+ * log secrets in the first place (see `LogFields`). This catches the case where
+ * a whole object is spread into fields and happens to carry a credential.
  *
- * It matches by FIELD NAME, and only at the top level or one level deep (the
- * `*.` entries). It will not catch personal data — an email nested in a payload
- * sails straight through, and a log line reaches a collector that erasure can
- * never reach. The nested `*.` set doesn't cover every top-level name.
+ * It matches by FIELD NAME, and only at the top level or one level deep. It will
+ * not catch personal data: an email nested in a payload sails straight through,
+ * and a log line reaches a collector that erasure can never reach.
  */
-const REDACTED_PATHS = [
+const REDACTED_KEYS = [
 	'token',
 	'sessionToken',
 	'refreshToken',
@@ -52,16 +51,29 @@ const REDACTED_PATHS = [
 	'Authorization',
 	'cookie',
 	// A freshly minted API token is returned as `secret`.
-	'secret',
-	'*.secret',
-	'*.authorization',
-	'*.Authorization',
-	'*.token',
-	'*.sessionToken',
-	'*.refreshToken',
-	'*.apiKey',
-	'*.password'
+	'secret'
 ];
+
+const CENSOR = '[redacted]';
+const REDACTED = new Set(REDACTED_KEYS);
+const REDACTED_PATHS = [...REDACTED_KEYS, ...REDACTED_KEYS.map((k) => `*.${k}`)];
+
+/** {@link REDACTED_KEYS} applied the way pino applies its paths, on a copy. */
+function redact(fields: LogFields): LogFields {
+	const out: LogFields = {};
+	for (const [key, value] of Object.entries(fields)) {
+		out[key] = REDACTED.has(key) ? CENSOR : redactOneLevel(value);
+	}
+	return out;
+}
+
+function redactOneLevel(value: unknown): unknown {
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+	if (!Object.keys(value).some((k) => REDACTED.has(k))) return value;
+	return Object.fromEntries(
+		Object.entries(value).map(([k, v]) => [k, REDACTED.has(k) ? CENSOR : v])
+	);
+}
 
 /**
  * Minimal `ILogger` over `console.*`, used when pino isn't installed. Renders
@@ -84,7 +96,7 @@ export class ConsoleLogger implements ILogger {
 	private write(level: LogLevel, message: string, fields?: LogFields): void {
 		if (ConsoleLogger.ORDER[level] < ConsoleLogger.ORDER[this.minLevel]) return;
 		const merged = { ...this.bound, ...fields };
-		const suffix = Object.keys(merged).length > 0 ? ` ${safeStringify(merged)}` : '';
+		const suffix = Object.keys(merged).length > 0 ? ` ${renderFields(merged)}` : '';
 		const line = `${level.toUpperCase()} ${message}${suffix}`;
 		// Split stderr/stdout the way an operator expects. `info` carries debug
 		// too — both land on stdout, and the line already spells out its level.
@@ -111,9 +123,9 @@ export class ConsoleLogger implements ILogger {
 }
 
 /** Fields can hold anything, including cycles. Never let rendering throw. */
-function safeStringify(value: unknown): string {
+function renderFields(fields: LogFields): string {
 	try {
-		return JSON.stringify(value) ?? String(value);
+		return JSON.stringify(redact(fields)) ?? String(fields);
 	} catch {
 		return '[unserializable]';
 	}
@@ -183,7 +195,7 @@ export async function createLogger(opts: CreateLoggerOptions = {}): Promise<ILog
 		const pino = factory({
 			level,
 			base: opts.base,
-			redact: { paths: REDACTED_PATHS, censor: '[redacted]' },
+			redact: { paths: REDACTED_PATHS, censor: CENSOR },
 			transport: opts.pretty
 				? { target: 'pino-pretty', options: { colorize: true, ignore: 'pid,hostname' } }
 				: undefined

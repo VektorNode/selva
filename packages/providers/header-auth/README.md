@@ -234,6 +234,14 @@ The row sits empty (no `email`, no `displayName`) until the user first
 visits — at that point the provider materializes those fields from the
 matching headers.
 
+If you entered their email and the proxy forwards a different UPN, the first
+sign-in still finds the row by the email header. That sign-in claims the row
+for its UPN (`claimedByUpn`), and from then on the email header admits only
+that UPN. A UPN equal to the row's `upn` always gets in and takes the claim
+over, so moving users onto a UPN you allowlisted needs no edit. If a user's
+UPN changes to anything else, set `upn` on their row in
+`header-allowlist.json` to the new one.
+
 ---
 
 ## Logout

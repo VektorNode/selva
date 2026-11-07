@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
@@ -54,6 +55,26 @@ public class SchemaFixtureTests
                 Inputs = new Dictionary<string, InputExpectation>
                 {
                     ["DataInput"] = new InputExpectation { ParamType = "generic", InputStructure = "list" }
+                }
+            },
+            ["v2.9.0.json"] = new FixtureExpectations
+            {
+                InputCount = 4,
+                OutputCount = 2,
+                Inputs = new Dictionary<string, InputExpectation>
+                {
+                    ["Outline"] = new InputExpectation { ParamType = "generic", InputStructure = "item" },
+                    ["Finishes"] = new InputExpectation { ParamType = "valueList", InputStructure = "list" }
+                }
+            },
+            ["v2.17.0.json"] = new FixtureExpectations
+            {
+                InputCount = 6,
+                OutputCount = 2,
+                Inputs = new Dictionary<string, InputExpectation>
+                {
+                    ["Profile"] = new InputExpectation { ParamType = "dynamicValueList", InputStructure = "item" },
+                    ["Site"] = new InputExpectation { ParamType = "geometry", InputStructure = "list" }
                 }
             }
         };
@@ -157,6 +178,65 @@ public class SchemaFixtureTests
     }
 
     // -------------------------------------------------------------------------
+    // Typed steps run on load, from the version the schema was saved at
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [MemberData(nameof(AllFixtureFiles))]
+    public void Fixture_LoadAppliesEveryTypedStepAfterItsSavedVersion(string fileName)
+    {
+        var raw = JObject.Parse(ReadFixture(fileName));
+        var saved = Version.Parse(raw["schemaVersion"]?.Value<string>() ?? "1.0.0");
+
+        var (_, changes) = Load(ReadFixture(fileName));
+
+        var steps = SchemaMigrator.GetMigrationPath(saved, SchemaVersion.CURRENT);
+        Assert.Equal(steps.Select(v => v.ToString()),
+            changes.Where(c => c.StartsWith("Applied migration")).Select(c => c.Split(' ').Last()));
+    }
+
+    [Fact]
+    public void V2_9_0_FoldsPathAndProducerIntoKeyAndDropsOnMissing()
+    {
+        var (schema, _) = Load(ReadFixture("v2.9.0.json"));
+
+        var items = ((FlatLayoutConfig)schema.Layout).Groups[0].Items;
+        var outline = (InputTextLayoutItem)items.Single(i => i.Id == "item-outline");
+        var measured = (InputTextLayoutItem)items.Single(i => i.Id == "item-measured");
+        Assert.Equal(("server", "capture.outline"), (outline.Source.Kind, outline.Source.Key));
+        Assert.Equal(("client", "line-app"), (measured.Source.Kind, measured.Source.Key));
+
+        var saved = JObject.Parse(JsonConvert.SerializeObject(schema, SchemaSerializationSettings.Settings));
+        var savedSources = saved.SelectTokens("$.layout.groups[*].items[*].source").Cast<JObject>().ToList();
+        Assert.Equal(2, savedSources.Count);
+        Assert.All(savedSources, source =>
+            Assert.Equal(new[] { "key", "kind" }, source.Properties().Select(p => p.Name).OrderBy(n => n)));
+    }
+
+    [Fact]
+    public void V2_17_0_KeepsOptionMediaAndAssets()
+    {
+        var (schema, _) = Load(ReadFixture("v2.17.0.json"));
+
+        var roof = (InputDropdownLayoutItem)((TabbedLayoutConfig)schema.Layout).Tabs[0].Groups[0].Items
+            .Single(i => i.Id == "item-roof");
+        Assert.Equal("tiles", roof.Config.DisplayAs);
+        Assert.Equal("roof-flat", roof.Config.OptionMedia["Flat"].Image);
+        Assert.Equal("lucide:house", roof.Config.OptionMedia["Gable"].IconName);
+        Assert.Equal("M3 12l9-9 9 9", schema.Assets["roof-gable"].D);
+        Assert.Null(schema.LocalOptions);
+    }
+
+    // Migration isn't an edit: the timestamp moves when the user saves.
+    [Fact]
+    public void Load_KeepsTheSavedLastModified()
+    {
+        var (schema, _) = Load(ReadFixture("v2.17.0.json"));
+
+        Assert.Equal(new DateTime(2026, 10, 26, 16, 45, 0, DateTimeKind.Utc), schema.LastModified.ToUniversalTime());
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -189,13 +269,15 @@ public class SchemaFixtureTests
         }
     }
 
-    // Mirrors SchemaArchiveSerializer's two-phase call sequence exactly.
     private static UISchema FullMigration(string rawJson)
     {
-        var jObject = JObject.Parse(rawJson);
-        jObject = SchemaMigrator.MigrateJson(jObject);
-        var schema = jObject.ToObject<UISchema>();
-        return SchemaMigrator.MigrateToCurrentVersion(schema, new Version(99, 0, 0));
+        return Load(rawJson).Schema;
+    }
+
+    // What SchemaArchiveSerializer calls when a .gh loads.
+    private static (UISchema Schema, List<string> Changes) Load(string rawJson)
+    {
+        return SchemaMigrator.Migrate(JObject.Parse(rawJson), new Version(99, 0, 0));
     }
 
     private static string ReadFixture(string fileName)

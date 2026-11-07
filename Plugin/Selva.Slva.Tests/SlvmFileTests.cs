@@ -292,6 +292,22 @@ public class SlvmFileTests
         Assert.Throws<InvalidDataException>(() => SlvmFile.Read(ms));
     }
 
+    // SLVM v2 was a pre-release layout that never shipped, so nothing on disk carries it; the
+    // container version is an exact match, not a floor.
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(2u)]
+    public void Read_RejectsAnOlderContainerVersion(uint version)
+    {
+        using var written = new MemoryStream();
+        SlvmFile.Write(written, SampleBatch());
+        var bytes = written.ToArray();
+        BitConverter.GetBytes(version).CopyTo(bytes, 4);
+
+        var ex = Assert.Throws<InvalidDataException>(() => SlvmFile.Read(new MemoryStream(bytes)));
+        Assert.Contains($"version {version}", ex.Message);
+    }
+
     [Fact]
     public void Write_RejectsNullArguments()
     {

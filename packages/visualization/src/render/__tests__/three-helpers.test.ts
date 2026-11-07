@@ -161,32 +161,37 @@ describe('clearScene', () => {
 	});
 
 	it('clears meshes in linear time', () => {
-		// Regression: removeFromParent per child is indexOf + splice, O(n²). A ratio, not a
-		// wall-clock budget, which varies too much across CI runners: 16x the meshes costs ~16x
-		// when linear, over 200x when quadratic, so the bound sits between them with room for noise.
-		// Each size keeps its fastest run: a GC pause only ever adds time.
+		// Regression: removeFromParent per child is indexOf + splice, O(n²), 3.5 s at 100k meshes.
+		// Counts element reads and writes on the child list rather than timing, which is noisy on CI.
+		const count = 2_000;
 		const geometry = new THREE.BufferGeometry();
 		const material = new THREE.MeshBasicMaterial();
-		const timeClear = (count: number) => {
-			const scene = new THREE.Scene();
-			for (let i = 0; i < count; i++) scene.children.push(new THREE.Mesh(geometry, material));
-			for (const child of scene.children) child.parent = scene;
-			const start = performance.now();
-			clearScene(scene);
-			const elapsed = performance.now() - start;
-			expect(scene.children).toHaveLength(0);
-			return elapsed;
-		};
-		const fastestClear = (count: number, runs: number) =>
-			Math.min(...Array.from({ length: runs }, () => timeClear(count)));
+		const scene = new THREE.Scene();
+		const children: THREE.Object3D[] = [];
+		for (let i = 0; i < count; i++) {
+			const mesh = new THREE.Mesh(geometry, material);
+			mesh.parent = scene;
+			children.push(mesh);
+		}
+		let elementAccesses = 0;
+		const isIndex = (key: string | symbol) => typeof key === 'string' && /^\d+$/.test(key);
+		scene.children = new Proxy(children, {
+			get(target, key, receiver) {
+				if (isIndex(key)) elementAccesses++;
+				return Reflect.get(target, key, receiver);
+			},
+			set(target, key, value, receiver) {
+				if (isIndex(key)) elementAccesses++;
+				return Reflect.set(target, key, value, receiver);
+			}
+		});
 
-		// Building the meshes dominates on slow runners, so keep the counts modest and the timeout loose.
-		fastestClear(5_000, 3);
-		const small = Math.max(fastestClear(5_000, 5), 1);
-		const large = fastestClear(80_000, 3);
+		clearScene(scene);
 
-		expect(large / small).toBeLessThan(64);
-	}, 60_000);
+		expect(scene.children).toHaveLength(0);
+		// One pass over the list; the quadratic version makes ~count² / 2.
+		expect(elementAccesses).toBeLessThan(count * 4);
+	});
 });
 
 describe('clearScene and lights', () => {

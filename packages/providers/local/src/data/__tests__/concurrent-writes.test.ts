@@ -1,25 +1,7 @@
 /**
- * What the local provider actually does under concurrent writes to `tryIncrementSolveCount`.
- *
- * It used to be worse than slow: 19 of 20 concurrent increments threw ENOENT,
- * because every writer shared one `${filePath}.tmp` staging file and the first
- * rename pulled it out from under the rest. Fixed by giving each write its own
- * temp name (see `fsJson.ts`); the first test below pins the regression.
- *
- * What's left is a real, permanent limitation, characterized here rather than
- * hidden: writes no longer crash or corrupt the file, but read-modify-write still
- * has a lost-update window. Concurrent increments can interleave their read and
- * write, so the cap can be exceeded and the stored count can end up lower than
- * the number of increments that were admitted. The local provider is a
- * single-node dev/small-deployment backend — Supabase's SECURITY DEFINER RPC is
- * what actually gives atomic check-and-increment (see
- * `packages/providers/supabase/src/data/__tests__/share-link-concurrency.test.ts`,
- * skipped without a live stack).
- *
- * The cap is exact under sequential load (pinned in the app's
- * `solve-cap-and-count.test.ts`) and best-effort under concurrent load here. If
- * the local provider ever gains real per-file locking, the characterization
- * tests below should tighten into guarantees.
+ * Concurrent `tryIncrementSolveCount` on the local share-link store. Writers queue
+ * on `withFileLock`, so within one process every increment lands; the capped case
+ * is in `local-write-races.test.ts`.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -105,55 +87,23 @@ describe('concurrent tryIncrementSolveCount (local provider)', () => {
 		expect(after!.solveCount).toBeGreaterThan(0);
 	});
 
-	posixRename('CHARACTERIZATION: concurrent increments lose updates (not atomic)', async () => {
-		// Sequentially, 20 increments give exactly 20; concurrently, interleaved
-		// read-modify-write means the stored count is <= the number of attempts,
-		// often far lower. Asserted as an inequality rather than an exact number
-		// because the loss is timing-dependent — the point is that it's lossy at all.
+	posixRename('counts every concurrent increment, each with its own number', async () => {
 		const store = newStore();
 		const l = link({ maxSolves: null });
 		await store.create(SYSTEM_CONTEXT, l);
 
 		const N = 20;
-		await Promise.all(
+		const results = await Promise.all(
 			Array.from({ length: N }, () => store.tryIncrementSolveCount(SYSTEM_CONTEXT, l.id))
 		);
 
-		const after = await store.getById(SYSTEM_CONTEXT, l.id);
-		expect(after!.solveCount).toBeLessThanOrEqual(N);
-		// Sequentially this would be exactly N. If it ever equals N reliably, the
-		// local store became atomic and this test should become a guarantee.
-		expect(after!.solveCount).toBeGreaterThan(0);
-	});
-
-	posixRename('CHARACTERIZATION: a cap can be over-admitted under concurrency', async () => {
-		// The security-relevant half. Sequentially the cap is exact (see the app's
-		// solve-cap-and-count.test.ts). Concurrently, several callers can each read
-		// a below-cap count before any of them writes, so more than `maxSolves`
-		// requests get admitted. An operator relying on share caps as a hard
-		// billing limit needs the Supabase backend, whose RPC does
-		// check-and-increment in one statement.
-		const store = newStore();
-		const CAP = 5;
-		const l = link({ maxSolves: CAP });
-		await store.create(SYSTEM_CONTEXT, l);
-
-		const results = await Promise.all(
-			Array.from({ length: 20 }, () => store.tryIncrementSolveCount(SYSTEM_CONTEXT, l.id))
+		expect([...results].sort((x, y) => (x ?? 0) - (y ?? 0))).toEqual(
+			Array.from({ length: N }, (_, i) => i + 1)
 		);
-		const admitted = results.filter((r) => r !== null).length;
-
-		// At least the cap is admitted; possibly more (that's the race).
-		expect(admitted).toBeGreaterThanOrEqual(1);
-		// What does hold: nothing is admitted once the persisted count reaches the
-		// cap, so the overshoot is bounded by concurrency, not unbounded.
-		const after = await store.getById(SYSTEM_CONTEXT, l.id);
-		expect(after!.solveCount).toBeLessThanOrEqual(CAP);
+		expect((await store.getById(SYSTEM_CONTEXT, l.id))!.solveCount).toBe(N);
 	});
 
-	it('sequential increments through the same store are exact (the contract that holds)', async () => {
-		// The guarantee the local provider genuinely makes — the one the route
-		// depends on for single-user dev flows.
+	it('sequential increments are exact and stop at the cap', async () => {
 		const store = newStore();
 		const CAP = 5;
 		const l = link({ maxSolves: CAP });

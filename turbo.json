@@ -64,7 +64,54 @@
 				"scripts/**",
 				"vitest.config.ts",
 				".env.test",
-				"$TURBO_ROOT$/packages/config/vitest.config.js"
+				"$TURBO_ROOT$/packages/config/vitest.config.js",
+				"$TURBO_ROOT$/packages/schemas/*-schema.json",
+				"$TURBO_ROOT$/packages/schemas/fixtures/**"
+			]
+		},
+		"@selvajs/cli#test": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": [
+				"src/**",
+				"bin/**",
+				"$TURBO_ROOT$/packages/server/src/ops/__tests__/deployment-config-fixtures.js"
+			]
+		},
+		"@selvajs/config#test": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": ["eslint-rules/**"]
+		},
+		"@selvajs/selva#test": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"scripts/**",
+				"openapi/**",
+				"vitest.config.ts",
+				"kit.config.ts",
+				".env.test",
+				"$TURBO_ROOT$/packages/config/vitest.config.js",
+				"$TURBO_ROOT$/packages/schemas/*-schema.json",
+				"$TURBO_ROOT$/packages/schemas/fixtures/**",
+				"$TURBO_ROOT$/packages/cli/src/generated/config.js",
+				"$TURBO_ROOT$/docs/contributing/permissions.md"
+			]
+		},
+		"@selvajs/website#test": {
+			"dependsOn": ["^build"],
+			"outputs": [],
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"scripts/**",
+				"static/**",
+				"vitest.config.ts",
+				"$TURBO_ROOT$/packages/config/vitest.config.js",
+				"$TURBO_ROOT$/docs/**"
 			]
 		},
 		"check": {
@@ -114,14 +161,29 @@
 				"vitest.config.ts",
 				"kit.config.ts",
 				".env.test",
-				"$TURBO_ROOT$/packages/config/vitest.config.js"
+				"$TURBO_ROOT$/packages/config/vitest.config.js",
+				"$TURBO_ROOT$/packages/schemas/*-schema.json",
+				"$TURBO_ROOT$/packages/schemas/fixtures/**"
 			]
 		},
 		"test:e2e": {
 			"dependsOn": ["build"],
 			"outputs": ["playwright-report/**"],
-			"inputs": ["src/**", "e2e/**", "playwright.config.ts"],
-			"env": ["CI", "E2E_PORT"]
+			"inputs": [
+				"src/**",
+				"e2e/**",
+				"playwright.config.ts",
+				"$TURBO_ROOT$/packages/schemas/fixtures/**"
+			],
+			"env": [
+				"CI",
+				"E2E_PORT",
+				"E2E_WS_PORT",
+				"E2E_COMPUTE_URL",
+				"E2E_COMPUTE_KEY",
+				"RHINO_COMPUTE_URL",
+				"RHINO_COMPUTE_KEY"
+			]
 		},
 		"dev": {
 			"cache": false,

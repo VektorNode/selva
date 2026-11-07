@@ -32,7 +32,6 @@ public class SchemaMigratorTests
 
         var migrated = SchemaMigrator.MigrateJson(json);
 
-        Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.ToString());
         Assert.Null(migrated["layout"]?["tabs"]);
         var groups = migrated["layout"]?["groups"] as JArray;
         Assert.NotNull(groups);
@@ -131,6 +130,70 @@ public class SchemaMigratorTests
         Assert.Equal("client", items[0]["source"]?["kind"]?.ToString());
     }
 
+    [Fact]
+    public void MigrateJson_FoldsProducerIntoKey()
+    {
+        var json = JObject.Parse("""
+                                 {
+                                 	"schemaVersion": "2.9.0",
+                                 	"layout": {
+                                 		"type": "flat",
+                                 		"groups": [ { "id": "g1", "label": "G1", "items": [
+                                 			{ "type": "input", "paramId": "a", "source": { "kind": "client", "producer": "line-app" } }
+                                 		] } ]
+                                 	}
+                                 }
+                                 """);
+
+        var source = (JObject)SchemaMigrator.MigrateJson(json)["layout"]!["groups"]![0]!["items"]![0]!["source"]!;
+
+        Assert.Equal("line-app", source["key"]?.ToString());
+        Assert.Null(source["producer"]);
+    }
+
+    [Fact]
+    public void MigrateJson_DropsOnMissing()
+    {
+        var json = JObject.Parse("""
+                                 {
+                                 	"schemaVersion": "2.9.0",
+                                 	"layout": {
+                                 		"type": "tabbed",
+                                 		"tabs": [ { "groups": [ { "id": "g1", "label": "G1", "items": [
+                                 			{ "type": "input", "paramId": "a", "source": { "kind": "server", "path": "p", "onMissing": "fail" } }
+                                 		] } ] } ]
+                                 	}
+                                 }
+                                 """);
+
+        var source = (JObject)SchemaMigrator.MigrateJson(json)["layout"]!["tabs"]![0]!["groups"]![0]!["items"]![0]!["source"]!;
+
+        Assert.Equal(new[] { "key", "kind" }, source.Properties().Select(p => p.Name).OrderBy(n => n));
+        Assert.Equal("p", source["key"]?.ToString());
+    }
+
+    [Fact]
+    public void MigrateJson_AnExistingKeyWinsOverPathAndProducer()
+    {
+        var json = JObject.Parse("""
+                                 {
+                                 	"schemaVersion": "2.9.0",
+                                 	"layout": {
+                                 		"type": "flat",
+                                 		"groups": [ { "id": "g1", "label": "G1", "items": [
+                                 			{ "type": "input", "paramId": "a", "source": { "kind": "server", "key": "k", "path": "p", "producer": "q" } }
+                                 		] } ]
+                                 	}
+                                 }
+                                 """);
+
+        var source = (JObject)SchemaMigrator.MigrateJson(json)["layout"]!["groups"]![0]!["items"]![0]!["source"]!;
+
+        Assert.Equal("k", source["key"]?.ToString());
+        Assert.Null(source["path"]);
+        Assert.Null(source["producer"]);
+    }
+
     // -------------------------------------------------------------------------
     // MigrateWithTracking — object-level migrations and version handling
     // -------------------------------------------------------------------------
@@ -200,7 +263,9 @@ public class SchemaMigratorTests
         var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
 
         Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
-        Assert.Contains(changes, c => c.Contains("Applied migration from 1.0.0 to 2.0.0"));
+        var steps = SchemaMigrator.GetMigrationPath(new Version(1, 0, 0), SchemaVersion.CURRENT);
+        var expected = steps.Select((to, i) => $"Applied migration from {(i == 0 ? "1.0.0" : steps[i - 1].ToString())} to {to}");
+        Assert.Equal(expected, changes);
     }
 
     // -------------------------------------------------------------------------
@@ -240,8 +305,7 @@ public class SchemaMigratorTests
 
         var migrated = SchemaMigrator.MigrateJson(json);
 
-        Assert.NotNull(migrated);
-        Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.Value<string>());
+        Assert.Equal("1.0.0", migrated["schemaVersion"]?.Value<string>());
     }
 
     [Fact]
@@ -255,7 +319,37 @@ public class SchemaMigratorTests
 
         var migrated = SchemaMigrator.MigrateJson(json);
 
-        Assert.Equal(SchemaVersion.CURRENT_STRING, migrated["schemaVersion"]?.Value<string>());
+        Assert.Equal("1.0.0", migrated["schemaVersion"]?.Value<string>());
+    }
+
+    // The typed steps start from schemaVersion, so stamping it here would skip all of them.
+    [Fact]
+    public void MigrateJson_LeavesTheSavedVersionForTheTypedSteps()
+    {
+        var json = new JObject
+        {
+            ["schemaVersion"] = "2.17.0",
+            ["layout"] = new JObject { ["type"] = "flat" }
+        };
+
+        Assert.Equal("2.17.0", SchemaMigrator.MigrateJson(json)["schemaVersion"]?.Value<string>());
+    }
+
+    [Fact]
+    public void Migrate_RunsEveryTypedStepAfterTheSavedVersion()
+    {
+        var json = new JObject
+        {
+            ["id"] = "s",
+            ["schemaVersion"] = "2.17.0",
+            ["layout"] = new JObject { ["type"] = "flat", ["groups"] = new JArray() }
+        };
+
+        var (schema, changes) = SchemaMigrator.Migrate(json, new Version(99, 0, 0));
+
+        Assert.Equal(SchemaVersion.CURRENT_STRING, schema.SchemaVersion);
+        Assert.Equal("Applied migration from 2.17.0 to 2.18.0", changes[0]);
+        Assert.Equal(SchemaMigrator.GetMigrationPath(new Version(2, 17, 0), SchemaVersion.CURRENT).Count, changes.Count);
     }
 
     [Fact]

@@ -61,15 +61,31 @@ describe('createServerResolver', () => {
 		expect(s.getConfig).toHaveBeenCalledTimes(2);
 	});
 
-	it('reads again past the TTL, and keeps no failed read', async () => {
-		const resolver = createServerResolver({ ttlMs: 1 });
+	it('keeps no failed read', async () => {
+		const resolver = createServerResolver();
 		const s = store();
 		s.getConfig.mockRejectedValueOnce(new Error('db away'));
 		await expect(resolver.resolve(SYSTEM_CONTEXT, 'org-a', s)).rejects.toThrow('db away');
 		expect((await resolver.resolve(SYSTEM_CONTEXT, 'org-a', s)).id).toBe('srv-1');
-		await new Promise((r) => setTimeout(r, 5));
 		await resolver.resolve(SYSTEM_CONTEXT, 'org-a', s);
-		expect(s.getConfig).toHaveBeenCalledTimes(3);
+		expect(s.getConfig).toHaveBeenCalledTimes(2);
+	});
+
+	it('reads again once the TTL has passed', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		try {
+			const resolver = createServerResolver({ ttlMs: 1_000 });
+			const s = store();
+			await resolver.resolve(SYSTEM_CONTEXT, 'org-a', s);
+			vi.advanceTimersByTime(999);
+			await resolver.resolve(SYSTEM_CONTEXT, 'org-a', s);
+			expect(s.getConfig).toHaveBeenCalledTimes(1);
+			vi.advanceTimersByTime(1);
+			await resolver.resolve(SYSTEM_CONTEXT, 'org-a', s);
+			expect(s.getConfig).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('keeps answers per store', async () => {

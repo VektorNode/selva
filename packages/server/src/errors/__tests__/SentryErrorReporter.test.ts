@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SentryErrorReporter, type SentryLike } from '../SentryErrorReporter.js';
+import { scrubBreadcrumb, scrubEvent } from '../scrub.js';
+
+const sentryNode = vi.hoisted(() => ({ init: vi.fn(), captureException: vi.fn() }));
+vi.mock('@sentry/node', () => sentryNode);
 
 function capturing() {
 	const calls: Parameters<SentryLike['captureException']>[] = [];
@@ -40,5 +44,26 @@ describe('SentryErrorReporter', () => {
 		} finally {
 			console.error = quiet;
 		}
+	});
+});
+
+describe('SentryErrorReporter.create', () => {
+	it('initializes the SDK with every scrubbing hook', async () => {
+		const reporter = await SentryErrorReporter.create({
+			dsn: 'https://key@sentry.example/1',
+			tracesSampleRate: '0.25'
+		});
+
+		expect(reporter).not.toBeNull();
+		expect(sentryNode.init).toHaveBeenCalledOnce();
+		expect(sentryNode.init.mock.calls[0][0]).toMatchObject({
+			dsn: 'https://key@sentry.example/1',
+			tracesSampleRate: 0.25,
+			// Streamed spans skip beforeSendTransaction.
+			traceLifecycle: 'static',
+			beforeSend: scrubEvent,
+			beforeSendTransaction: scrubEvent,
+			beforeBreadcrumb: scrubBreadcrumb
+		});
 	});
 });

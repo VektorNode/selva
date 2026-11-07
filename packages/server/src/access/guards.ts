@@ -220,9 +220,6 @@ export function requireActingOrg(
 }
 
 /**
- * Gate for pages reachable by any platform-class permission holder (the
-
-/**
  * Management-scope bypass — used for org governance and project management
  * actions (Reclaim, create project, delete project, manage members, edit
  * settings). `instance_admin` bypasses these so platform staff can administer

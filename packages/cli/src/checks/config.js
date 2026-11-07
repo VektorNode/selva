@@ -12,10 +12,10 @@
 
 import { RENAMED_ENV_VARS, RETIRED_ENV_VARS } from '../env.js';
 import { keyRotationStatus } from '../generated/config.js';
+import { KEY_PLACEHOLDER } from '../secrets.js';
 import { green, red, yellow } from './result.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
-const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
 
 const VALID_AUTH = ['local', 'supabase', 'header'];
 // Header-auth is an auth provider only — it has no data or storage layer.
@@ -28,7 +28,7 @@ const VALID_DATA = ['local', 'supabase'];
  */
 export function checkSecret(value, label) {
 	if (!value) return red(`${label} — unset`);
-	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
+	if (value === KEY_PLACEHOLDER) return red(`${label} — still the placeholder`);
 	if (!HEX_64.test(value) && !isBase64Of32Bytes(value)) {
 		return red(`${label} — not 32 bytes as 64 hex chars or base64`);
 	}
@@ -42,7 +42,7 @@ export function checkSecret(value, label) {
 export function checkHmacKey(value) {
 	const label = 'SELVA_HMAC_KEY is at least 32 characters';
 	if (!value) return red(`${label} — unset`);
-	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
+	if (value === KEY_PLACEHOLDER) return red(`${label} — still the placeholder`);
 	if (value.length < 32) return red(`${label} — only ${value.length}`);
 	return green(label);
 }

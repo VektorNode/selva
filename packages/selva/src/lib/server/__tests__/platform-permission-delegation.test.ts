@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,
@@ -22,6 +23,7 @@ import {
 	actAs,
 	call,
 	grantPlatformPermissions,
+	type CallResult,
 	type TestProviders
 } from '#lib/server/__tests__/fixtures.js';
 import { POST as MINT_INVITE } from '../../../routes/api/v1/orgs/[orgId]/invites/+server.js';
@@ -53,6 +55,19 @@ async function seedUserAdmin() {
 	return { admin, org };
 }
 
+/**
+ * The delegation guard's own refusal. A bare 403 is not enough: the local
+ * permission store refuses a non-admin's write as well, so a route with the
+ * guard removed would still answer 403, after creating the user.
+ */
+function refusedByDelegationGuard(res: CallResult, verb: 'grant' | 'change') {
+	expect(res.status).toBe(403);
+	expect(res.json).toMatchObject({
+		code: 'FORBIDDEN',
+		message: `Only a platform admin can ${verb} platform-scope permissions`
+	});
+}
+
 describe('platform-scope permissions are not delegable', () => {
 	it('an org owner cannot mint an invite carrying instance_admin', async () => {
 		tp = await freshProviders();
@@ -71,7 +86,7 @@ describe('platform-scope permissions are not delegable', () => {
 
 		// The owner clears `requireManageOrgMembers` and the owner-only role gate.
 		// Only the delegation guard stands between them and a minted admin.
-		expect(res.status).toBe(403);
+		refusedByDelegationGuard(res, 'grant');
 	});
 
 	it('an org owner can still mint an ordinary org invite', async () => {
@@ -104,7 +119,8 @@ describe('platform-scope permissions are not delegable', () => {
 			body: { email: 'confederate@acme.test', permissions: ['instance_admin'] }
 		});
 
-		expect(res.status).toBe(403);
+		refusedByDelegationGuard(res, 'grant');
+		expect(await tp.authUsers.findByEmail('confederate@acme.test')).toBeNull();
 	});
 
 	it('manage_instance_users cannot grant instance_admin to an existing user', async () => {
@@ -120,7 +136,8 @@ describe('platform-scope permissions are not delegable', () => {
 			body: { permissions: ['instance_admin'] }
 		});
 
-		expect(res.status).toBe(403);
+		refusedByDelegationGuard(res, 'change');
+		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, target.id)).toEqual([]);
 	});
 
 	it('manage_instance_users cannot revoke an existing admin’s permissions', async () => {
@@ -138,7 +155,10 @@ describe('platform-scope permissions are not delegable', () => {
 
 		// Revoking is a platform-scope change too — otherwise the user-admin role
 		// strips the admins above it and the instance is left with none.
-		expect(res.status).toBe(403);
+		refusedByDelegationGuard(res, 'change');
+		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, target.id)).toEqual([
+			'instance_admin'
+		]);
 	});
 
 	it('an instance admin may grant platform scope', async () => {

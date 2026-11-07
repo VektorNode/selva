@@ -1,0 +1,40 @@
+name: .NET tests
+description: >-
+  Installs both Rhino target SDKs and runs the Rhino-free .NET test projects: the
+  one list of them that the test and release workflows share. The Rhino-coupled
+  Selva.GH tests need a Rhino install and are not here.
+
+  Callers MUST run actions/checkout first, as for ./.github/actions/setup. The
+  SDKs stay installed for the caller's later steps.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+
+    # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
+    # built-in cache can't be used.
+    - uses: actions/cache@v6
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
+        restore-keys: |
+          nuget-${{ runner.os }}-
+
+    - name: Test Selva.Schema (migration, validation)
+      shell: bash
+      run: dotnet test Plugin/Selva.Tests/Selva.Tests.csproj --nologo
+
+    - name: Test Selva.Slva (mesh codec + fixture contracts)
+      shell: bash
+      run: dotnet test Plugin/Selva.Slva.Tests/Selva.Slva.Tests.csproj --nologo
+
+    # SVG snapshots are deterministic: glyph advances come from the bundled
+    # font via FontMetrics, not the host's installed fonts.
+    - name: Test Selva.Drawing (model + layout + SVG snapshots)
+      shell: bash
+      run: dotnet test Plugin/Selva.Drawing.Tests/Selva.Drawing.Tests.csproj --nologo

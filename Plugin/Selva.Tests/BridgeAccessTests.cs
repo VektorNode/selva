@@ -208,6 +208,42 @@ public class BridgeAccessTests
         Assert.False(BridgeAccess.IsRefusedFrom(kind, BridgeAccess.PanelHost));
     }
 
+    [Theory]
+    [MemberData(nameof(AllKinds))]
+    public void Route_AppliesTheRoleGateThenThePanelGate(InboundKind kind)
+    {
+        var gate = Gates[kind];
+        foreach (var role in new[] { BridgeRole.Author, BridgeRole.Player })
+        {
+            foreach (var host in new[] { null, BridgeAccess.PanelHost })
+            {
+                var expected = (gate, role, host) switch
+                {
+                    (Gate.AuthorOnly, BridgeRole.Player, _) => InboundRoute.RefusedForRole,
+                    (Gate.PlayerOnly, BridgeRole.Author, _) => InboundRoute.RefusedForRole,
+                    (Gate.RhinoPanelOnly, _, null) => InboundRoute.RefusedFromBrowserTab,
+                    _ => InboundRoute.Dispatch
+                };
+
+                Assert.Equal(expected, BridgeAccess.Route(kind, role, host));
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(InboundKind.HostSaveFile, BridgeAccess.PanelHost, InboundRoute.Dispatch)]
+    [InlineData(InboundKind.HostSaveFile, null, InboundRoute.RefusedFromBrowserTab)]
+    // A browser tab hears "panel only" whatever its header says, not a hint about the header.
+    [InlineData(InboundKind.SessionMismatch, null, InboundRoute.RefusedFromBrowserTab)]
+    [InlineData(InboundKind.Malformed, null, InboundRoute.RefusedFromBrowserTab)]
+    [InlineData(InboundKind.SessionMismatch, BridgeAccess.PanelHost, InboundRoute.NotAHostFile)]
+    [InlineData(InboundKind.ValueUpdate, BridgeAccess.PanelHost, InboundRoute.NotAHostFile)]
+    [InlineData(InboundKind.HostPickFile, BridgeAccess.PanelHost, InboundRoute.NotAHostFile)]
+    public void RouteHostFile_SavesOnlyAFileFromThePanel(InboundKind kind, string? host, InboundRoute expected)
+    {
+        Assert.Equal(expected, BridgeAccess.RouteHostFile(kind, host));
+    }
+
     // The page reads the same file (bridge-handshake.test.ts), so the two sides can't drift.
     [Fact]
     public void Handshake_MatchesTheSharedFixture()

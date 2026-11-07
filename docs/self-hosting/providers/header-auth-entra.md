@@ -225,7 +225,7 @@ Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/m
 
 A request with a Selva API token skips oauth2-proxy (`@selfAuthenticated` above), so Entra never sees it. If step 1 is forgotten, `SIGN_IN_MAX_AGE_DAYS` (Part 6) revokes the person's tokens once they haven't come through Entra for that many days. Without it, a token works until it expires; **Team → API tokens** shows each key's expiry.
 
-Disable the Selva user rather than leave it. Selva matches header-auth users by UPN, then by email, so if Entra later gives either to someone else, they would sign in as the old account, with its projects and roles. A disabled account refuses them instead.
+Disable the Selva user rather than leave it. Selva matches header-auth users by UPN, so if Entra later gives the UPN to someone else, they would sign in as the old account, with its projects and roles. A disabled account refuses them instead. A reused email address alone doesn't get in: the first sign-in binds an account to its UPN.
 
 An org admin without access to Admin → Users can remove the person at **Team → Members & roles**. That revokes their tokens in that org only, and doesn't stop them signing in.
 

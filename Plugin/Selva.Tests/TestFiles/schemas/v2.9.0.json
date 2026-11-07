@@ -1,0 +1,127 @@
+{
+	"_comment": "Schema fixture for v2.9.0, hand-made from that version's shape: source kinds 'client' and 'server', where a server input carries 'path' and 'onMissing' and a client input the short-lived 'producer'. Both addresses fold into 'key' on load and 'onMissing' is dropped. Also carries a checklist value list, an image and a chart output and a line break.",
+	"schemaVersion": "2.9.0",
+	"id": "fixture-v290",
+	"name": "Fixture v2.9.0",
+	"pluginVersion": "0.14.0",
+	"created": "2025-06-02T09:00:00Z",
+	"lastModified": "2025-06-03T10:30:00Z",
+	"viewerOptions": {
+		"enableLocal": true,
+		"backgroundColor": "#f4f4f4"
+	},
+	"inputs": [
+		{
+			"id": "29000000-0000-4000-8000-000000000001",
+			"nickname": "Width",
+			"paramType": "number",
+			"inputStructure": "item",
+			"default": 1200
+		},
+		{
+			"id": "29000000-0000-4000-8000-000000000002",
+			"nickname": "Outline",
+			"paramType": "generic",
+			"inputStructure": "item"
+		},
+		{
+			"id": "29000000-0000-4000-8000-000000000003",
+			"nickname": "Measured",
+			"paramType": "text",
+			"inputStructure": "item"
+		},
+		{
+			"id": "29000000-0000-4000-8000-000000000004",
+			"nickname": "Finishes",
+			"paramType": "valueList",
+			"inputStructure": "list"
+		}
+	],
+	"outputs": [
+		{
+			"id": "29000000-0000-4000-8000-0000000000a1",
+			"nickname": "Preview",
+			"type": "file"
+		},
+		{
+			"id": "29000000-0000-4000-8000-0000000000a2",
+			"nickname": "Cost",
+			"type": "chart"
+		}
+	],
+	"layout": {
+		"type": "flat",
+		"groups": [
+			{
+				"id": "g-inputs",
+				"label": "Inputs",
+				"columns": 2,
+				"items": [
+					{
+						"id": "item-width",
+						"paramId": "29000000-0000-4000-8000-000000000001",
+						"type": "input",
+						"widgetType": "number",
+						"config": { "minimum": 100, "maximum": 5000, "stepSize": 10, "renderAsSlider": true }
+					},
+					{
+						"id": "item-outline",
+						"paramId": "29000000-0000-4000-8000-000000000002",
+						"type": "input",
+						"widgetType": "text",
+						"source": { "kind": "server", "path": "capture.outline", "onMissing": "fail" }
+					},
+					{
+						"id": "item-measured",
+						"paramId": "29000000-0000-4000-8000-000000000003",
+						"type": "input",
+						"widgetType": "text",
+						"source": { "kind": "client", "producer": "line-app" }
+					},
+					{ "id": "break-1", "type": "linebreak" },
+					{
+						"id": "item-finishes",
+						"paramId": "29000000-0000-4000-8000-000000000004",
+						"type": "input",
+						"widgetType": "dropdown",
+						"config": {
+							"options": { "Oak": "oak", "Ash": "ash", "Walnut": "walnut" },
+							"displayAs": "checklist"
+						},
+						"visibilityCondition": {
+							"mode": "all",
+							"action": "show",
+							"rules": [
+								{
+									"paramId": "29000000-0000-4000-8000-000000000001",
+									"operator": "greaterThan",
+									"value": 500
+								}
+							]
+						}
+					}
+				]
+			},
+			{
+				"id": "g-results",
+				"label": "Results",
+				"items": [
+					{
+						"id": "item-preview",
+						"paramId": "29000000-0000-4000-8000-0000000000a1",
+						"type": "output",
+						"widgetType": "image",
+						"config": { "allowDownload": false, "backgroundColor": "#000000" }
+					},
+					{
+						"id": "item-cost",
+						"paramId": "29000000-0000-4000-8000-0000000000a2",
+						"type": "output",
+						"widgetType": "chart",
+						"config": {}
+					}
+				]
+			}
+		]
+	}
+}

@@ -118,9 +118,7 @@ public class SchemaArchiveSerializer
                         }
                     }
 
-                    jObject = SchemaMigrator.MigrateJson(jObject, _pluginVersion);
-                    var rawSchema = jObject.ToObject<UISchema>();
-                    schema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, _pluginVersion);
+                    schema = SchemaMigrator.Migrate(jObject, _pluginVersion).Schema;
 
                     if (originalVersion != schema.SchemaVersion)
                     {

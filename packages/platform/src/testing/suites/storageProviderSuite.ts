@@ -16,10 +16,16 @@ export interface StorageProviderConformanceOptions {
 	strictDenials?: boolean;
 	/** `deletePrefix('a/b')` removes the directory `a/b` and leaves `a/bc`. */
 	segmentPrefix?: boolean;
+	/** Every method refuses a path that climbs out of the store with `..`: `ProviderError(400)` under `strictDenials`. */
+	pathContainment?: boolean;
 }
 
 function bytes(text: string): Uint8Array {
 	return new TextEncoder().encode(text);
+}
+
+function randomName(): string {
+	return `escape-${crypto.randomUUID()}`;
 }
 
 /** FNV-1a fingerprint: one linear pass, far cheaper than a deep `toEqual` over a megabyte. */
@@ -33,7 +39,13 @@ function checksum(data: Uint8Array): number {
 }
 
 export function runStorageProviderConformance(opts: StorageProviderConformanceOptions): void {
-	const { name, createStorage, strictDenials = false, segmentPrefix = false } = opts;
+	const {
+		name,
+		createStorage,
+		strictDenials = false,
+		segmentPrefix = false,
+		pathContainment = false
+	} = opts;
 	const expectDenied = makeExpectDenied(strictDenials);
 
 	describe(`IStorageProvider conformance: ${name}`, () => {
@@ -106,6 +118,20 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 
 			expect(await storage.get('test/file.txt')).toEqual(bytes('keep'));
 		});
+
+		if (pathContainment) {
+			it('refuses a path that climbs out of the store, on every method', async () => {
+				const storage = await createStorage();
+				const outside = `../${randomName()}.txt`;
+				const climbing = `nested/../../${randomName()}.txt`;
+
+				await expectDenied(storage.put(outside, bytes('escaped')), 400);
+				await expectDenied(storage.put(climbing, bytes('escaped')), 400);
+				await expectDenied(storage.get(outside), 400);
+				await expectDenied(storage.delete(outside), 400);
+				await expectDenied(storage.deletePrefix('../'), 400);
+			});
+		}
 
 		if (segmentPrefix) {
 			it('deletePrefix stops at a path segment: a/b does not reach a/bc', async () => {

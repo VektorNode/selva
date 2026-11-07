@@ -8,7 +8,6 @@
 import {
 	existsSync,
 	readFileSync,
-	copyFileSync,
 	readdirSync,
 	accessSync,
 	constants,
@@ -397,7 +396,7 @@ function checkEnvDocs(dir) {
 				const drift = diffEnvKeys(before, after);
 				if (drift) return red(`refused to strip .env — ${drift}`);
 
-				copyFileSync(envPath, envPath + '.bak');
+				writeEnvText(envPath + '.bak', current);
 				writeEnvText(envPath, strippedText);
 				return green(`stripped ${removed} comment lines from .env (backup: .env.bak)`);
 			} catch (err) {

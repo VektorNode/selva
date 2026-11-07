@@ -87,10 +87,7 @@ public class SchemaValidatorTests
     public void Fixture_ValidFile_PassesValidationWithNoErrors(string fileName)
     {
         var json = File.ReadAllText(Path.Combine("TestFiles", "schemas", fileName));
-        var jObject = JObject.Parse(json);
-        jObject = SchemaMigrator.MigrateJson(jObject);
-        var schema = jObject.ToObject<UISchema>();
-        schema = SchemaMigrator.MigrateToCurrentVersion(schema, new Version(99, 0, 0));
+        var (schema, _) = SchemaMigrator.Migrate(JObject.Parse(json), new Version(99, 0, 0));
 
         var result = _validator.Validate(schema);
 

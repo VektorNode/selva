@@ -22,6 +22,13 @@ export interface AllowlistEntry {
 	createdAt: string;
 	lastLoginAt?: string;
 	disabled?: boolean;
+	/**
+	 * The proxy UPN that last signed in to this row, case-folded. Only that UPN
+	 * gets in through the email fallback; a UPN equal to `upn` always gets in and
+	 * takes the claim. Unset on a row nobody has signed in to yet, and on rows from
+	 * before the field existed: their next sign-in sets it.
+	 */
+	claimedByUpn?: string;
 }
 
 interface AllowlistFile {
@@ -73,15 +80,17 @@ export interface AllowlistStore {
 	 */
 	syncFromHeaders(id: string, fields: { email?: string; displayName?: string }): Promise<void>;
 	/**
-	 * Repoint a row's UPN — for an operator correcting an allowlist entry after
-	 * a directory-side rename. No-ops if the new UPN already belongs to a
-	 * different row (a collision means manual operator cleanup — never silently
-	 * merge).
-	 *
-	 * Deliberately NOT called from `identifyFromHeaders`: both the UPN and email
-	 * headers are proxy-supplied, so rebinding on an email-fallback match would
-	 * let a request rewrite a stored identity. The fallback re-resolves the row
-	 * by email on every login instead.
+	 * Record `upn` as the row's claimant if it has none, or over the current one
+	 * with `replace`, and return the claimant now stored (null for a missing row).
+	 * Concurrent first sign-ins resolve to whichever wrote first.
+	 */
+	claim(id: string, upn: string, opts?: { replace?: boolean }): Promise<string | null>;
+	/**
+	 * Repoint a row's UPN and claimant — for an operator correcting an allowlist
+	 * entry after a directory-side rename. No-ops if the new UPN already belongs
+	 * to a different row (a collision means manual operator cleanup — never
+	 * silently merge). Never called from `identifyFromHeaders`: headers don't
+	 * get to rewrite a claimed identity.
 	 */
 	rebindUpn(id: string, upn: string): Promise<void>;
 	setDisabled(id: string, disabled: boolean): Promise<void>;
@@ -163,16 +172,31 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 			});
 		},
 
+		claim(id, upn, opts) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const user = file.users.find((u) => u.id === id);
+				if (!user) return null;
+				const key = norm(upn);
+				if (!user.claimedByUpn || (opts?.replace && user.claimedByUpn !== key)) {
+					user.claimedByUpn = key;
+					await writeFile(filePath, file);
+				}
+				return user.claimedByUpn;
+			});
+		},
+
 		rebindUpn(id, upn) {
 			return locked(async () => {
 				const file = await readFile(filePath);
 				const key = norm(upn);
 				const user = file.users.find((u) => u.id === id);
-				if (!user || user.upn === key) return;
+				if (!user || (user.upn === key && user.claimedByUpn === key)) return;
 				// Don't merge into an existing row — a UPN collision is an operator
 				// data issue, not something to paper over by reassigning identity.
 				if (file.users.some((u) => u.id !== id && u.upn === key)) return;
 				user.upn = key;
+				user.claimedByUpn = key;
 				await writeFile(filePath, file);
 			});
 		},

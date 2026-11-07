@@ -90,9 +90,16 @@ describe('erasing a user', () => {
 		const leaver = await seedUser(db);
 		const org = await seedOrg(db, owner);
 		await seedOrgMember(db, org, leaver, 'member');
+		const token = crypto.randomUUID();
+		await db.query(
+			`insert into selva.api_tokens (id, user_id, created_by, org_id, name, token_hash, scopes, expires_at)
+			 values ($1, $2, $2, $3, 'laptop', $4, '{read:all}', now() + interval '30 days')`,
+			[token, leaver, org, `hash-${token}`]
+		);
 
 		await erase(leaver);
 
 		expect(await count('org_members', 'user_id', leaver)).toBe(0);
+		expect(await count('api_tokens', 'id', token)).toBe(0);
 	});
 });

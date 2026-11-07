@@ -28,11 +28,11 @@
 	}
 
 	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.
-	// Anonymous share-token viewers get no stream (the route needs a session) and solve as before.
-	// Built only for a signed-in viewer: the stream connects as soon as it exists, and an
-	// anonymous one would keep retrying a 401 with backoff. Signing in or out is a navigation, so
-	// the initial value is the only one this page sees.
-	const liveEvents = untrack(() => isAuthed)
+	// Built only for a viewer solving with their own session. The stream connects as soon as it
+	// exists, so an anonymous one would keep retrying a 401 with backoff, and a share-token solve
+	// is never bound to a stream. Signing in or out is a navigation, so the initial value is the
+	// only one this page sees.
+	const liveEvents = untrack(() => isAuthed && !data.shareToken)
 		? createSolveEventStream({
 				endpoint: '/api/v1/solve-events',
 				cancelEndpoint: (solveId) => `/api/v1/solve/${solveId}/cancel`
@@ -48,6 +48,7 @@
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
 		streamId: () => liveEvents?.streamId ?? null,
+		bearerToken: () => data.shareToken,
 		meshes: shouldShowViewer()
 			? { extract: (response, opts) => getThreeObjectsFromComputeResponse(response, opts) }
 			: undefined,

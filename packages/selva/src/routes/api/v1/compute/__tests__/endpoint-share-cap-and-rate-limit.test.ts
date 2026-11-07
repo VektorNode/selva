@@ -1,27 +1,16 @@
 /**
- * Audit Q5.1 + Q5.3 — `/api/compute` POST handler wiring.
+ * `POST /api/v1/compute` enforces two gates before it solves, and these tests hit
+ * the route, not the stores behind it:
  *
- * The sibling `solve-cap-and-count.test.ts` pins the *store* methods this route
- * delegates to, and deliberately skips the HTTP shell on the grounds that it
- * "needs a live compute server". That is true of a successful solve — but both
- * security gates below run and return **before** `resolveServerForOrg`, so the
- * route's own enforcement is reachable with no compute server at all. Until now
- * nothing asserted that the route actually calls those units, in the right order,
- * and maps their answers to the right status:
+ *   - a share-token solve at the link's `maxSolves` is refused with 429 and does
+ *     not spend another solve;
+ *   - the compute bucket is `share:{linkId}` for a token solve and
+ *     `user:{userId}` for a signed-in one. Keyed on the link's owner, every
+ *     anonymous visitor of a public link would drain the owner's budget, and
+ *     one link's traffic would throttle the owner's other links.
  *
- *   - **Q5.1** a share-token solve AT `maxSolves` must be rejected by the route
- *     itself (429), not merely by the store returning `null` to someone.
- *   - **Q5.3** the rate-limit bucket must key on `share:{linkId}` for token
- *     solves and `user:{userId}` for authenticated ones. If a share solve keyed
- *     on the *owner*, every anonymous consumer of a public link would drain the
- *     owner's budget — and one link's traffic would throttle unrelated links.
- *
- * How these avoid needing compute: the cap check (+server.ts, `tryIncrementSolveCount`
- * → 429) and the rate-limit check (`checkComputeRateLimit` → 429) both precede
- * the `resolveServerForOrg` call. A test that reaches either gate never touches
- * the network. The "admitted" cases below therefore assert only that the request
- * got *past* the gate under test — they run on to fail at compute resolution,
- * which is the expected outcome here and is asserted as `not 429`.
+ * No compute server is configured, so an admitted request stops at server
+ * resolution with 503.
  */
 
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
@@ -62,7 +51,7 @@ function solveBody(guid: string) {
 	return { inputs: [], values: {}, definitionUrl: `local:${guid}` };
 }
 
-describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
+describe('POST /api/v1/compute — share-link solve cap', () => {
 	it('rejects a share-token solve that is already AT maxSolves with 429', async () => {
 		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
@@ -78,7 +67,7 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 
 		const res = await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
 			body: solveBody(def.record.guid)
 		});
 
@@ -104,13 +93,12 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 
 		const res = await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
 			body: solveBody(def.record.guid)
 		});
 
-		// It got past the cap gate (it fails later, at compute resolution — there
-		// is no server configured here). The point is that it was NOT capped.
-		expect(res.status).not.toBe(429);
+		// Past the cap gate, it stops at compute resolution: no server is configured.
+		expect(res.status).toBe(503);
 
 		// Exactly one solve consumed: the cap is charged once per admitted request.
 		const after = await tp.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id);
@@ -130,7 +118,7 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 
 		const res = await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
 			body: solveBody(def.record.guid)
 		});
 
@@ -169,7 +157,7 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 
 		const res = await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
 			body: { ...solveBody(def.record.guid), values: { job: 'FORGED' } }
 		});
 
@@ -179,7 +167,7 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 	});
 });
 
-describe('POST /api/compute — rate-limit key selection (Q5.3)', () => {
+describe('POST /api/v1/compute — rate-limit key selection', () => {
 	it('keys an anonymous share solve on share:{linkId}, NOT on the link owner', async () => {
 		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
@@ -192,7 +180,7 @@ describe('POST /api/compute — rate-limit key selection (Q5.3)', () => {
 
 		await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
 			body: solveBody(def.record.guid)
 		});
 
@@ -234,7 +222,7 @@ describe('POST /api/compute — rate-limit key selection (Q5.3)', () => {
 
 		await call(POST, {
 			locals: anon(tp),
-			url: `http://test.local/api/compute?token=${first.rawToken}`,
+			url: `http://test.local/api/v1/compute?token=${first.rawToken}`,
 			body: solveBody(def.record.guid)
 		});
 

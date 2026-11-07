@@ -2,6 +2,8 @@
 
 Run from the repo root. Most have a `pnpm` script; the rest are run with `node scripts/<folder>/<file>`.
 
+A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs them all, offline; CI runs it too.
+
 ## `develop/`
 
 | Script                                  | Run                                              | Does                                                                                                         |
@@ -13,16 +15,16 @@ Run from the repo root. Most have a `pnpm` script; the rest are run with `node s
 
 ## `plugin/`
 
-| Script                           | Run                                                  | Does                                                                                       |
-| -------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs and stages the yak packages        |
-| `install-local.js`               | `pnpm install:plugin`                                | Builds and installs into Rhino 8's and 9's package folders                                 |
-| `check-component-signatures.mjs` | CI; `--update` after a param change                  | Fails on a changed param list behind an existing component GUID                            |
-| `bridge-drive.mjs`               | `node scripts/plugin/bridge-drive.mjs <url> <steps>` | Drives a running UI Bridge from outside Rhino and logs every frame with timings            |
-| `snap-preview.mjs`               | `node scripts/plugin/snap-preview.mjs --url <url>`   | Screenshots the preview page: each form tab, the 3D view per look, per set of input values |
-| `perf-report.mjs`                | `node scripts/plugin/perf-report.mjs <log>`          | Summarises a `SELVA_PERF_LOG` file                                                         |
-| `example-definitions/`           | in Rhino, see its README                             | Builds the showcase and stress-test `.gh` files                                            |
-| `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                       |
+| Script                           | Run                                                  | Does                                                                                          |
+| -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs and stages the yak packages           |
+| `install-local.js`               | `pnpm install:plugin`                                | Builds and installs into Rhino 8's and 9's package folders                                    |
+| `check-component-signatures.mjs` | CI; `--update` after a param change                  | Fails on a changed param list behind an existing component GUID, or any change in `OBSOLETE/` |
+| `bridge-drive.mjs`               | `node scripts/plugin/bridge-drive.mjs <url> <steps>` | Drives a running UI Bridge from outside Rhino and logs every frame with timings               |
+| `snap-preview.mjs`               | `node scripts/plugin/snap-preview.mjs --url <url>`   | Screenshots the preview page: each form tab, the 3D view per look, per set of input values    |
+| `perf-report.mjs`                | `node scripts/plugin/perf-report.mjs <log>`          | Summarises a `SELVA_PERF_LOG` file                                                            |
+| `example-definitions/`           | in Rhino, see its README                             | Builds the showcase and stress-test `.gh` files                                               |
+| `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                          |
 
 ## `release/`
 
@@ -34,7 +36,6 @@ Run from the repo root. Most have a `pnpm` script; the rest are run with `node s
 | `unconsumed-changesets.mjs`                                | release workflow            | Lists changesets the current pre-release has not consumed                                |
 | `verify-pack.mjs`                                          | `pnpm test:pack`; `release` | Packs every publishable package and checks what would ship                               |
 | `changeset-publish.mjs`                                    | `pnpm release`              | `changeset publish` that passes when npm already has every version                       |
-| `changeset-publish.test.mjs`                               | by hand (needs network)     | Tests for the above                                                                      |
 | `release-plugin.js`, `plugin-changelog.mjs`                | `pnpm release:plugin`; CI   | Cuts a plugin version and its `Plugin/CHANGELOG.md` section                              |
 
 `release/` is an exception in `.gitignore`: the .NET rule `[Rr]elease/` would ignore it.

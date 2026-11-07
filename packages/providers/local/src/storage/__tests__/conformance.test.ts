@@ -20,6 +20,7 @@ describe('LocalStorageProvider', () => {
 		name: 'LocalStorageProvider',
 		createStorage: () => new LocalStorageProvider(tempDir),
 		segmentPrefix: true,
-		strictDenials: true
+		strictDenials: true,
+		pathContainment: true
 	});
 });

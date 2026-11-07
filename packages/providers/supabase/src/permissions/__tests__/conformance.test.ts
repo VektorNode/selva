@@ -35,7 +35,9 @@ if (!envCtx) {
 					user_metadata: { ...(data.user.user_metadata ?? {}), disabled: true }
 				});
 				if (error) throw error;
-			}
+			},
+			strictDenials: true,
+			refusesEscalation: true
 		});
 	});
 }

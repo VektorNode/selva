@@ -132,6 +132,8 @@ class HeaderProxyAuth implements IProxyAuth {
 	// Same one-shot treatment for the opposite misconfiguration: identity
 	// headers arriving more than once per request.
 	private duplicateUpnWarned = false;
+	private duplicateEmailWarned = false;
+	private claimWriteWarned = false;
 
 	constructor(
 		private readonly users: AllowlistStore,
@@ -162,6 +164,50 @@ class HeaderProxyAuth implements IProxyAuth {
 			!headers.get(this.headers.email) &&
 			!headers.get(this.headers.displayName)
 		);
+	}
+
+	/**
+	 * The email header, or undefined when it carries more than one value. Email
+	 * can select a row through the fallback, so a joined value (a proxy appending
+	 * its copy to the client's) is the same spoofing signal as on the UPN.
+	 */
+	private singleValuedEmail(headers: Headers): string | undefined {
+		const email = headers.get(this.headers.email)?.trim() || undefined;
+		if (!email?.includes(',')) return email;
+		if (!this.duplicateEmailWarned) {
+			this.duplicateEmailWarned = true;
+			this.logger.warn(
+				'Multiple values arrived in the email identity header on one request. The ' +
+					'forward-auth proxy is not stripping client-supplied copies of the trusted ' +
+					'headers. Ignoring the email header. Strip the configured headers at site ' +
+					'scope, above forward_auth — see the @selvajs/header-auth-provider README.',
+				{ component: 'HeaderAuth', header: this.headers.email }
+			);
+		}
+		return undefined;
+	}
+
+	/**
+	 * Claims the row, or returns null when the allowlist can't be written. A failed
+	 * claim must not fail the sign-in: that would lock every unclaimed user out of
+	 * a deployment whose allowlist is read-only or has the wrong owner. The row
+	 * then stays unclaimed, and the email fallback still admits any UPN to it.
+	 */
+	private async tryClaim(id: string, upn: string, replace: boolean): Promise<string | null> {
+		try {
+			return await this.users.claim(id, upn, { replace });
+		} catch (err) {
+			if (!this.claimWriteWarned) {
+				this.claimWriteWarned = true;
+				this.logger.warn(
+					'Could not record which UPN signed in to an allowlisted user: the allowlist ' +
+						'file is not writable. Sign-in continues, but until it is writable the email ' +
+						'header can still select any user whose UPN is an address.',
+					{ component: 'HeaderAuth', userId: id, code: (err as NodeJS.ErrnoException).code }
+				);
+			}
+			return null;
+		}
 	}
 
 	async identifyFromHeaders(headers: Headers): Promise<AuthUser | null> {
@@ -216,25 +262,17 @@ class HeaderProxyAuth implements IProxyAuth {
 			return null;
 		}
 
-		const email = headers.get(this.headers.email)?.trim() || undefined;
+		const email = this.singleValuedEmail(headers);
 		const displayName = headers.get(this.headers.displayName)?.trim() || undefined;
 
 		let entry = await this.users.findByUpn(upn);
+		let matchedByUpn = entry !== null;
 
 		// Fallback: the proxy's UPN didn't match, but an admin may have
 		// pre-allowlisted this person by EMAIL (Entra UPN ≠ mail is common).
 		// Adopt that row so the org membership + permissions provisioned
-		// against its UUID survive.
-		//
-		// Deliberately does NOT rebind the row's UPN to the forwarded value.
-		// Both headers on this path are proxy-supplied, so a rebind would let a
-		// header write identity: a request that matches an existing row by email
-		// would permanently repoint that row's lookup key at whatever UPN the
-		// request carried, turning a single spoofed request into persistence in
-		// the allowlist. The email fallback resolves the same row on every
-		// subsequent login, so the only cost is staying on this branch instead
-		// of the faster findByUpn path. Repointing a row's UPN is an operator
-		// action — `rebindUpn` remains on the store for that.
+		// against its UUID survive. The claim check below keeps this to the
+		// UPN that claimed the row.
 		if (!entry && email) {
 			const byEmail = await this.users.findByEmail(email);
 			if (byEmail) entry = byEmail;
@@ -254,10 +292,34 @@ class HeaderProxyAuth implements IProxyAuth {
 					// Race: another concurrent request beat us to it. Re-read.
 					entry = await this.users.findByUpn(upn);
 				}
+				matchedByUpn = entry !== null;
 			}
 		}
 
 		if (!entry || entry.disabled) {
+			return null;
+		}
+
+		// A sign-in claims its row for its UPN, and the email fallback admits only
+		// that UPN. Without this, the fallback would hand any row whose UPN is an
+		// address (most of them, on Entra) to whoever presents that address in the
+		// email header. A UPN equal to the row's own is the identity the operator
+		// allowlisted, so it always gets in and takes the claim: that keeps a UPN
+		// cleanup working, and evicts anyone who claimed the row with a spoofed email.
+		const presented = upn.trim().toLowerCase();
+		let claimant = entry.claimedByUpn;
+		if (!claimant || (matchedByUpn && claimant !== presented)) {
+			claimant = (await this.tryClaim(entry.id, upn, matchedByUpn)) ?? undefined;
+		}
+		// Logged on every refusal, not once: each names a different locked-out user
+		// or a probe of the email fallback, and the operator needs to see which.
+		if (claimant && claimant !== presented) {
+			this.logger.warn(
+				'Refused a sign-in to an allowlisted user already claimed by a different UPN. ' +
+					"If that user's UPN changed in the directory, set upn on their row in the " +
+					'allowlist file to the new one; their next sign-in claims it.',
+				{ component: 'HeaderAuth', userId: entry.id }
+			);
 			return null;
 		}
 

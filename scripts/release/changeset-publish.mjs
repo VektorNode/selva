@@ -69,9 +69,12 @@ function publishablePackages() {
 		});
 }
 
+// SELVA_VERIFY_REGISTRY swaps in a stub registry for tests. Unset in CI.
+const registry = process.env.SELVA_VERIFY_REGISTRY ?? 'https://registry.npmjs.org';
+
 // Plain GET rather than `npm view`: spawning npm per package costs seconds each.
 async function publishedVersion(name, version) {
-	const url = `https://registry.npmjs.org/${name.replaceAll('/', '%2f')}/${version}`;
+	const url = `${registry}/${name.replaceAll('/', '%2f')}/${version}`;
 	try {
 		const res = await fetch(url, {
 			headers: { accept: 'application/json', 'cache-control': 'no-cache' }

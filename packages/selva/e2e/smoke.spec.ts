@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-// Smoke flows over the public, dependency-free surface. With the local provider
-// on a fresh DATA_PATH there is no admin yet, so the deepest we can go without
-// seeding is the unauthenticated landing + login pages. Compute / admin flows
-// belong in their own specs once a seed fixture provisions an admin.
+// Smoke flows over the public surface, signed out. They run after the `setup`
+// project has created the admin: until one exists, /login redirects to /setup.
 
 test('landing page renders and links to sign-in', async ({ page }) => {
 	await page.goto('/');
@@ -29,5 +27,5 @@ test('login page renders the password form for the local provider', async ({ pag
 test('a protected route redirects an unauthenticated user away', async ({ page }) => {
 	await page.goto('/library');
 
-	await expect(page).toHaveURL(/\/(login|setup)/);
+	await expect(page).toHaveURL(/\/login/);
 });

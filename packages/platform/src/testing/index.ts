@@ -61,6 +61,9 @@ export type { PlatformPermissionStoreConformanceOptions } from './suites/platfor
 export { runPlatformProjectGrantStoreConformance } from './suites/platformProjectGrantStoreSuite.js';
 export type { PlatformProjectGrantStoreConformanceOptions } from './suites/platformProjectGrantStoreSuite.js';
 
+export { runUserErasureConformance } from './suites/userErasureSuite.js';
+export type { UserErasureConformanceOptions } from './suites/userErasureSuite.js';
+
 export { runApiTokenStoreConformance } from './suites/apiTokenStoreSuite.js';
 export type {
 	ApiTokenStoreConformanceOptions,

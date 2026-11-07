@@ -122,43 +122,45 @@
 
 <aside class="bg-card shadow-raised flex h-full overflow-hidden rounded-xl border">
 	<div
-		role="tablist"
-		aria-orientation="vertical"
 		class="border-border bg-muted flex w-14 shrink-0 flex-col items-center gap-1.5 border-r py-3"
 	>
 		<Tooltip.Provider delayDuration={400} disableCloseOnTriggerClick>
-			{#each RAIL as item (item.value)}
-				{#if item.divider}
-					<div class="bg-border my-1.5 h-px w-6"></div>
-				{/if}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<button
-								{...props}
-								type="button"
-								role="tab"
-								aria-selected={panel.value === item.value}
-								aria-label={item.label}
-								class="text-muted-foreground hover:text-foreground relative grid size-9 place-items-center rounded-lg transition-colors {panel.value ===
-								item.value
-									? 'bg-raised text-foreground ring-border-strong shadow-raised ring-1'
-									: ''}"
-								onclick={() => (panel.value = item.value)}
-							>
-								<item.icon class="size-4 {item.class ?? ''}" />
-								{#if item.value === 'parameters' && unplacedCount > 0}
-									<span
-										class="bg-foreground text-background absolute -top-0.5 -right-0.5 rounded-full px-1 text-[10px] leading-4 font-semibold tabular-nums"
-										>{unplacedCount}</span
-									>
-								{/if}
-							</button>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content side="right">{item.label}</Tooltip.Content>
-				</Tooltip.Root>
-			{/each}
+			<!-- Only tabs belong in a tablist: the search button sits outside it. -->
+			<div role="tablist" aria-orientation="vertical" class="flex flex-col items-center gap-1.5">
+				{#each RAIL as item (item.value)}
+					{#if item.divider}
+						<div aria-hidden="true" class="bg-border my-1.5 h-px w-6"></div>
+					{/if}
+					{@const badge = item.value === 'parameters' && unplacedCount > 0 ? unplacedCount : null}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<button
+									{...props}
+									type="button"
+									role="tab"
+									aria-selected={panel.value === item.value}
+									aria-label={badge ? `${item.label}, ${badge} unplaced` : item.label}
+									class="text-muted-foreground hover:text-foreground relative grid size-9 place-items-center rounded-lg transition-colors {panel.value ===
+									item.value
+										? 'bg-raised text-foreground ring-border-strong shadow-raised ring-1'
+										: ''}"
+									onclick={() => (panel.value = item.value)}
+								>
+									<item.icon class="size-4 {item.class ?? ''}" />
+									{#if badge}
+										<span
+											class="bg-foreground text-background text-2xs absolute -top-0.5 -right-0.5 rounded-full px-1 leading-4 font-semibold tabular-nums"
+											>{badge}</span
+										>
+									{/if}
+								</button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content side="right">{item.label}</Tooltip.Content>
+					</Tooltip.Root>
+				{/each}
+			</div>
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { SLOW_SOLVE_COUNT, STUB_PORT, STUB_SECRET } from './ws-stub';
 
 // Smoke: /preview loads the schema from the stub and renders the interactive UI. Proves the
@@ -6,6 +6,45 @@ import { SLOW_SOLVE_COUNT, STUB_PORT, STUB_SECRET } from './ws-stub';
 // solve path doesn't error — the change that needed live verification.
 
 const SESSION = 'e2e-session';
+
+type Frame = { type?: string; isSolving?: boolean; outputs?: Record<string, unknown> };
+
+/** Every JSON frame the page sends and receives, in order. */
+function recordFrames(page: Page): { sent: Frame[]; received: Frame[] } {
+	const frames = { sent: [] as Frame[], received: [] as Frame[] };
+	const parse = (payload: string | Buffer): Frame | null =>
+		typeof payload === 'string' ? (JSON.parse(payload) as Frame) : null;
+	page.on('websocket', (ws) => {
+		ws.on('framesent', (frame) => {
+			const message = parse(frame.payload);
+			if (message) frames.sent.push(message);
+		});
+		ws.on('framereceived', (frame) => {
+			const message = parse(frame.payload);
+			if (message) frames.received.push(message);
+		});
+	});
+	return frames;
+}
+
+/**
+ * Waits for the solve that produced `area` to close with `solvingState: false`. The page sends
+ * anything a solve's result triggers while handling it, so by then a repeat is on the record.
+ */
+async function solveSettled(received: Frame[], area: number) {
+	await expect
+		.poll(
+			() => {
+				const result = received.findIndex((m) => m.outputs?.['out-area'] === area);
+				return (
+					result >= 0 &&
+					received.slice(result).some((m) => m.type === 'solvingState' && m.isSolving === false)
+				);
+			},
+			{ timeout: 10_000 }
+		)
+		.toBe(true);
+}
 
 test.describe('/preview', () => {
 	test('connects to the stub and renders the input UI', async ({ page }) => {
@@ -35,41 +74,32 @@ test.describe('/preview', () => {
 
 	// Each request makes the plugin serialize and send the whole schema.
 	test('asks for initial data once', async ({ page }) => {
-		const requests: string[] = [];
-		page.on('websocket', (ws) =>
-			ws.on('framesent', (frame) => {
-				if (String(frame.payload).includes('"requestInitialData"'))
-					requests.push(String(frame.payload));
-			})
-		);
+		const { sent, received } = recordFrames(page);
 
 		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
-		await page.waitForTimeout(500);
+		// A second request would go out on connect, long before the first solve comes back.
+		await solveSettled(received, 3 * 3);
 
-		expect(requests).toHaveLength(1);
+		expect(sent.filter((m) => m.type === 'requestInitialData')).toHaveLength(1);
 	});
 
 	// The field reports on input and again on blur; the repeat would be a second solve.
 	test('sends an edited value once', async ({ page }) => {
-		const updates: string[] = [];
-		page.on('websocket', (ws) =>
-			ws.on('framesent', (frame) => {
-				if (String(frame.payload).includes('"valueUpdate"')) updates.push(String(frame.payload));
-			})
-		);
+		const { sent, received } = recordFrames(page);
+		const updates = () => sent.filter((m) => m.type === 'valueUpdate');
 
 		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
-		await page.waitForTimeout(500);
-		const before = updates.length;
+		await solveSettled(received, 3 * 3);
+		const before = updates().length;
 
 		const count = page.getByRole('spinbutton').first();
 		await count.fill(String(SLOW_SOLVE_COUNT));
 		await count.blur();
-		await page.waitForTimeout(3000);
+		await solveSettled(received, SLOW_SOLVE_COUNT * SLOW_SOLVE_COUNT);
 
-		expect(updates.slice(before)).toHaveLength(1);
+		expect(updates().slice(before)).toHaveLength(1);
 	});
 
 	test('shows a value list as buttons with the option icon from the schema', async ({ page }) => {

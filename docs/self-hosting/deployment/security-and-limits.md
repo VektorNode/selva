@@ -126,4 +126,4 @@ Dropping the old `SELVA_AT_REST_KEY` without an overlap makes stored API keys un
 
 ## Logging and personal data
 
-`PinoLogger` redacts by field name only. Top level: `token`, `sessionToken`, `refreshToken`, `apiKey`, `api_key`, `password`, `authorization`, `Authorization`, `cookie`, `secret`. One level down, the same minus `api_key` and `cookie`. Nothing deeper, no personal data such as emails, and nothing at all when `pino` isn't installed (console fallback). Log identifiers (`eventType`, `actorId`, `userId`), never whole objects: logs are where erasure can't reach. See [data privacy](../concepts/data-privacy.md).
+The logger redacts by field name only, at the top level and one level down: `token`, `sessionToken`, `refreshToken`, `apiKey`, `api_key`, `password`, `authorization`, `Authorization`, `cookie`, `secret`. Nothing deeper, and no personal data such as emails. The console fallback used when `pino` isn't installed redacts the same names. Log identifiers (`eventType`, `actorId`, `userId`), never whole objects: logs are where erasure can't reach. See [data privacy](../concepts/data-privacy.md).

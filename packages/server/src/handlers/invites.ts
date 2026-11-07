@@ -77,6 +77,8 @@ async function mailInvite(
 
 /** Pending and recently accepted invites for the acting org. */
 export const listInvites: ApiHandler = async (req) => {
+	// Invitee emails are personal data, and a key outlives the admin who made it.
+	requireSession(req, 'Invites are managed from the web app, not with an API key.');
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 

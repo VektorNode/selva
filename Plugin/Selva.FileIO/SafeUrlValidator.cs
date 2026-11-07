@@ -78,12 +78,6 @@ public static class SafeUrlValidator
 
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
         {
-            // IPv4-mapped IPv6 (::ffff:a.b.c.d) — unwrap and check the embedded v4.
-            if (address.IsIPv4MappedToIPv6)
-            {
-                return IsPublicV4(address.MapToIPv4().GetAddressBytes());
-            }
-
             return IsPublicV6(address);
         }
 
@@ -125,12 +119,46 @@ public static class SafeUrlValidator
 
         var b = address.GetAddressBytes();
 
-        // ::/128 unspecified, ::1 loopback (loopback already handled above).
-        if (b.All(x => x == 0)) return false;
+        // These prefixes reach an IPv4 host through a translator or tunnel, so the embedded IPv4
+        // decides: 64:ff9b::a9fe:a9fe is the metadata endpoint behind NAT64.
+        // ::ffff:0:0/96 — IPv4-mapped
+        if (IsZero(b, 0, 10) && b[10] == 0xFF && b[11] == 0xFF) return IsPublicV4(Slice(b, 12));
+        // ::ffff:0:0:0/96 — IPv4-translated (SIIT)
+        if (IsZero(b, 0, 8) && b[8] == 0xFF && b[9] == 0xFF && IsZero(b, 10, 2)) return IsPublicV4(Slice(b, 12));
+        // ::/96 — IPv4-compatible; also covers :: (0.0.0.0)
+        if (IsZero(b, 0, 12)) return IsPublicV4(Slice(b, 12));
+        // 64:ff9b::/96 — NAT64. The rest of 64:ff9b::/32 is local-use or reserved, never public.
+        if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B)
+        {
+            return IsZero(b, 4, 8) && IsPublicV4(Slice(b, 12));
+        }
+
+        // 2002::/16 — 6to4
+        if (b[0] == 0x20 && b[1] == 0x02) return IsPublicV4(Slice(b, 2));
+        // 2001::/32 — Teredo: the server's IPv4, then the client's with every bit inverted
+        if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0 && b[3] == 0)
+        {
+            return IsPublicV4(Slice(b, 4)) && IsPublicV4(Slice(b, 12).Select(x => (byte)~x).ToArray());
+        }
 
         // fc00::/7 — unique local addresses (private).
         if ((b[0] & 0xFE) == 0xFC) return false;
 
         return true;
+    }
+
+    private static bool IsZero(byte[] bytes, int start, int count)
+    {
+        for (var i = start; i < start + count; i++)
+        {
+            if (bytes[i] != 0) return false;
+        }
+
+        return true;
+    }
+
+    private static byte[] Slice(byte[] bytes, int start)
+    {
+        return new[] { bytes[start], bytes[start + 1], bytes[start + 2], bytes[start + 3] };
     }
 }

@@ -97,7 +97,7 @@ runDefinitionStoreConformance({
 });
 ```
 
-A suite exists per store, plus auth, OAuth, email-link auth, storage, audit query, event sink and solve-metric sink. `runAuthProviderConformance` wraps `runAuthCoreConformance` and `runPasswordAuthConformance`, so a provider without passwords can run the core alone or pass `passwordless`. The suites cover `pending` filtering, `includePending` opt-in, `ProviderError` shapes, and the races a store exists to prevent, such as the share-link solve cap. They don't cover performance.
+A suite exists per store, plus auth, OAuth, email-link auth, storage, audit query, event sink, solve-metric sink and user erasure. `runAuthProviderConformance` wraps `runAuthCoreConformance` and `runPasswordAuthConformance`, so a provider without passwords can run the core alone or pass `passwordless`. The suites cover `pending` filtering, `includePending` opt-in, `ProviderError` shapes, and the races a store exists to prevent, such as the share-link solve cap. They don't cover performance.
 
 New and stricter cases sit behind options that default off, so an upgrade doesn't turn a third-party adapter red. Each suite's options type documents its own: `ctxIsolation` for scoping in the store, `strictDenials` for exact `ProviderError` statuses, `nonAdminCtx` for a default `ctx` without `instance_admin`, and per-suite cases such as `auditStamps` or `publicListing`. Turn on every option your adapter passes.
 

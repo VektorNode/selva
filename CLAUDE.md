@@ -41,9 +41,9 @@ In Rhino, Local runs inside a docked or floating Rhino panel (`Plugin/Selva.Pane
 - **Route handlers parse, guard, delegate, serialize, and nothing else.** A rule that
   two endpoints must agree on belongs in `#lib/server/` or `@selvajs/server`, not
   copied into both. `/api/admin/*` and `/api/v1/*` are siblings over one core, so a
-  rule duplicated across them drifts silently: the compute-config apiKey merge
-  (`#lib/server/compute/serverConfigWrite.ts`) clears or leaks a stored credential
-  if the two copies disagree, and nothing fails at build time.
+  rule duplicated across them drifts silently. The compute-config apiKey merge lives
+  once, in `mergeApiKeys` (`@selvajs/server/compute`): two copies that disagree clear
+  or leak a stored credential, and nothing fails at build time.
 
 ### Comments
 

@@ -2,6 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import {
+	flag,
 	getDefinitionMeta,
 	getProjectProvider,
 	getStorageProvider
@@ -21,6 +22,7 @@ const UpdatePlatformProjectBody = z
 	.partial();
 
 async function loadPlatformProjectOr404(id: string) {
+	if (!flag('ENABLE_PLATFORM_PROJECTS')) apiError(404, ApiErrorCode.NOT_FOUND, 'Not found');
 	const project = await getProjectProvider().getProject(SYSTEM_CONTEXT, id);
 	if (!project || project.visibility !== 'platform') {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'Platform project not found');
@@ -43,8 +45,8 @@ export const PATCH: RequestHandler = apiRoute(
 		requireInstanceAdmin(locals);
 		const { id } = requireParams(params, 'id');
 
-		const input = await parseBody(request, UpdatePlatformProjectBody);
 		await loadPlatformProjectOr404(id);
+		const input = await parseBody(request, UpdatePlatformProjectBody);
 
 		const patch: { name?: string; slug?: string; description?: string } = {};
 		if (input.name !== undefined) {

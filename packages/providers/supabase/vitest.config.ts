@@ -28,12 +28,11 @@ export default async () =>
 	});
 
 /**
- * `.env.test` is checked in with local-stack defaults, so its mere presence
- * can't mean "a stack is running" — without Docker up, every conformance
- * suite would fail with an opaque `TypeError: fetch failed` per test. Probe
- * the REST endpoint once here (before workers spawn) and withhold the creds
- * when it's unreachable, so the suites take their existing no-creds skip path
- * and the run reports one clear reason instead of hundreds of failures.
+ * A `.env.test` can outlive the stack it points at, and then every conformance
+ * suite fails with an opaque `TypeError: fetch failed` per test. Probe the REST
+ * endpoint once here (before workers spawn) and withhold the creds when it's
+ * unreachable, so the suites take their no-creds skip path and the run reports
+ * one clear reason instead of hundreds of failures.
  */
 async function reachableTestEnv(): Promise<Record<string, string>> {
 	const env = loadTestEnv();
@@ -41,6 +40,13 @@ async function reachableTestEnv(): Promise<Record<string, string>> {
 	const required = process.env.SELVA_REQUIRE_SUPABASE === '1';
 	if (!url) {
 		if (required) throw new Error('SELVA_REQUIRE_SUPABASE is set, but .env.test has no stack.');
+		// A skipped suite reads as a pass in the summary, so say so once.
+		if (!process.env.CI && !process.env.SUPABASE_URL) {
+			console.warn(
+				'\n⚠  Supabase conformance suites skipped: no packages/providers/supabase/.env.test.\n' +
+					'   Run `npx supabase start` there and copy its URL and keys into .env.test.\n'
+			);
+		}
 		return env;
 	}
 

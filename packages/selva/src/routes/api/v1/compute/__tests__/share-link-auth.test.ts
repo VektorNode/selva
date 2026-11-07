@@ -8,7 +8,7 @@
  * leaking access.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
 	freshProviders,
 	seedAcme,
@@ -186,6 +186,25 @@ describe('share-link token resolution', () => {
 			tryResolveShareToken(request, url, def.record.guid, 'live', { requireSolve: true }),
 			401
 		);
+	});
+
+	it('expired token from a store that still returns the row → 401', async () => {
+		// The local store already hides expired rows; a store that doesn't must
+		// still not let one through.
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const { rawToken, link } = await seedShareLink(tp, {
+			definitionId: def.record.guid,
+			createdBy: alice.id
+		});
+		const expired = { ...link, expiresAt: new Date(Date.now() - 60_000).toISOString() };
+		vi.spyOn(tp.config.data.shareLinks, 'getByTokenHash').mockResolvedValue(expired);
+
+		const { request, url } = reqWithToken(rawToken);
+		await expect(
+			tryResolveShareToken(request, url, def.record.guid, 'live', { requireSolve: true })
+		).rejects.toMatchObject({ status: 401, body: { message: 'Share token has expired.' } });
 	});
 
 	it('token whose parent definition was soft-deleted → 401 (fail closed)', async () => {

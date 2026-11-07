@@ -47,6 +47,10 @@ jobs:
       - name: Check fixtures
         run: node scripts/develop/check-fixtures.mjs
 
+      # Tests for the repo's own scripts, the signature check above among them. Offline.
+      - name: Test repo scripts
+        run: pnpm test:scripts
+
       # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
       # the release job after the test gate has already passed.
       - name: Validate changeset contents
@@ -97,13 +101,8 @@ jobs:
           elif [ -n "$BETA_BASE" ]; then
             export SCHEMA_GUARD_BASE_REF="$BETA_BASE"
           fi
-          pnpm generate
-          if ! git diff --exit-code -- \
-            packages/schemas/src/generated \
-            Plugin/Selva.Schema/Models/UISchema.Generated.cs \
-            Plugin/Selva.Schema/Models/Wire.Generated.cs \
-            Plugin/Selva.Schema/Constants/SchemaVersion.cs; then
-            echo "::error::Generated code is out of date. Run 'pnpm generate' and commit the result."
+          if ! pnpm check:generated; then
+            echo "::error::Generated code check failed (see above). Run 'pnpm generate' and commit the result."
             exit 1
           fi
 
@@ -188,35 +187,20 @@ jobs:
           SELVA_REQUIRE_SUPABASE: '1'
         run: pnpm exec turbo run test --filter=@selvajs/supabase-provider --env-mode=loose --force
 
-  # Rhino-free .NET libraries; runs in parallel with the JS job. The
-  # Rhino-coupled Selva.GH tests still need a Windows+Rhino runner.
+  # Rhino-free .NET libraries; runs in parallel with the JS job.
   dotnet:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/dotnet-test
 
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: |
-            8.0.x
-            10.0.x
-
-      # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
-      # built-in cache can't be used.
-      - uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
-      - name: Test Selva.Schema (migration, validation)
-        run: dotnet test Plugin/Selva.Tests/Selva.Tests.csproj --nologo
-
-      - name: Test Selva.Slva (mesh codec + fixture contracts)
-        run: dotnet test Plugin/Selva.Slva.Tests/Selva.Slva.Tests.csproj --nologo
-
-      # SVG snapshots are deterministic: glyph advances come from the bundled
-      # font via FontMetrics, not the host's installed fonts.
-      - name: Test Selva.Drawing (model + layout + SVG snapshots)
-        run: dotnet test Plugin/Selva.Drawing.Tests/Selva.Drawing.Tests.csproj --nologo
+  # Rhino 9 on Windows is the primary platform, and the GDI+ raster tests and the
+  # Windows Credential Manager round trip skip on Linux.
+  dotnet-windows:
+    runs-on: windows-latest
+    env:
+      # The runner, and the credential it writes, is thrown away after the job.
+      SELVA_CREDENTIAL_STORE_TEST: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/dotnet-test

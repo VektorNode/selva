@@ -22,8 +22,9 @@ describe('LocalPlatformPermissionStore', () => {
 		name: 'LocalPlatformPermissionStore',
 		createStore: async () => {
 			const userDataPath = path.join(tempDir, 'user-data.json');
+			// One store for seeding and the store under test, as LocalDataProvider wires it.
 			const userData = createLocalUserDataStore(userDataPath);
-			const store = new LocalPlatformPermissionStore(userDataPath);
+			const store = new LocalPlatformPermissionStore(userData);
 			return {
 				store,
 				seedUser: async () => {

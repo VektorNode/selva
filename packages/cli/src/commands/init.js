@@ -8,8 +8,28 @@ import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { collectConfig } from '../prompts.js';
 import { parseEnv, seededTemplateDefaults, setEnvValues, writeEnvText } from '../env.js';
-import { generateKey } from '../secrets.js';
+import { KEY_PLACEHOLDER, generateKey } from '../secrets.js';
 import { readEnvTemplate, requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+
+/**
+ * The root keys init writes back. An existing key is never replaced: rotating
+ * SELVA_HMAC_KEY or SELVA_AT_REST_KEY invalidates sessions and at-rest
+ * encryption, which is `selva keys rotate`'s job. A missing key (a scaffold
+ * that bailed mid-flight) or the template placeholder is safe to generate.
+ */
+export function rootKeysFor(current, generate = generateKey) {
+	const keys = {};
+	const generated = [];
+	for (const name of ['SELVA_HMAC_KEY', 'SELVA_AT_REST_KEY']) {
+		if (current[name] && current[name] !== KEY_PLACEHOLDER) {
+			keys[name] = current[name];
+		} else {
+			keys[name] = generate();
+			generated.push(name);
+		}
+	}
+	return { keys, generated };
+}
 
 export async function runInit() {
 	const dir = resolveDeploymentDir();
@@ -20,29 +40,9 @@ export async function runInit() {
 	const current = parseEnv(text);
 	const values = await collectConfig({ defaults: current, mode: 'init' });
 
-	// Never regenerate an existing key: rotating SELVA_HMAC_KEY or
-	// SELVA_AT_REST_KEY invalidates sessions and at-rest encryption — that's
-	// `selva keys rotate`'s job, not init's. Missing keys (a scaffold that
-	// bailed mid-flight) are the one case it's safe to generate here.
-	if (
-		current.SELVA_HMAC_KEY &&
-		current.SELVA_HMAC_KEY !== 'replace-this-with-a-random-32-byte-hex-key'
-	) {
-		values.SELVA_HMAC_KEY = current.SELVA_HMAC_KEY;
-	} else {
-		values.SELVA_HMAC_KEY = generateKey();
-		p.log.warn('SELVA_HMAC_KEY was missing — generated a fresh one.');
-	}
-
-	if (
-		current.SELVA_AT_REST_KEY &&
-		current.SELVA_AT_REST_KEY !== 'replace-this-with-a-random-32-byte-hex-key'
-	) {
-		values.SELVA_AT_REST_KEY = current.SELVA_AT_REST_KEY;
-	} else {
-		values.SELVA_AT_REST_KEY = generateKey();
-		p.log.warn('SELVA_AT_REST_KEY was missing — generated a fresh one.');
-	}
+	const { keys, generated } = rootKeysFor(current);
+	Object.assign(values, keys);
+	for (const name of generated) p.log.warn(`${name} was missing — generated a fresh one.`);
 
 	// Line-level: keys the prompts don't cover, and the operator's comments, stay as they are.
 	// A prompt answered blank means unset, as it did when the file was re-rendered.

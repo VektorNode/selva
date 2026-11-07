@@ -369,6 +369,19 @@ public class SlvmDocumentTests
         Assert.True(wireBytes.Length < fileBytes.Length);
     }
 
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(2u)]
+    public void Read_RejectsAnyVersionButTheCurrentOne(uint version)
+    {
+        var batch = BatchWithMeshes((0, "a", "", "src/0", null));
+        var bytes = SlvmDocument.Write(batch, RealGeometryBlob(1), includeItems: false);
+        BitConverter.GetBytes(version).CopyTo(bytes, 4);
+
+        var ex = Assert.Throws<InvalidDataException>(() => SlvmDocument.Read(bytes));
+        Assert.Contains($"version {version}", ex.Message);
+    }
+
     // ============================================================================
     // EXTENSION MODEL
     // ============================================================================

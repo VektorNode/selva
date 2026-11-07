@@ -8,9 +8,9 @@
  * access — the token grants one definition on one channel, and nothing on this
  * path validates it.
  *
- * These tests never reach a compute server: every assertion lands on a gate that
- * runs before `resolveServerForOrg`. The "admitted" cases assert only that a
- * request got *past* the gate under test.
+ * No compute server is configured here, so a request that clears every gate
+ * stops at server resolution with 503 COMPUTE_UNAVAILABLE. That is what the
+ * "admitted" cases assert.
  */
 
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
@@ -106,10 +106,9 @@ describe('POST /api/v1/definitions/{guid}/solve — access', () => {
 			body: { inputs: [], values: {} }
 		});
 
-		// Fails later at compute resolution (no server configured) — the point is
-		// that it was neither 401 nor 404.
-		expect(res.status).not.toBe(401);
-		expect(res.status).not.toBe(404);
+		// No compute server is configured, so an admitted request stops there.
+		expect(res.status).toBe(503);
+		expect((res.json as { code?: string }).code).toBe('COMPUTE_UNAVAILABLE');
 	});
 });
 
@@ -140,7 +139,7 @@ describe('POST /api/v1/definitions/{guid}/solve — body', () => {
 			body: { inputs: [], values: {}, definitionUrl: `local:${def.record.guid}` }
 		});
 
-		expect(res.status).not.toBe(400);
+		expect(res.status).toBe(503);
 	});
 
 	it('rejects an invalid channel', async () => {

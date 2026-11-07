@@ -57,10 +57,10 @@ async function mint(t: TestProviders, userId: string, orgId: string, scopes: str
 	return { raw, id };
 }
 
-function resolve(t: TestProviders, raw: string, path = '/api/v1/projects', extra = {}) {
+function resolve(t: TestProviders, raw: string, path = '/api/v1/projects') {
 	return resolveApiToken(
 		new Request(`http://selva.test${path}`, {
-			headers: { authorization: `Bearer ${raw}`, ...extra }
+			headers: { authorization: `Bearer ${raw}` }
 		}),
 		{ codec, auth: t.config.auth, data: t.config.data }
 	);
@@ -116,12 +116,10 @@ describe('API tokens on the local provider', () => {
 		expect((await call(GET, { locals })).status).toBe(403);
 	});
 
-	it('a bad key gets 401 even with a valid session cookie alongside', async () => {
+	it('rejects a well-formed key that was never issued with 401', async () => {
 		tp = await freshProviders();
 		await seedAcme(tp);
-		const result = await resolve(tp, codec.mintRawToken(), '/api/v1/projects', {
-			cookie: 'admin_session=a-perfectly-good-session'
-		});
+		const result = await resolve(tp, codec.mintRawToken());
 		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
 	});
 

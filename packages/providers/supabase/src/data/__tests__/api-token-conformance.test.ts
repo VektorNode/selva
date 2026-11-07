@@ -58,7 +58,8 @@ if (!envCtx) {
 				if (member.error) throw member.error;
 				return { ownerId, ownerSessionToken, orgId, otherOrgId };
 			},
-			seedUser: (id) => seedUser(envCtx, id)
+			seedUser: (id) => seedUser(envCtx, id),
+			auditStamps: true
 		});
 	});
 }

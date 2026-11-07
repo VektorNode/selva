@@ -75,8 +75,8 @@ test tooling. It stays out of the shared config on purpose.
 
 Two suites, each against a stand-in backend:
 
-- **`@selvajs/selva`**: serves the production `node build/index.js` (adapter-node) on the local provider, with throwaway secrets and a temp `DATA_PATH` under `.e2e/`. Nothing reads your real `.env`. CI runs this suite (`e2e.yml`, `--filter=@selvajs/selva`).
-- **`@selvajs/plugin-ui`**: serves the static build with `vite preview` and a WebSocket stub (`e2e/ws-stub.ts`) in place of Grasshopper, so the real transport runs without Rhino. CI does not run it; use `pnpm --filter @selvajs/plugin-ui test:e2e`.
+- **`@selvajs/selva`**: serves the production `node build/index.js` (adapter-node) on the local provider, with throwaway secrets and a temp `DATA_PATH` under `.e2e/`. Nothing reads your real `.env`. CI runs it (`e2e.yml`).
+- **`@selvajs/plugin-ui`**: serves the static build with `vite preview` and a WebSocket stub (`e2e/ws-stub.ts`) in place of Grasshopper, so the real transport runs without Rhino. CI runs it too; locally, `pnpm --filter @selvajs/plugin-ui test:e2e`.
 
 For the selva suite, running through turbo (`pnpm test:e2e`) builds first; running `playwright test` directly assumes `build/` is current.
 

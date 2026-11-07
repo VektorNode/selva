@@ -110,27 +110,32 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 		expect(body.orgPermissions).toEqual(['manage_projects']);
 	});
 
-	it('refuses an invite belonging to another org', async () => {
+	it('refuses an invite belonging to another org, named under the caller’s own', async () => {
 		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
-		const locals = await actAs(tp, alice.id);
+		const otherOwner = await seedUser(tp, 'owner@other.test');
 		const other = await seedOrg(tp, {
 			name: 'Other Co',
 			slug: 'other-co',
-			ownerId: alice.id
+			ownerId: otherOwner.id
 		});
+		await seedOrgMember(tp, { orgId: other.id, userId: otherOwner.id, role: 'owner' });
 
-		const original = await mint(acme.id, locals, {
-			email: 'newhire@acme.test',
+		const foreign = await mint(other.id, await actAs(tp, otherOwner.id), {
+			email: 'newhire@other.test',
 			orgRole: 'member',
 			permissions: []
 		});
 
 		const res = await callHandler(resendInvite, {
-			locals,
-			params: { orgId: other.id, id: original.id }
+			locals: await actAs(tp, alice.id),
+			params: { orgId: acme.id, id: foreign.id }
 		});
-		expect(res.status).toBeGreaterThanOrEqual(400);
+		expect(res.status).toBe(404);
+		expect(res.json).not.toHaveProperty('acceptUrl');
+		await expect(
+			tp.config.data.invites.getByTokenHash(SYSTEM_CONTEXT, inviteHash(tp, foreign.token))
+		).resolves.not.toBeNull();
 	});
 
 	// The response is a working link: an admin resending an owner invite could

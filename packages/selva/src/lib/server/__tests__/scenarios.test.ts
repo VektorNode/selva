@@ -24,6 +24,7 @@ import {
 	requireCanReclaim,
 	requireCanViewProject
 } from '../access.server.js';
+import { tryResolveShareToken } from '../shareLinks/resolve.server.js';
 import {
 	call,
 	freshProviders,
@@ -594,19 +595,32 @@ describe('§11 — share links', () => {
 	});
 
 	it('Draft-channel token resolves; live token does not match a draft request', async () => {
-		tp = await freshProviders();
+		tp = await freshProviders({ flags: { ENABLE_SHARING: true } });
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
-		const { link: draftLink } = await seedShareLink(tp, {
-			definitionId: def.record.guid,
+		const guid = def.record.guid;
+		const draft = await seedShareLink(tp, {
+			definitionId: guid,
 			createdBy: alice.id,
 			channel: 'draft'
 		});
-		const ctx = (await actAs(tp, alice.id)).ctx;
+		const live = await seedShareLink(tp, {
+			definitionId: guid,
+			createdBy: alice.id,
+			channel: 'live'
+		});
+		const draftRequest = (rawToken: string) => {
+			const url = new URL(`http://test.local/?token=${encodeURIComponent(rawToken)}`);
+			return tryResolveShareToken(new Request(url), url, guid, 'draft', { requireSolve: true });
+		};
 
-		const resolved = await tp.config.data.shareLinks.getByTokenHash(ctx, draftLink.tokenHash);
-		expect(resolved?.channel).toBe('draft');
-		expect(resolved?.definitionId).toBe(def.record.guid);
+		const resolved = await draftRequest(draft.rawToken);
+		expect(resolved?.link.id).toBe(draft.link.id);
+
+		await expect(draftRequest(live.rawToken)).rejects.toMatchObject({
+			status: 403,
+			body: { message: "Share token is for the 'live' channel only." }
+		});
 	});
 });
 

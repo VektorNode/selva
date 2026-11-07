@@ -10,18 +10,40 @@
 // into OBSOLETE/, new GUID, IGH_UpgradeObject) lives in STRUCTURE.md; this
 // script makes forgetting it a CI failure instead of a user's corrupted file.
 //
-//   --check   Compare live components against Plugin/Selva.GH/component-signatures.json
-//   --update  Rewrite the snapshot (bless new components and cosmetic renames)
+//   --check   Compare components against Plugin/Selva.GH/component-signatures.json
+//   --update  Rewrite the snapshot (bless new components and cosmetic moves)
+//   --root    Repo root to read, for tests (default: this repo)
 //
 // Source-level on purpose: the test suite cannot load Grasshopper/RhinoCommon
 // headless, so signatures are parsed from the C# source. One component class
-// per file (verified across the tree); files under OBSOLETE/ are skipped.
+// per file (verified across the tree).
+//
+// Components under OBSOLETE/ are checked too: they are what saved files holding
+// an old GUID load into before the upgrader runs, so their params never change.
 
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
-import { join, dirname, relative } from 'node:path';
+import { join, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+function usage() {
+	console.error('Usage: check-component-signatures.mjs --check | --update [--root <dir>]');
+	process.exit(1);
+}
+
+let options;
+try {
+	options = parseArgs({
+		options: { check: { type: 'boolean' }, update: { type: 'boolean' }, root: { type: 'string' } }
+	}).values;
+} catch {
+	usage();
+}
+if (Boolean(options.check) === Boolean(options.update)) usage();
+
+const repoRoot = options.root
+	? resolve(options.root)
+	: join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const featuresRoot = join(repoRoot, 'Plugin/Selva.GH/Features');
 const snapshotPath = join(repoRoot, 'Plugin/Selva.GH/component-signatures.json');
 
@@ -33,7 +55,7 @@ function* walkCsFiles(dir) {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		const full = join(dir, entry.name);
 		if (entry.isDirectory()) {
-			if (entry.name === 'OBSOLETE' || entry.name === 'obj' || entry.name === 'bin') continue;
+			if (entry.name === 'obj' || entry.name === 'bin') continue;
 			yield* walkCsFiles(full);
 		} else if (entry.name.endsWith('.cs')) {
 			yield full;
@@ -107,7 +129,10 @@ function readComponents() {
 			/ComponentGuid[\s\S]{0,200}?new\s+Guid\s*\(\s*"([0-9A-Fa-f-]{36})"/
 		);
 		if (!guidMatch) continue;
-		const className = source.match(/\bclass\s+(\w+)/)?.[1] ?? '(unknown)';
+		// The first class with a base list: a solve-result helper declared above the component has none.
+		const className =
+			(source.match(/^[\t ]*(?:\w+\s+)*class\s+(\w+)(?:<[^>]*>)?\s*:/m) ??
+				source.match(/\bclass\s+(\w+)/))?.[1] ?? '(unknown)';
 		components.push({
 			guid: guidMatch[1].toUpperCase(),
 			class: className,
@@ -123,14 +148,16 @@ function readComponents() {
 // Comparison
 // ============================================================================
 
-/** The wire-breaking part of a signature: param kinds, access, count, order. */
+/**
+ * The wire-breaking part of a signature: every param's kind, access and name, in order. Names
+ * count: swapping two same-type params (Width, Height) keeps every kind in place, yet each wire
+ * now feeds the other input, and in source a swap looks the same as two renames.
+ */
 function structural(component) {
-	const sig = (p) => `${p.kind}:${p.access ?? ''}`;
-	return JSON.stringify({
-		inputs: component.inputs.map(sig),
-		outputs: component.outputs.map(sig)
-	});
+	return JSON.stringify({ inputs: component.inputs, outputs: component.outputs });
 }
+
+const isObsolete = (component) => component.file.includes('/OBSOLETE/');
 
 function check(components) {
 	let snapshot;
@@ -148,6 +175,13 @@ function check(components) {
 
 	for (const [guid, was] of known) {
 		const now = live.get(guid);
+		if (!now && isObsolete(was)) {
+			errors.push(
+				`OBSOLETE component removed: ${was.class} (${guid}, ${was.file}).\n` +
+					`  Saved definitions holding this GUID load into it before upgrading. Restore it.`
+			);
+			continue;
+		}
 		if (!now) {
 			errors.push(
 				`Component removed: ${was.class} (${guid}).\n` +
@@ -156,16 +190,24 @@ function check(components) {
 			);
 			continue;
 		}
-		if (structural(now) !== structural(was)) {
+		const paramsChanged = structural(now) !== structural(was);
+		if (paramsChanged && isObsolete(was)) {
+			errors.push(
+				`OBSOLETE component changed: ${now.class} (${guid}, ${now.file}).\n` +
+					`  Saved definitions holding this GUID load into these params by index before\n` +
+					`  upgrading. Restore them as they were.`
+			);
+		} else if (paramsChanged) {
 			errors.push(
 				`Param list changed on released GUID ${guid} (${now.class}, ${now.file}).\n` +
-					`  Grasshopper binds wires by index — this silently rewires saved definitions.\n` +
+					`  Grasshopper binds wires by index — a reordered, renamed, added or removed param\n` +
+					`  silently rewires saved definitions.\n` +
 					`  Follow the OBSOLETE + upgrader procedure in STRUCTURE.md: snapshot the old\n` +
 					`  component, give the live one a NEW GUID, add an IGH_UpgradeObject, then --update.`
 			);
 		} else if (JSON.stringify(now) !== JSON.stringify(was)) {
 			errors.push(
-				`Cosmetic signature change for ${now.class} (${guid}) — names or file moved.\n` +
+				`Cosmetic signature change for ${now.class} (${guid}) — class renamed or file moved.\n` +
 					`  Not wire-breaking. Bless it with: node scripts/plugin/check-component-signatures.mjs --update`
 			);
 		}
@@ -203,19 +245,18 @@ function update(components) {
 // ============================================================================
 
 const components = readComponents();
-const guids = new Set();
+const byGuid = new Map();
 for (const c of components) {
-	if (guids.has(c.guid)) {
-		console.error(`✗ Duplicate ComponentGuid ${c.guid} — two live components share an identity.`);
+	const other = byGuid.get(c.guid);
+	if (other) {
+		console.error(
+			`✗ Duplicate ComponentGuid ${c.guid}: ${other.file} and ${c.file} share an identity.\n` +
+				`  A component moved to OBSOLETE/ keeps its GUID; the live one needs a new one.`
+		);
 		process.exit(1);
 	}
-	guids.add(c.guid);
+	byGuid.set(c.guid, c);
 }
 
-const mode = process.argv[2];
-if (mode === '--update') update(components);
-else if (mode === '--check') check(components);
-else {
-	console.error('Usage: check-component-signatures.mjs --check | --update');
-	process.exit(1);
-}
+if (options.update) update(components);
+else check(components);

@@ -18,12 +18,6 @@ namespace Selva.Tests;
 /// </summary>
 public class HostFileFrameTests
 {
-    private static readonly JsonSerializerSettings TransportSettings = new JsonSerializerSettings
-    {
-        TypeNameHandling = TypeNameHandling.None,
-        MetadataPropertyHandling = MetadataPropertyHandling.Ignore
-    };
-
     internal static object SampleHeader()
     {
         return OutboundEnvelopes.HostPickedFile("session-fixture", "8", "facade.3dm");
@@ -77,7 +71,7 @@ public class HostFileFrameTests
     public void Fixture_MatchesTheEncodedSample()
     {
         var path = Path.Combine(TestPaths.RepoRoot(), "packages", "schemas", "fixtures", "wire", "host-picked-file.slhf");
-        var produced = HostFileFrame.Encode(JsonConvert.SerializeObject(SampleHeader(), TransportSettings), SampleBody());
+        var produced = HostFileFrame.Encode(JsonConvert.SerializeObject(SampleHeader(), WireJson.Settings), SampleBody());
 
         if (Environment.GetEnvironmentVariable("UPDATE_WIRE_FIXTURES") == "1")
         {

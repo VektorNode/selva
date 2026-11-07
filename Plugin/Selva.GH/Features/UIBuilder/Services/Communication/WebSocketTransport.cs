@@ -31,17 +31,6 @@ public class SchemaSaveRequest
 /// </summary>
 public class WebSocketTransport : IDisposable
 {
-    // TypeNameHandling.None blocks type-confusion deserialization attacks.
-    private static readonly JsonSerializerSettings SecureSerializerSettings = new JsonSerializerSettings
-    {
-        TypeNameHandling = TypeNameHandling.None,
-        MaxDepth = AppConfig.JsonSerialization.MaxJsonDepth,
-        MetadataPropertyHandling = MetadataPropertyHandling.Ignore
-    };
-
-    private static readonly JsonSerializer SecureSerializer =
-        JsonSerializer.Create(SecureSerializerSettings);
-
     private const string PromptOpenMessage = "Rhino is already asking for something. Finish or cancel that first.";
 
     private readonly int _port;
@@ -50,7 +39,7 @@ public class WebSocketTransport : IDisposable
 
     // Parsing/classifying inbound frames is pure (InboundMessageParser, unit-tested separately);
     // this class owns only the socket, thread marshalling, and event raising.
-    private readonly InboundMessageParser _inboundParser = new InboundMessageParser(SecureSerializer);
+    private readonly InboundMessageParser _inboundParser = new InboundMessageParser(WireJson.Serializer);
 
     private readonly HostFileCoordinator _hostFiles;
 
@@ -601,7 +590,7 @@ public class WebSocketTransport : IDisposable
             return Task.CompletedTask;
         }
 
-        var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
+        var json = JsonConvert.SerializeObject(payload, WireJson.Settings);
         return server.BroadcastAsync(json, binaryFrames);
     }
 
@@ -666,23 +655,22 @@ public class WebSocketTransport : IDisposable
 
             var inbound = _inboundParser.Parse(headerJson, _sessionId);
             var reply = new SocketReply(this, frame.Client);
-            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
+            switch (BridgeAccess.RouteHostFile(inbound.Kind, frame.Host))
             {
-                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
-                _hostFiles.RefuseSave(inbound.RequestId, "Saving through Rhino works only in the Rhino panel.",
-                    reply);
-                return;
-            }
+                case InboundRoute.RefusedFromBrowserTab:
+                    Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
+                    _hostFiles.RefuseSave(inbound.RequestId, "Saving through Rhino works only in the Rhino panel.",
+                        reply);
+                    return;
 
-            if (inbound.Kind != InboundKind.HostSaveFile)
-            {
-                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
-                _hostFiles.RefuseSave(inbound.RequestId,
-                    inbound.Kind == InboundKind.SessionMismatch
-                        ? "This page belongs to another Grasshopper session. Reload it and try again."
-                        : "Could not save the file.",
-                    reply);
-                return;
+                case InboundRoute.NotAHostFile:
+                    Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                    _hostFiles.RefuseSave(inbound.RequestId,
+                        inbound.Kind == InboundKind.SessionMismatch
+                            ? "This page belongs to another Grasshopper session. Reload it and try again."
+                            : "Could not save the file.",
+                        reply);
+                    return;
             }
 
             _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, reply);
@@ -707,16 +695,16 @@ public class WebSocketTransport : IDisposable
             }
 
             // Hiding the builder on the page isn't enough: the socket itself must not write.
-            if (BridgeAccess.IsRefused(inbound.Kind, _role()))
+            var role = _role();
+            switch (BridgeAccess.Route(inbound.Kind, role, frame.Host))
             {
-                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' in a {BridgeAccess.RoleName(_role())} session.");
-                return;
-            }
+                case InboundRoute.RefusedForRole:
+                    Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' in a {BridgeAccess.RoleName(role)} session.");
+                    return;
 
-            if (BridgeAccess.IsRefusedFrom(inbound.Kind, frame.Host))
-            {
-                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' from a browser tab.");
-                return;
+                case InboundRoute.RefusedFromBrowserTab:
+                    Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' from a browser tab.");
+                    return;
             }
 
             switch (inbound.Kind)
@@ -920,7 +908,7 @@ public class WebSocketTransport : IDisposable
             var server = _transport._webSocketServer;
             return server == null
                 ? Task.CompletedTask
-                : server.SendAsync(_client, JsonConvert.SerializeObject(envelope, SecureSerializerSettings));
+                : server.SendAsync(_client, JsonConvert.SerializeObject(envelope, WireJson.Settings));
         }
 
         public Task SendFileAsync(object header, byte[] body)
@@ -929,7 +917,7 @@ public class WebSocketTransport : IDisposable
             return server == null
                 ? Task.CompletedTask
                 : server.SendBinaryAsync(_client,
-                    HostFileFrame.Encode(JsonConvert.SerializeObject(header, SecureSerializerSettings), body));
+                    HostFileFrame.Encode(JsonConvert.SerializeObject(header, WireJson.Settings), body));
         }
     }
 

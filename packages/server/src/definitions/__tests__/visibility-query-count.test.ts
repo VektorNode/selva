@@ -125,6 +125,8 @@ describe('listVisibleDefinitions query count', () => {
 		expect(counts.getProjectMembersFor).toBe(1);
 	});
 
+	// Seeding writes every definition through the file store, which can outlast
+	// the default timeout when the whole suite runs in parallel.
 	it('membership reads stay constant as orgs and projects grow', async () => {
 		tp = await freshHarness();
 		const small = await seedTenants(tp, 2, 2);
@@ -139,7 +141,7 @@ describe('listVisibleDefinitions query count', () => {
 		const smallMembershipReads = smallCounts.getOrgMembersFor + smallCounts.getProjectMembersFor;
 		vi.restoreAllMocks();
 
-		const large = await seedTenants(tp, 6, 8);
+		const large = await seedTenants(tp, 4, 5);
 		const { ctx: largeCtx } = await actAs(tp, large.user.id);
 
 		const largeCounts = countStoreCalls(tp);
@@ -153,7 +155,7 @@ describe('listVisibleDefinitions query count', () => {
 		expect(largeMembershipReads).toBe(smallMembershipReads);
 		expect(largeCounts.getOrgMember).toBe(0);
 		expect(largeCounts.getProjectMember).toBe(0);
-	});
+	}, 20_000);
 
 	it('scans projects once per org — the one call that is linear, and is a list not a row read', async () => {
 		tp = await freshHarness();

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { canonicaliseDefinitions, compareSchemas, schemaVersionOf } from './version-guard.js';
+import {
+	canonicaliseDefinitions,
+	compareSchemas,
+	schemaGuardError,
+	schemaVersionOf
+} from './version-guard.js';
 
 // The guard's whole job is detecting definition edits that lack a version bump.
 // The original implementation used JSON.stringify's array-replacer form, which
@@ -111,6 +116,65 @@ describe('compareSchemas — ignores doc-only changes', () => {
 			}
 		};
 		expect(canonicaliseDefinitions(reordered)).toBe(canonicaliseDefinitions(makeSchema()));
+	});
+});
+
+describe('compareSchemas — version direction', () => {
+	const withVersion = (version) => {
+		const schema = makeSchema();
+		schema.definitions.UISchema.properties.schemaVersion.default = version;
+		return schema;
+	};
+
+	it('compares versions numerically, not as strings', () => {
+		expect(compareSchemas(withVersion('2.9.0'), withVersion('2.10.0'))).toMatchObject({
+			versionBumped: true,
+			versionDowngraded: false
+		});
+	});
+
+	it('treats a lower version as a downgrade, never a bump', () => {
+		expect(compareSchemas(withVersion('2.14.0'), withVersion('2.13.0'))).toMatchObject({
+			versionBumped: false,
+			versionDowngraded: true
+		});
+	});
+
+	// A NaN direction would read as neither a bump nor a downgrade.
+	it.each(['2.20.0-beta.1', '2.20', 'v2.20.0'])('throws on %s rather than comparing it', (bad) => {
+		expect(() => compareSchemas(withVersion('2.19.0'), withVersion(bad))).toThrow(
+			/MAJOR\.MINOR\.PATCH/
+		);
+	});
+});
+
+describe('schemaGuardError', () => {
+	it('rejects a downgrade even when the definitions changed with it', () => {
+		const changed = makeSchema();
+		changed.definitions.UISchema.properties.schemaVersion.default = '2.13.0';
+		changed.definitions.Widget.properties.color = { type: 'string' };
+		expect(schemaGuardError(makeSchema(), changed, 'HEAD')).toMatch(/2\.14\.0 -> 2\.13\.0/);
+	});
+
+	it('rejects changed definitions without a bump', () => {
+		const changed = makeSchema();
+		changed.definitions.Widget.properties.color = { type: 'string' };
+		expect(schemaGuardError(makeSchema(), changed, 'HEAD')).toMatch(/not bumped/);
+	});
+
+	it('rejects a working version with a prerelease suffix, bump or not', () => {
+		const prerelease = makeSchema();
+		prerelease.definitions.UISchema.properties.schemaVersion.default = '2.15.0-beta.1';
+		prerelease.definitions.Widget.properties.color = { type: 'string' };
+		expect(schemaGuardError(makeSchema(), prerelease, 'HEAD')).toMatch(/2\.15\.0-beta\.1/);
+	});
+
+	it('accepts changed definitions with a bump, and an unchanged schema', () => {
+		const changed = makeSchema();
+		changed.definitions.UISchema.properties.schemaVersion.default = '2.15.0';
+		changed.definitions.Widget.properties.color = { type: 'string' };
+		expect(schemaGuardError(makeSchema(), changed, 'HEAD')).toBeNull();
+		expect(schemaGuardError(makeSchema(), makeSchema(), 'HEAD')).toBeNull();
 	});
 });
 

@@ -93,7 +93,8 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 	return { GrasshopperClient };
 });
 
-vi.mock('@selvajs/compute/core', () => {
+vi.mock('@selvajs/compute/core', async (importOriginal) => {
+	const { ErrorCodes } = await importOriginal<typeof import('@selvajs/compute/core')>();
 	class MockComputeError extends Error {
 		constructor(
 			message: string,
@@ -105,7 +106,7 @@ vi.mock('@selvajs/compute/core', () => {
 	return {
 		enableDebugLogging: vi.fn(),
 		ComputeError: MockComputeError,
-		ErrorCodes: { ABORTED: 'ABORTED' }
+		ErrorCodes
 	};
 });
 
@@ -192,6 +193,14 @@ describe('createClientCache — limits from the server', () => {
 			reuseDefinitionCache: true,
 			deploymentId: null
 		});
+	});
+
+	it('sends the whole definition to a server that answers a stale pointer with empty geometry', async () => {
+		reportedLimits = { timeoutSeconds: 100, maxRequestBytes: 1, signalsStaleDefinition: false };
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0]).toMatchObject({ reuseServerDefinitionCache: false });
+		expect(entry.limits.reuseDefinitionCache).toBe(false);
 	});
 
 	it('caps the deadline at an hour', async () => {

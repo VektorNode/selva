@@ -110,7 +110,9 @@ if (!envCtx) {
 					secondaryUserId,
 					secondaryUserSessionToken
 				};
-			}
+			},
+			strictDenials: true,
+			auditStamps: true
 		});
 	});
 }

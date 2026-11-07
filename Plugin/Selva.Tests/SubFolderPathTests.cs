@@ -124,6 +124,69 @@ public class SubFolderPathTests
         Assert.Equal(["Windows"], SubFolderPath.Split("C:/Windows"));
     }
 
+    // "C:evil" is relative to drive C's working directory: Path.Combine rebases onto it.
+    [Theory]
+    [InlineData("C:evil/x")]
+    [InlineData("ROOT::C:evil::x")]
+    [InlineData("c:../x")]
+    public void Split_DropsDriveRelativeSegments(string raw)
+    {
+        Assert.DoesNotContain(SubFolderPath.Split(raw), segment => segment.Contains(':'));
+        Assert.Equal("x", SubFolderPath.Split(raw)[^1]);
+    }
+
+    // NTFS reads "name:stream" as an alternate data stream of "name".
+    [Fact]
+    public void Split_DropsSegmentsWithAColon()
+    {
+        Assert.Equal(["ROOT"], SubFolderPath.Split("ROOT/a:b"));
+    }
+
+    // One rule on every OS, so a definition bakes the same folders on macOS as on Windows.
+    [Theory]
+    [InlineData("a<b")]
+    [InlineData("a>b")]
+    [InlineData("a\"b")]
+    [InlineData("a|b")]
+    [InlineData("a?b")]
+    [InlineData("a*b")]
+    [InlineData("a\0b")]
+    [InlineData("a\u001fb")]
+    public void Split_DropsSegmentsWithCharactersWindowsForbids(string bad)
+    {
+        Assert.Equal(["ROOT", "ok"], SubFolderPath.Split("ROOT/" + bad + "/ok"));
+    }
+
+    // Windows opens the device for these, whatever the extension, so the write lands nowhere.
+    [Theory]
+    [InlineData("aux")]
+    [InlineData("NUL")]
+    [InlineData("nul.txt")]
+    [InlineData("Con .txt")]
+    [InlineData("COM1")]
+    [InlineData("lpt9.log")]
+    [InlineData("COM\u00B9")]
+    public void Split_DropsWindowsDeviceNames(string device)
+    {
+        Assert.Equal(["ROOT", "ok"], SubFolderPath.Split("ROOT/" + device + "/ok"));
+    }
+
+    [Theory]
+    [InlineData("console")]
+    [InlineData("COM10")]
+    [InlineData("auxiliary.txt")]
+    public void Split_KeepsNamesThatOnlyStartLikeADevice(string name)
+    {
+        Assert.Equal(["ROOT", name], SubFolderPath.Split("ROOT/" + name));
+    }
+
+    // Windows trims the trailing dot, so "v1." would create "v1" and the write would miss it.
+    [Fact]
+    public void Split_DropsSegmentsWithATrailingDot()
+    {
+        Assert.Equal(["ROOT", "ok"], SubFolderPath.Split("ROOT/v1./ok"));
+    }
+
     [Fact]
     public void Split_PureTraversal_YieldsNothing()
     {

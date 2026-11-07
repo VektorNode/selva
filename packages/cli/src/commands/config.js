@@ -1,7 +1,7 @@
 // `selva config show|set|unset`: what this deployment's .env sets, checked
 // against the manifest the runtime declares.
 
-import { copyFileSync, existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { parseEnv, setEnvValues, writeEnvText } from '../env.js';
@@ -145,8 +145,7 @@ function runShow(argv) {
 function backUp(envPath) {
 	if (!existsSync(envPath)) return null;
 	const bak = backupPathFor(envPath, backupStamp());
-	copyFileSync(envPath, bak);
-	writeEnvText(bak, readFileSync(bak, 'utf8'));
+	writeEnvText(bak, readFileSync(envPath, 'utf8'));
 	return bak;
 }
 

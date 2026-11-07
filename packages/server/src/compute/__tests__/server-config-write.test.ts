@@ -207,6 +207,9 @@ describe('assertStoredKeysReadable', () => {
 
 	it('refuses to overwrite a key it could not decrypt by leaving it out', () => {
 		expect(() => assertStoredKeysReadable([{ id: 'a' }], unreadable)).toThrow(/SELVA_AT_REST_KEY/);
+		expect(() => assertStoredKeysReadable([{ id: 'a', apiKey: '' }], unreadable)).toThrow(
+			/SELVA_AT_REST_KEY/
+		);
 	});
 
 	it('lets the operator replace or clear that key', () => {

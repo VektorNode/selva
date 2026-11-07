@@ -381,24 +381,27 @@ describe('resolveApiToken with a sign-in max age', () => {
 
 	it('treats an owner who never signed in as lapsed', async () => {
 		const w = world();
-		signedIn(w, undefined);
+		const revoke = signedIn(w, undefined);
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+		expect(revoke).toHaveBeenCalledWith(expect.anything(), 'tok-1', 'sign_in_lapsed');
 	});
 
 	it('treats a sign-in stamped in the future as lapsed', async () => {
 		const w = world();
-		signedIn(w, new Date(NOW + 365 * DAY).toISOString());
+		const revoke = signedIn(w, new Date(NOW + 365 * DAY).toISOString());
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+		expect(revoke).toHaveBeenCalledWith(expect.anything(), 'tok-1', 'sign_in_lapsed');
 	});
 
 	it('applies whatever the auth provider', async () => {
 		const w = world();
-		signedIn(w, new Date(NOW - 30 * DAY).toISOString());
+		const revoke = signedIn(w, new Date(NOW - 30 * DAY).toISOString());
 		w.deps.auth = { getUser: w.deps.auth.getUser };
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
-		expect(result.kind).toBe('rejected');
+		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+		expect(revoke).toHaveBeenCalledWith(expect.anything(), 'tok-1', 'sign_in_lapsed');
 	});
 });
 

@@ -15,7 +15,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # One runner per app: both serve on E2E_PORT, and plugin-ui's stub holds the
+  # Grasshopper WebSocket port.
   e2e:
+    name: e2e (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: selva
+            package: '@selvajs/selva'
+          - name: plugin-ui
+            package: '@selvajs/plugin-ui'
     runs-on: ubuntu-latest
     steps:
       # Must precede `uses: ./...` below — GitHub resolves local actions from
@@ -28,19 +39,19 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .turbo
-          key: turbo-e2e-${{ github.sha }}
+          key: turbo-e2e-${{ matrix.name }}-${{ github.sha }}
           restore-keys: |
-            turbo-e2e-
+            turbo-e2e-${{ matrix.name }}-
 
       # Keyed on the installed Playwright version so Chromium is only
       # re-downloaded when @playwright/test bumps.
-      # Resolved from @selvajs/selva: the root doesn't hoist @playwright/test.
+      # Resolved from the app: the root doesn't hoist @playwright/test.
       # Assigned first so a failed lookup fails the step; inside echo it
       # yielded an empty key that matched a stale cache with no browser.
       - name: Resolve Playwright version
         id: pw
         run: |
-          version=$(pnpm --filter @selvajs/selva exec node -p "require('@playwright/test/package.json').version")
+          version=$(pnpm --filter '${{ matrix.package }}' exec node -p "require('@playwright/test/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
@@ -50,17 +61,17 @@ jobs:
 
       # Always run: it skips the download when the cached browser matches, and
       # the OS libraries are never cached.
-      - run: pnpm --filter @selvajs/selva exec playwright install --with-deps chromium
+      - run: pnpm --filter '${{ matrix.package }}' exec playwright install --with-deps chromium
 
-      # Via turbo so the `build` dependency fires — Playwright's webServer
-      # serves build/index.js (adapter-node).
-      - run: pnpm test:e2e --filter=@selvajs/selva
+      # Via turbo so the `build` dependency fires: Playwright's webServer serves
+      # the production build.
+      - run: pnpm test:e2e --filter='${{ matrix.package }}'
         env:
           CI: 'true'
 
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
-          path: packages/selva/playwright-report/
+          name: playwright-report-${{ matrix.name }}
+          path: packages/${{ matrix.name }}/playwright-report/
           retention-days: 7

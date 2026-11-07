@@ -33,7 +33,10 @@ if (!envCtx) {
 					};
 				};
 				return { store, seedUser };
-			}
+			},
+			strictDenials: true,
+			selfAccess: true,
+			recentRunsCap: true
 		});
 	});
 }

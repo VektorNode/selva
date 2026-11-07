@@ -2,7 +2,17 @@
 // `node --env-file` boots the app with, so the CLI never sees a value the app
 // doesn't.
 
-import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import {
+	chownSync,
+	existsSync,
+	readFileSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync
+} from 'node:fs';
 import { parseEnv as nodeParseEnv } from 'node:util';
 import { ALL_SETTINGS, RETIRED_KEYS } from './generated/config.js';
 
@@ -244,11 +254,28 @@ export function writeEnvFile(path, template, values) {
 	writeEnvText(path, renderEnvValues(template, values));
 }
 
-/** `.env` holds both root keys, so it is the owner's alone. */
+/**
+ * `.env` holds both root keys, so it is the owner's alone. The text goes into a
+ * new 0600 file renamed over the old one: `mode` applies only when a file is
+ * created, so writing into an existing 0644 `.env` exposes the keys until a
+ * later chmod.
+ */
 export function writeEnvText(path, text) {
-	writeFileSync(path, text, { encoding: 'utf8', mode: 0o600 });
-	// `mode` applies only when the file is created; an existing file keeps its own.
-	if (process.platform !== 'win32') chmodSync(path, 0o600);
+	// Through a symlinked .env to the file it points at, so the link survives.
+	const target = existsSync(path) ? realpathSync(path) : path;
+	const tmp = `${target}.${randomBytes(6).toString('hex')}.tmp`;
+	writeFileSync(tmp, text, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+	try {
+		// Run as root, the new file would otherwise be root's and unreadable by the app's user.
+		if (process.getuid?.() === 0 && existsSync(target)) {
+			const { uid, gid } = statSync(target);
+			chownSync(tmp, uid, gid);
+		}
+		renameSync(tmp, target);
+	} catch (err) {
+		rmSync(tmp, { force: true });
+		throw err;
+	}
 }
 
 /**
