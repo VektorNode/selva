@@ -1,5 +1,33 @@
 # @selvajs/server
 
+## 2.1.0-beta.0
+
+### Minor Changes
+
+- b38182e: Accepting an invite claims it before granting anything, so an invite revoked while the account is being created no longer grants its permissions or membership. The OpenAPI document now describes the request bodies of PATCH `/definitions/{guid}`, POST `/publish` and POST `/share-links`; `@selvajs/server/api` exports them as `UpdateDefinitionBodySchema`, `PublishVersionBodySchema` and `CreateShareLinkBodySchema`.
+- b38182e: Env settings parse by one set of rules, so the config report and the running server agree. A whitespace-only value counts as unset; ints must be plain digits (`0x10`, `1e3` and `0.5` are refused); `url` settings must be `http:` or `https:`, and `ORIGIN` and `SELVA_EVENT_CALLBACK_ORIGIN` refuse a path, query or credentials. The compute and API rate limits and `SIGN_IN_MAX_AGE_DAYS` now read the manifest through the new `readSetting`, so an invalid tunable falls back to its default instead of being floored. `<KEY>_PREVIOUS_EXPIRES` accepts only an ISO date that exists, at most 90 days out. A malformed config snapshot no longer stops the server booting, and the snapshot stores a marker instead of a guessable hash for secrets Selva did not generate: each such secret reports "changed" once after upgrading. `readPositiveInt` and `readNonNegativeInt` in `@selvajs/server` are deprecated.
+
+### Patch Changes
+
+- b38182e: Store fixes across both providers:
+
+  - `markAccepted` refuses an expired invite.
+  - A share link stops counting solves once its definition is deleted. On Supabase this is a new migration: run `npx selva-supabase` and `supabase db push`.
+  - Supabase emits `definition.deleted` only when a row was deleted, and `listUsers` and the audit query clamp their limit (`limit: 0` returns one row; the audit default is now 50).
+  - Local's `revoke` of an unknown share link is a 404, and local storage refuses a bad path with `ProviderError` 400.
+  - Supabase has no platform-project grants, so provider setup now fails when `ENABLE_PLATFORM_PROJECTS` is on. `IPlatformProjectGrantStore` gains an optional `unsupported` marker.
+
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+  - @selvajs/platform@1.1.0-beta.0
+  - @selvajs/schemas@5.3.1-beta.0
+  - @selvajs/notifications@0.3.1-beta.0
+
 ## 2.0.0
 
 ### Major Changes

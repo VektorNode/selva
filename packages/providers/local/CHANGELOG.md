@@ -1,5 +1,27 @@
 # @selvajs/local-provider
 
+## 0.16.1-beta.0
+
+### Patch Changes
+
+- b38182e: Compute API keys are sealed in a new `enc:v3:` envelope that binds both the server id and its URL, so a row whose `serverUrl` is edited at rest no longer decrypts and sends its key to the new host. Both compute-server stores seal and re-seal on save, `reencryptSecrets` moves `enc:v1:`/`enc:v2:` rows to v3, and `verifySecrets` reports them in `legacyEnvelopes`. v1 and v2 still decrypt. Decryption also pins a 16-byte GCM tag. `encryptSecret`, `decryptSecret` and `decryptWithKeys` accept a `{ id, url }` binding alongside the old string; new exports on `./computeServer`: `readAtRestKeys`, `parseKey32`, `isLegacyEnvelope`, `SecretBinding`.
+- b38182e: Store fixes across both providers:
+
+  - `markAccepted` refuses an expired invite.
+  - A share link stops counting solves once its definition is deleted. On Supabase this is a new migration: run `npx selva-supabase` and `supabase db push`.
+  - Supabase emits `definition.deleted` only when a row was deleted, and `listUsers` and the audit query clamp their limit (`limit: 0` returns one row; the audit default is now 50).
+  - Local's `revoke` of an unknown share link is a 404, and local storage refuses a bad path with `ProviderError` 400.
+  - Supabase has no platform-project grants, so provider setup now fails when `ENABLE_PLATFORM_PROJECTS` is on. `IPlatformProjectGrantStore` gains an optional `unsupported` marker.
+
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+  - @selvajs/platform@1.1.0-beta.0
+
 ## 0.16.0
 
 ### Minor Changes

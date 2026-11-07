@@ -1,5 +1,16 @@
 # @selvajs/solve
 
+## 2.1.0-beta.1
+
+### Minor Changes
+
+- b38182e: An input whose `source.kind` is `server` solves with its schema default, and a solve that posts a value for it is refused with 400. No binding resolver is wired, so before this such an input took whatever a caller posted. The client no longer sends a value for these inputs. New on `@selvajs/solve/server`: `postedServerSourcedIds`; `SolveInput` gains `serverSourced`.
+
+### Patch Changes
+
+- Updated dependencies [b38182e]
+  - @selvajs/schemas@5.3.1-beta.0
+
 ## 2.1.0-beta.0
 
 ### Minor Changes

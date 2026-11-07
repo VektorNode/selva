@@ -1,5 +1,18 @@
 # @selvajs/notifications
 
+## 0.3.1-beta.0
+
+### Patch Changes
+
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+- Updated dependencies [b38182e]
+  - @selvajs/platform@1.1.0-beta.0
+
 ## 0.3.0
 
 ### Minor Changes

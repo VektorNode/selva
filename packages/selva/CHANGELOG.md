@@ -1,5 +1,13 @@
 # @selvajs/selva
 
+## 4.20.1-beta.1
+
+### Patch Changes
+
+- b38182e: Accepting an invite claims it before granting anything, so an invite revoked while the account is being created no longer grants its permissions or membership. The OpenAPI document now describes the request bodies of PATCH `/definitions/{guid}`, POST `/publish` and POST `/share-links`; `@selvajs/server/api` exports them as `UpdateDefinitionBodySchema`, `PublishVersionBodySchema` and `CreateShareLinkBodySchema`.
+- b38182e: Env settings parse by one set of rules, so the config report and the running server agree. A whitespace-only value counts as unset; ints must be plain digits (`0x10`, `1e3` and `0.5` are refused); `url` settings must be `http:` or `https:`, and `ORIGIN` and `SELVA_EVENT_CALLBACK_ORIGIN` refuse a path, query or credentials. The compute and API rate limits and `SIGN_IN_MAX_AGE_DAYS` now read the manifest through the new `readSetting`, so an invalid tunable falls back to its default instead of being floored. `<KEY>_PREVIOUS_EXPIRES` accepts only an ISO date that exists, at most 90 days out. A malformed config snapshot no longer stops the server booting, and the snapshot stores a marker instead of a guessable hash for secrets Selva did not generate: each such secret reports "changed" once after upgrading. `readPositiveInt` and `readNonNegativeInt` in `@selvajs/server` are deprecated.
+- b38182e: An input whose `source.kind` is `server` solves with its schema default, and a solve that posts a value for it is refused with 400. No binding resolver is wired, so before this such an input took whatever a caller posted. The client no longer sends a value for these inputs. New on `@selvajs/solve/server`: `postedServerSourcedIds`; `SolveInput` gains `serverSourced`.
+
 ## 4.20.1-beta.0
 
 ### Patch Changes

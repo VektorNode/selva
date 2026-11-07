@@ -1,5 +1,29 @@
 # @selvajs/platform
 
+## 1.1.0-beta.0
+
+### Minor Changes
+
+- b38182e: Compute API keys are sealed in a new `enc:v3:` envelope that binds both the server id and its URL, so a row whose `serverUrl` is edited at rest no longer decrypts and sends its key to the new host. Both compute-server stores seal and re-seal on save, `reencryptSecrets` moves `enc:v1:`/`enc:v2:` rows to v3, and `verifySecrets` reports them in `legacyEnvelopes`. v1 and v2 still decrypt. Decryption also pins a 16-byte GCM tag. `encryptSecret`, `decryptSecret` and `decryptWithKeys` accept a `{ id, url }` binding alongside the old string; new exports on `./computeServer`: `readAtRestKeys`, `parseKey32`, `isLegacyEnvelope`, `SecretBinding`.
+- b38182e: Env settings parse by one set of rules, so the config report and the running server agree. A whitespace-only value counts as unset; ints must be plain digits (`0x10`, `1e3` and `0.5` are refused); `url` settings must be `http:` or `https:`, and `ORIGIN` and `SELVA_EVENT_CALLBACK_ORIGIN` refuse a path, query or credentials. The compute and API rate limits and `SIGN_IN_MAX_AGE_DAYS` now read the manifest through the new `readSetting`, so an invalid tunable falls back to its default instead of being floored. `<KEY>_PREVIOUS_EXPIRES` accepts only an ISO date that exists, at most 90 days out. A malformed config snapshot no longer stops the server booting, and the snapshot stores a marker instead of a guessable hash for secrets Selva did not generate: each such secret reports "changed" once after upgrading. `readPositiveInt` and `readNonNegativeInt` in `@selvajs/server` are deprecated.
+- b38182e: Conformance kit: the outsider in the `ctxIsolation` cases no longer carries `instance_admin`, so an adapter that filters by ctx passes them. New opt-in options tighten the suites without turning existing adapters red, among them `strictDenials` (denials must carry their status code), `nonAdminCtx`, `auditStamps`, `refusesEscalation`, `orgScopedReads`, `segmentPrefix`, `limitClamp` and `disabledSessionWindowMs`; each suite's options type documents its own. `SeedUserFn`, `SeedUserResult` and `DefinitionTestScope` are exported from `./testing`.
+
+### Patch Changes
+
+- b38182e: A `create_projects` API scope is described as "Read and create private projects in …", which is what it grants, and can only be issued for `all` or an org: a stored `create_projects:project:…` scope now grants nothing. `hasPermission` refuses every share-link context. `slugify` folds `ß` and similar letters, and an org name of only invisible characters is refused. `withAdminBypass`, `ProjectAccessInput.orgPermissions` and the `system` field read by `actorFrom`/`actorOf` are deprecated. `DefinitionChannelSchema` and `trimTrailing` are exported.
+- b38182e: The image transcoder refuses inputs that held a transcode slot for minutes: SVGs using filters, masks, markers, nested `<use>`, `stroke-dasharray`, embedded `data:` URLs or entity declarations, SVGs over 1 MB or 10,000 elements, and rasters wider or taller than 16,384 pixels. Content that starts like SVG is refused unparsed unless SVG was declared. The waiting queue is bounded (8 waiters, 20 s each) and answers 503 when full. Content types match case-insensitively.
+- b38182e: Store fixes across both providers:
+
+  - `markAccepted` refuses an expired invite.
+  - A share link stops counting solves once its definition is deleted. On Supabase this is a new migration: run `npx selva-supabase` and `supabase db push`.
+  - Supabase emits `definition.deleted` only when a row was deleted, and `listUsers` and the audit query clamp their limit (`limit: 0` returns one row; the audit default is now 50).
+  - Local's `revoke` of an unknown share link is a 404, and local storage refuses a bad path with `ProviderError` 400.
+  - Supabase has no platform-project grants, so provider setup now fails when `ENABLE_PLATFORM_PROJECTS` is on. `IPlatformProjectGrantStore` gains an optional `unsupported` marker.
+
+- b38182e: An input whose `source.kind` is `server` solves with its schema default, and a solve that posts a value for it is refused with 400. No binding resolver is wired, so before this such an input took whatever a caller posted. The client no longer sends a value for these inputs. New on `@selvajs/solve/server`: `postedServerSourcedIds`; `SolveInput` gains `serverSourced`.
+- Updated dependencies [b38182e]
+  - @selvajs/schemas@5.3.1-beta.0
+
 ## 1.0.0
 
 ### Major Changes
