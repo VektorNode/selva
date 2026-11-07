@@ -1,5 +1,23 @@
 # @selvajs/selva
 
+## 4.20.1-beta.3
+
+### Patch Changes
+
+- d424587: `/api/admin/compute` answers with the status its checks raise instead of a 500: 409 when a save would move a server to a new URL without its key re-entered, or would overwrite a key that can't be decrypted; 400 for an invalid server; 403 without `manage_compute`. `/api/admin/compute/actions` and `/api/admin/compute/status` answer 403 instead of 500 without `manage_compute` too. `@selvajs/server/compute` gains `mergeApiKeys`, the whole apiKey merge for one scope's write, which the admin route and `/api/v1/orgs/{orgId}/compute` now share.
+- d424587: Creating a user at `/admin/users` with platform permissions now stores them on the local and header-auth providers. The grant needed a data-layer row that only the user's first sign-in created, so it was silently dropped while the request still answered 201. If the permission store refuses the grant, the request now fails with 500 and says so; the user is still created and added to the org, so the permissions can be granted again from the user list.
+
+  `GET`, `PATCH` and `DELETE /api/admin/projects/{id}` answer 404 while `ENABLE_PLATFORM_PROJECTS` is off, like the other platform-project routes. Turning the flag off now hides these projects from instance admins too.
+
+- d424587: A definition cover the caller can't view answers 404, not 403, so the file route no longer confirms that another tenant's definition exists.
+
+  Header-auth: a sign-in now claims its allowlist row for its UPN (`claimedByUpn` in `header-allowlist.json`), and the email-header fallback admits only that UPN. Before, the fallback matched any row whose UPN was the forwarded address, so a proxy that didn't strip the email header let an unlisted user sign in as anyone, admins included. A UPN equal to the row's own `upn` always gets in and takes the claim over, so a UPN cleanup onto allowlisted addresses needs no edit. Rows from earlier versions are claimed on their next sign-in. If a user's UPN changes to anything else, set `upn` on their row to the new one. A duplicated email header is now ignored and logged, like a duplicated UPN. If the allowlist file is not writable, sign-in still works and a warning is logged; rows then stay unclaimed.
+
+- d424587: `GET /api/v1/orgs/{orgId}/invites` refuses an API key with 403, as creating and resending invites already did: the list holds invitee email addresses. Revoking an invite and changing org branding still work with a key, since neither grants access.
+- d424587: Share links work without an account. The app's session gate let no anonymous request reach the two routes that accept a share token, so a link opened by someone signed out went to the login page, and its solves were refused. The gate now lets a request carrying a share token through to those two routes, which accept or refuse the token themselves. The login redirect no longer copies a share token into `redirectTo`.
+
+  `createComputeFetchSolveFn` takes a `bearerToken` option, sent as `Authorization: Bearer …`. The library page passes its share token there, in a header rather than the URL, so it stays out of access logs.
+
 ## 4.20.1-beta.2
 
 ### Patch Changes

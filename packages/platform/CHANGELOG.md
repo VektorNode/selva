@@ -1,5 +1,19 @@
 # @selvajs/platform
 
+## 1.1.0-beta.2
+
+### Minor Changes
+
+- d424587: Deleting a user on Supabase removes the invites addressed to them, and redacts their address from `invite.created` audit payloads, whatever case the address arrives in. Before, an address whose case differed from the stored, lowercased one left those rows behind. The local provider already matched case-insensitively; it no longer emits an `org_member.removed` event for each org it erases the user from.
+
+  Conformance kit: `runUserErasureConformance` checks what `IDataProvider.onUserDeleted` removes (invites to and from the user, their API tokens, memberships and profile) and what it keeps (the orgs and projects they owned, under `ERASED_ACTOR_ID`). `runProjectStoreConformance` takes `orgScoping`, with `otherOrgId` from `createStore`, to check that slug lookups and listings stay inside the org asked for.
+
+### Patch Changes
+
+- d424587: The Supabase storage provider refuses a path with a `..` segment with a 400 on `get`, `put`, `delete` and `deletePrefix`, as the local provider does. Before, a read of such a path came back as not found. The storage conformance suite checks every method for this under `pathContainment`.
+- Updated dependencies [d424587]
+  - @selvajs/schemas@5.3.1-beta.1
+
 ## 1.1.0-beta.1
 
 ### Minor Changes

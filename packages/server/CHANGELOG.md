@@ -1,5 +1,26 @@
 # @selvajs/server
 
+## 3.0.0-beta.1
+
+### Major Changes
+
+- d424587: `@selvajs/server/compute` no longer exports `assertStoredKeysReadable`, `assertKeyNotRetargeted`, `resolveApiKey` or `storedKeysById`. A merge rebuilt from them could skip the retarget check and send a stored key to a new URL. Call `mergeApiKeys(incoming, scopedStored)` instead: it runs both checks and returns the key to store for each submitted id. A write that saves a scope's servers whole passes every server in the set, with `apiKey` omitted for the ones it doesn't change.
+
+### Minor Changes
+
+- d424587: `/api/admin/compute` answers with the status its checks raise instead of a 500: 409 when a save would move a server to a new URL without its key re-entered, or would overwrite a key that can't be decrypted; 400 for an invalid server; 403 without `manage_compute`. `/api/admin/compute/actions` and `/api/admin/compute/status` answer 403 instead of 500 without `manage_compute` too. `@selvajs/server/compute` gains `mergeApiKeys`, the whole apiKey merge for one scope's write, which the admin route and `/api/v1/orgs/{orgId}/compute` now share.
+
+### Patch Changes
+
+- d424587: The console logger used when `pino` isn't installed now redacts credential fields (`apiKey`, `authorization`, `password` and the rest of the list) the way the pino logger does. Both now redact every listed name one level deep, `api_key` and `cookie` included.
+- d424587: `GET /api/v1/orgs/{orgId}/invites` refuses an API key with 403, as creating and resending invites already did: the list holds invitee email addresses. Revoking an invite and changing org branding still work with a key, since neither grants access.
+- Updated dependencies [d424587]
+- Updated dependencies [d424587]
+- Updated dependencies [d424587]
+  - @selvajs/schemas@5.3.1-beta.1
+  - @selvajs/platform@1.1.0-beta.2
+  - @selvajs/notifications@0.3.1-beta.2
+
 ## 2.1.0-beta.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 5.3.1-beta.1
+
+### Patch Changes
+
+- d424587: The schema generators refuse a `schemaVersion` lower than the base ref's, and compare versions numerically, so `2.10.0` counts as a bump over `2.9.0`.
+
 ## 5.3.1-beta.0
 
 ### Patch Changes
