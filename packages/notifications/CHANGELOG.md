@@ -1,5 +1,13 @@
 # @selvajs/notifications
 
+## 0.3.1-beta.1
+
+### Patch Changes
+
+- Updated dependencies [02f41e4]
+- Updated dependencies [8602332]
+  - @selvajs/platform@1.1.0-beta.1
+
 ## 0.3.1-beta.0
 
 ### Patch Changes

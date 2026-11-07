@@ -1,5 +1,9 @@
 # @selvajs/cli
 
+## 4.20.1-beta.2
+
+No changes in this release.
+
 ## 4.20.1-beta.1
 
 ### Patch Changes

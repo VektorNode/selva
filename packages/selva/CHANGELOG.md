@@ -1,5 +1,12 @@
 # @selvajs/selva
 
+## 4.20.1-beta.2
+
+### Patch Changes
+
+- 02f41e4: An invite whose permissions or membership could not be applied after it was claimed is handed back, so the invitee can open the link again instead of needing a new invite. `IInviteStore` gains an optional `reopen`, implemented by the local and Supabase stores; the conformance suite tests it under the `reopen` option.
+- 8602332: A share-link solve refused for posting a value to a server-sourced input no longer counts against the link's solve cap.
+
 ## 4.20.1-beta.1
 
 ### Patch Changes
