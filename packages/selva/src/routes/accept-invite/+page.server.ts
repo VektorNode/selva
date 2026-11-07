@@ -49,6 +49,28 @@ function inviteDeps() {
 	};
 }
 
+// Every grant step is idempotent, so a claim handed back after a failed grant
+// can be redeemed again instead of leaving the invite spent.
+async function reopenInvite(
+	inviteId: string,
+	userId: string,
+	locals: App.Locals
+): Promise<boolean> {
+	const store = getInviteStore();
+	if (!store.reopen) return false;
+	try {
+		return await store.reopen(SYSTEM_CONTEXT, inviteId, userId);
+	} catch (err) {
+		locals.log.error('Could not reopen invite after a failed grant', {
+			component: 'accept-invite',
+			inviteId,
+			userId,
+			err: renderThrown(err)
+		});
+		return false;
+	}
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const token = url.searchParams.get('token')?.trim();
 	if (!token) {
@@ -149,10 +171,11 @@ export const actions = {
 			}
 		}
 
+		let claimed = false;
 		try {
 			// Claim before granting: an invite revoked while the account was being
 			// created fails the claim, and must land no permission or membership.
-			const claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
 			if (!claimed) {
 				locals.log.info('Invite was revoked or used before it could be claimed', {
 					component: 'accept-invite',
@@ -207,6 +230,14 @@ export const actions = {
 				component: 'accept-invite',
 				err: renderThrown(err)
 			});
+			if (claimed && (await reopenInvite(invite.id, user.id, locals))) {
+				return fail(500, {
+					error:
+						mode === 'join'
+							? 'We could not add you to the organization. Please try again.'
+							: `Your account was created, but we could not finish joining the organization. Sign in as ${invite.email}, then open this link again to join.`
+				});
+			}
 			// The account is intact either way; surface a softer failure rather
 			// than a blank 500. An admin can add the membership by hand.
 			return fail(500, {

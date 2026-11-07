@@ -40,7 +40,8 @@ if (!envCtx) {
 				});
 				return { adminId, adminSessionToken, orgId };
 			},
-			seedUser: (id) => seedUser(envCtx, id)
+			seedUser: (id) => seedUser(envCtx, id),
+			reopen: true
 		});
 	});
 }

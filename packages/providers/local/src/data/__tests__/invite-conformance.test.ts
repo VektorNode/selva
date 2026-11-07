@@ -22,6 +22,7 @@ describe('LocalInviteStore', () => {
 		createStore: () => new LocalInviteStore(tempDir),
 		nonAdminCtx: true,
 		revokeAccepted: true,
-		orgScoping: true
+		orgScoping: true,
+		reopen: true
 	});
 });

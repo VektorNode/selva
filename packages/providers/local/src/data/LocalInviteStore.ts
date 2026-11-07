@@ -106,6 +106,18 @@ export class LocalInviteStore implements IInviteStore {
 		return true;
 	}
 
+	async reopen(_ctx: RequestContext, id: string, userId: string): Promise<boolean> {
+		return this.locked(async () => {
+			const file = await this.load();
+			const target = file.invites.find((i) => i.id === id);
+			if (!target?.acceptedAt || target.acceptedByUserId !== userId) return false;
+			delete target.acceptedAt;
+			delete target.acceptedByUserId;
+			await this.save(file);
+			return true;
+		});
+	}
+
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
 		const target = await this.locked(async () => {
 			const file = await this.load();

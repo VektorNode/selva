@@ -162,8 +162,9 @@ describe('clearScene', () => {
 
 	it('clears meshes in linear time', () => {
 		// Regression: removeFromParent per child is indexOf + splice, O(n²). A ratio, not a
-		// wall-clock budget, which varies too much across CI runners: 4x the meshes costs ~4x
-		// when linear, ~16x when quadratic.
+		// wall-clock budget, which varies too much across CI runners: 16x the meshes costs ~16x
+		// when linear, over 200x when quadratic, so the bound sits between them with room for noise.
+		// Each size keeps its fastest run: a GC pause only ever adds time.
 		const geometry = new THREE.BufferGeometry();
 		const material = new THREE.MeshBasicMaterial();
 		const timeClear = (count: number) => {
@@ -176,13 +177,15 @@ describe('clearScene', () => {
 			expect(scene.children).toHaveLength(0);
 			return elapsed;
 		};
+		const fastestClear = (count: number, runs: number) =>
+			Math.min(...Array.from({ length: runs }, () => timeClear(count)));
 
 		// Building the meshes dominates on slow runners, so keep the counts modest and the timeout loose.
-		timeClear(5_000);
-		const small = Math.max(timeClear(20_000), 1);
-		const large = timeClear(80_000);
+		fastestClear(5_000, 3);
+		const small = Math.max(fastestClear(5_000, 5), 1);
+		const large = fastestClear(80_000, 3);
 
-		expect(large / small).toBeLessThan(8);
+		expect(large / small).toBeLessThan(64);
 	}, 60_000);
 });
 

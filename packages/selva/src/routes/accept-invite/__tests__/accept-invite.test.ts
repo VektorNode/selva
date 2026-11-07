@@ -202,6 +202,26 @@ describe('accept-invite submit', () => {
 		expect(res.error).toMatch(/missing invite token/i);
 	});
 
+	it('hands the invite back when joining the org fails, so the invitee can retry', async () => {
+		tp = await freshProviders();
+		const token = await mintFor(tp);
+		vi.spyOn(tp.config.data.orgs, 'addOrgMember').mockRejectedValueOnce(new Error('db blip'));
+
+		const first = await submit(token, { password: PASSWORD, confirm: PASSWORD });
+		expect(first.status).toBe(500);
+		expect(first.error).toMatch(/open this link again/i);
+		expect(
+			await tp.config.data.invites.getByTokenHash(SYSTEM_CONTEXT, hashToken(token))
+		).not.toBeNull();
+
+		// The account exists now, so the retry is a join, made signed in.
+		const created = await tp.authUsers.findByEmail(INVITEE);
+		const retry = await submit(token, {}, { user: (await actAs(tp, created!.id)).user });
+		expect(retry.redirected).toBe('/library');
+		const membership = await tp.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, created!.id);
+		expect(membership?.member.role).toBe('member');
+	});
+
 	it('rejects an already-consumed invite with 410', async () => {
 		tp = await freshProviders();
 		const token = await mintFor(tp);

@@ -24,6 +24,13 @@ export interface IInviteStore {
 	/** True if this call accepted the invite; false if it was already accepted, has expired or is gone. */
 	markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean>;
 
+	/**
+	 * Undo `userId`'s `markAccepted`, so an invite whose grant failed can be redeemed again.
+	 * False if `userId` did not accept it. Emits nothing: the `invite.accepted` it undoes
+	 * stays in the audit log. A store without it leaves such an invite consumed.
+	 */
+	reopen?(ctx: RequestContext, id: string, userId: string): Promise<boolean>;
+
 	/** No-op if already consumed or missing. */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 

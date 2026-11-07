@@ -10,6 +10,7 @@
  *   tokens before lookup.
  * - `markAccepted` succeeds once; a repeat returns false and changes nothing.
  * - `revoke` removes pending invites but must not un-consume accepted ones.
+ * - `reopen`, where implemented, un-consumes only the acceptor's own claim.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -46,6 +47,8 @@ export interface InviteStoreConformanceOptions {
 	 * that org's. Needs `scope.otherOrgId` when `createScope` is supplied.
 	 */
 	orgScoping?: boolean;
+	/** The store implements `reopen`. */
+	reopen?: boolean;
 }
 
 function invite(scope: InviteTestScope, overrides: Partial<Invite> = {}): Invite {
@@ -80,7 +83,8 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 		seedUser = noopSeedUser,
 		nonAdminCtx = false,
 		revokeAccepted = false,
-		orgScoping = false
+		orgScoping = false,
+		reopen = false
 	} = opts;
 	const { ctx, scopeFrom } = makeSeedHelpers(seedUser, { nonAdminCtx });
 	const scopeFor = scopeFrom(createScope, DEFAULT_SCOPE, (s) => [
@@ -203,6 +207,38 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			);
 			expect(revoked).toEqual([inv.id]);
 		});
+
+		if (reopen) {
+			it('reopen by the acceptor makes the invite redeemable again', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const { userId: acceptor } = await seedUser(makeUuid());
+				const inv = invite(scope);
+				await store.create(ctx(scope.adminId), inv);
+				await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
+
+				expect(await store.reopen!(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
+
+				const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
+				expect(got?.acceptedAt).toBeUndefined();
+				expect(got?.acceptedByUserId).toBeUndefined();
+				expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
+			});
+
+			it('reopen refuses a pending invite, or one another user accepted', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const { userId: acceptor } = await seedUser(makeUuid());
+				const { userId: other } = await seedUser(makeUuid());
+				const inv = invite(scope);
+				await store.create(ctx(scope.adminId), inv);
+
+				expect(await store.reopen!(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(false);
+				await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
+				expect(await store.reopen!(SYSTEM_CONTEXT, inv.id, other)).toBe(false);
+				expect(await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash)).toBeNull();
+			});
+		}
 
 		if (revokeAccepted) {
 			it('revoke of an accepted invite leaves it on record as accepted', async () => {

@@ -95,6 +95,18 @@ export class SupabaseInviteStore implements IInviteStore {
 		return true;
 	}
 
+	async reopen(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('invites')
+			.update({ accepted_at: null, accepted_by_user_id: null })
+			.eq('id', id)
+			.eq('accepted_by_user_id', userId)
+			.select('id');
+		if (error) throw mapPostgrestError(error);
+		return (data?.length ?? 0) > 0;
+	}
+
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
 		const { data, error } = await this.clients
 			.forRequest(ctx)
