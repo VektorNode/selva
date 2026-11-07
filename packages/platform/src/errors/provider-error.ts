@@ -1,9 +1,9 @@
+const BRAND = Symbol.for('@selvajs/platform/ProviderError');
+
 /**
  * Thrown by providers to signal an expected failure the API layer forwards with
  * a specific status. Unknown errors should propagate as plain `Error` and become 500s.
  */
-const BRAND = Symbol.for('@selvajs/platform/ProviderError');
-
 export class ProviderError extends Error {
 	readonly statusCode: number;
 	readonly [BRAND] = true;

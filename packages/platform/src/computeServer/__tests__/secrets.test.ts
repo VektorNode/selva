@@ -1,9 +1,68 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { decryptSecret, encryptSecret, isEncryptedSecret } from '../secrets.js';
-import { decryptWithKeys } from '../secrets.js';
+import {
+	decryptSecret,
+	decryptWithKeys,
+	encryptSecret,
+	isEncryptedSecret,
+	isLegacyEnvelope
+} from '../secrets.js';
 
 const KEY = randomBytes(32);
+
+describe('secrets bound to a server id and URL', () => {
+	const server = { id: 'server-a', url: 'https://compute.internal' };
+
+	it('round-trips under the same binding', () => {
+		const envelope = encryptSecret('rhino-key', KEY, server);
+		expect(envelope.startsWith('enc:v3:')).toBe(true);
+		expect(isLegacyEnvelope(envelope)).toBe(false);
+		expect(decryptSecret(envelope, KEY, server)).toBe('rhino-key');
+	});
+
+	it('refuses once the server points at another URL', () => {
+		const envelope = encryptSecret('rhino-key', KEY, server);
+		expect(() =>
+			decryptSecret(envelope, KEY, { ...server, url: 'https://attacker.example' })
+		).toThrow();
+	});
+
+	it('refuses ciphertext copied onto another server with the same URL', () => {
+		const envelope = encryptSecret('rhino-key', KEY, server);
+		expect(() => decryptSecret(envelope, KEY, { ...server, id: 'server-b' })).toThrow();
+	});
+
+	it('refuses an id that only matches once the URL is folded into it', () => {
+		const envelope = encryptSecret('rhino-key', KEY, { id: 'a:b', url: 'c' });
+		expect(() => decryptSecret(envelope, KEY, { id: 'a', url: 'b:c' })).toThrow();
+	});
+
+	it('refuses a bound envelope read with the id alone', () => {
+		const envelope = encryptSecret('rhino-key', KEY, server);
+		expect(() => decryptSecret(envelope, KEY, server.id)).toThrow(/URL/);
+	});
+
+	it('opens a v2 envelope with the binding of the server it was sealed for', () => {
+		const v2 = encryptSecret('rhino-key', KEY, server.id);
+		expect(isLegacyEnvelope(v2)).toBe(true);
+		expect(decryptSecret(v2, KEY, server)).toBe('rhino-key');
+		expect(() => decryptSecret(v2, KEY, { ...server, id: 'server-b' })).toThrow();
+	});
+
+	it('opens a v1 envelope under any binding', () => {
+		const v1 = encryptSecret('rhino-key', KEY);
+		expect(isLegacyEnvelope(v1)).toBe(true);
+		expect(decryptSecret(v1, KEY, server)).toBe('rhino-key');
+	});
+});
+
+describe('truncated envelopes', () => {
+	it('refuses an envelope cut short of a full GCM tag', () => {
+		const full = Buffer.from(encryptSecret('', KEY, 'server-a').slice('enc:v2:'.length), 'base64');
+		const fourByteTag = 'enc:v2:' + full.subarray(0, 16).toString('base64');
+		expect(() => decryptSecret(fourByteTag, KEY, 'server-a')).toThrow(/IV and tag/);
+	});
+});
 
 describe('secrets bound to a server id', () => {
 	it('round-trips under the same id', () => {

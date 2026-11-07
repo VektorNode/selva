@@ -1,17 +1,14 @@
 /**
- * Adapter conformance suite for IUserProfileStore.
- *
- * Tests the user-profile mutations (display name, starred definitions,
- * recent runs). Adapters must seed
- * a real user before each test since profile mutations target a userId.
+ * Adapter conformance suite for IUserProfileStore: display name, starred
+ * definitions and recent runs, scoped to the user themselves.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IUserProfileStore } from '../../userProfile/interface.js';
 import type { AuthUser } from '../../auth/index.js';
-import type { RecentRun } from '../../userProfile/index.js';
+import { MAX_RECENT_RUNS, type RecentRun } from '../../userProfile/index.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeCtx, makeUuid } from './helpers.js';
+import { makeCtx, makeExpectDenied, makeUuid } from './helpers.js';
 
 // SYSTEM_CONTEXT, so most cases don't need a ctx minted per user. The scoping case
 // below builds its own.
@@ -29,36 +26,58 @@ export interface UserProfileStoreConformanceOptions {
 		store: IUserProfileStore;
 		seedUser: (email: string) => Promise<AuthUser>;
 	}>;
+	/** Denials assert `ProviderError(403)`, not just a rejection. */
+	strictDenials?: boolean;
+	/** A user reads and changes their own profile through a ctx with no permissions. */
+	selfAccess?: boolean;
+	/** `recordRun` keeps exactly `MAX_RECENT_RUNS` entries, not just fewer than it was given. */
+	recentRunsCap?: boolean;
+}
+
+function run(definitionId: string, timestamp = new Date().toISOString()): RecentRun {
+	return { definitionId, runId: makeUuid(), definitionName: 'D', timestamp };
 }
 
 export function runUserProfileStoreConformance(opts: UserProfileStoreConformanceOptions): void {
-	const { name, createStore } = opts;
+	const {
+		name,
+		createStore,
+		strictDenials = false,
+		selfAccess = false,
+		recentRunsCap = false
+	} = opts;
+	const expectDenied = makeExpectDenied(strictDenials);
+	const plainCtx = (userId: string) =>
+		makeCtx(userId, { platformPermissions: [], orgPermissions: [] });
 
 	describe(`IUserProfileStore conformance: ${name}`, () => {
 		it('a user cannot read or change someone else through a plain ctx', async () => {
 			const { store, seedUser } = await createStore();
 			const victim = await seedUser('victim@example.com');
-			const other = makeCtx(makeUuid(), { platformPermissions: [] });
+			const other = plainCtx(makeUuid());
 
-			await expect(store.getProfile(other, victim.id)).rejects.toThrow();
-			await expect(
-				store.updateProfile(other, victim.id, { displayName: 'Hacked' })
-			).rejects.toThrow();
+			await expectDenied(store.getProfile(other, victim.id), 403);
+			await expectDenied(store.updateProfile(other, victim.id, { displayName: 'Hacked' }), 403);
 		});
+
+		if (selfAccess) {
+			it('a user reads and changes their own profile through a plain ctx', async () => {
+				const { store, seedUser } = await createStore();
+				const user = await seedUser('self@example.com');
+				const own = plainCtx(user.id);
+
+				expect(await store.updateProfile(own, user.id, { displayName: 'Me' })).toBe('ok');
+				expect((await store.getProfile(own, user.id))?.displayName).toBe('Me');
+			});
+		}
 
 		it('recordRun keeps one entry per definition, newest first', async () => {
 			const { store, seedUser } = await createStore();
 			const user = await seedUser('dedupe@example.com');
-			const run = (definitionId: string, timestamp: string): RecentRun => ({
-				definitionId,
-				runId: makeUuid(),
-				definitionName: 'D',
-				timestamp
-			});
 			const a = makeUuid();
 			const b = makeUuid();
 
-			await store.recordRun(ctx, user.id, run(a, '2026-01-01T00:00:00.000Z'));
+			expect(await store.recordRun(ctx, user.id, run(a, '2026-01-01T00:00:00.000Z'))).toBe('ok');
 			await store.recordRun(ctx, user.id, run(b, '2026-01-02T00:00:00.000Z'));
 			await store.recordRun(ctx, user.id, run(a, '2026-01-03T00:00:00.000Z'));
 
@@ -69,18 +88,15 @@ export function runUserProfileStoreConformance(opts: UserProfileStoreConformance
 		it('recordRun caps the list', async () => {
 			const { store, seedUser } = await createStore();
 			const user = await seedUser('cap@example.com');
+			const given = MAX_RECENT_RUNS + 10;
 
-			for (let i = 0; i < 30; i++) {
-				await store.recordRun(ctx, user.id, {
-					definitionId: makeUuid(),
-					runId: makeUuid(),
-					definitionName: 'D',
-					timestamp: new Date(i).toISOString()
-				});
+			for (let i = 0; i < given; i++) {
+				await store.recordRun(ctx, user.id, run(makeUuid(), new Date(i).toISOString()));
 			}
 
 			const profile = await store.getProfile(ctx, user.id);
-			expect(profile?.recentRuns.length).toBeLessThan(30);
+			if (recentRunsCap) expect(profile?.recentRuns).toHaveLength(MAX_RECENT_RUNS);
+			else expect(profile?.recentRuns.length).toBeLessThan(given);
 		});
 
 		it('getProfile returns null for unknown user', async () => {
@@ -147,29 +163,9 @@ export function runUserProfileStoreConformance(opts: UserProfileStoreConformance
 			expect(occurrences).toBe(1);
 		});
 
-		it('recordRun returns ok and profile surfaces the entry', async () => {
-			const { store, seedUser } = await createStore();
-			const user = await seedUser('runs@example.com');
-			const run: RecentRun = {
-				definitionId: makeUuid(),
-				runId: makeUuid(),
-				definitionName: 'D',
-				timestamp: new Date().toISOString()
-			};
-			expect(await store.recordRun(ctx, user.id, run)).toBe('ok');
-			const profile = await store.getProfile(ctx, user.id);
-			expect(profile?.recentRuns.some((r) => r.runId === run.runId)).toBe(true);
-		});
-
 		it('recordRun returns not_found for unknown user', async () => {
 			const { store } = await createStore();
-			const run: RecentRun = {
-				definitionId: makeUuid(),
-				runId: makeUuid(),
-				definitionName: 'D',
-				timestamp: new Date().toISOString()
-			};
-			expect(await store.recordRun(ctx, makeUuid(), run)).toBe('not_found');
+			expect(await store.recordRun(ctx, makeUuid(), run(makeUuid()))).toBe('not_found');
 		});
 
 		it('starDefinition returns not_found for unknown user', async () => {

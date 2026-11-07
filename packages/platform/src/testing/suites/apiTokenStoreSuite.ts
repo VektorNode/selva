@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import type { IApiTokenStore } from '../../apiTokens/interface.js';
 import type { ApiToken } from '../../apiTokens/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, nextTick, noopSeedUser, type SeedUserFn } from './helpers.js';
 
 export interface ApiTokenTestScope {
 	/** Token owner. Must be seeded and a member of `orgId`. */
@@ -30,6 +30,13 @@ export interface ApiTokenStoreConformanceOptions {
 	createStore: () => Promise<IApiTokenStore> | IApiTokenStore;
 	createScope?: () => Promise<ApiTokenTestScope> | ApiTokenTestScope;
 	seedUser?: SeedUserFn;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/**
+	 * The second revoke in the idempotency case lands in a later millisecond, so a
+	 * store that re-stamps `revokedAt` fails instead of passing on a tie.
+	 */
+	auditStamps?: boolean;
 }
 
 const DEFAULT_SCOPE: ApiTokenTestScope = {
@@ -59,13 +66,18 @@ function token(scope: ApiTokenTestScope, overrides: Partial<ApiToken> = {}): Api
 }
 
 export function runApiTokenStoreConformance(opts: ApiTokenStoreConformanceOptions): void {
-	const { name, createStore, createScope, seedUser = noopSeedUser } = opts;
-	const { ctx, registerToken } = makeSeedHelpers(seedUser);
-	const scopeFor = async (): Promise<ApiTokenTestScope> => {
-		const s = createScope ? await createScope() : DEFAULT_SCOPE;
-		if (s.ownerSessionToken) registerToken(s.ownerId, s.ownerSessionToken);
-		return s;
-	};
+	const {
+		name,
+		createStore,
+		createScope,
+		seedUser = noopSeedUser,
+		nonAdminCtx = false,
+		auditStamps = false
+	} = opts;
+	const { ctx, scopeFrom } = makeSeedHelpers(seedUser, { nonAdminCtx });
+	const scopeFor = scopeFrom(createScope, DEFAULT_SCOPE, (s) => [
+		{ userId: s.ownerId, sessionToken: s.ownerSessionToken }
+	]);
 
 	describe(`IApiTokenStore conformance: ${name}`, () => {
 		it('create + getByTokenHash round-trips', async () => {
@@ -110,6 +122,7 @@ export function runApiTokenStoreConformance(opts: ApiTokenStoreConformanceOption
 			await store.create(ctx(scope.ownerId), t);
 			await store.revoke(ctx(scope.ownerId), t.id, 'owner');
 			const first = (await store.get(ctx(scope.ownerId), t.id))?.revokedAt;
+			if (auditStamps) await nextTick();
 			await store.revoke(ctx(scope.ownerId), t.id, 'admin');
 			expect((await store.get(ctx(scope.ownerId), t.id))?.revokedAt).toBe(first);
 		});

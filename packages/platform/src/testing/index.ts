@@ -1,3 +1,5 @@
+export type { SeedUserFn, SeedUserResult } from './suites/helpers.js';
+
 export {
 	runAuthCoreConformance,
 	runAuthProviderConformance,
@@ -15,7 +17,10 @@ export { runEmailLinkAuthConformance } from './suites/emailLinkAuthSuite.js';
 export type { EmailLinkAuthConformanceOptions } from './suites/emailLinkAuthSuite.js';
 
 export { runDefinitionStoreConformance } from './suites/definitionStoreSuite.js';
-export type { DefinitionStoreConformanceOptions } from './suites/definitionStoreSuite.js';
+export type {
+	DefinitionStoreConformanceOptions,
+	DefinitionTestScope
+} from './suites/definitionStoreSuite.js';
 
 export { runOrgStoreConformance } from './suites/orgStoreSuite.js';
 export type { OrgStoreConformanceOptions } from './suites/orgStoreSuite.js';

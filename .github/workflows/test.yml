@@ -107,9 +107,9 @@ jobs:
             exit 1
           fi
 
-      # lint, check, type-check and test all run through turbo, which keys each
-      # task on its own inputs, and all four depend on `^build` — so a restored
-      # cache skips the ~75s build they would otherwise each trigger.
+      # lint, lint:types, check, type-check and test all run through turbo, which
+      # keys each task on its own inputs, and all but lint depend on `^build` — so
+      # a restored cache skips the ~75s build they would otherwise each trigger.
       #
       # Cache only .turbo/cache (the task outputs). The rest of .turbo is daemon
       # state and logs, which must not travel between runners.
@@ -139,6 +139,7 @@ jobs:
 
       - run: pnpm format:check
       - run: pnpm lint
+      - run: pnpm lint:types
       - run: pnpm type-check
       - run: pnpm check
 

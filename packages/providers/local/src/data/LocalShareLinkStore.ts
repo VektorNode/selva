@@ -37,9 +37,9 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	private readonly events: IEventSink;
 	private readonly configFilePath: string;
 
-	// Callers must still call `setDefinitionProvider` before token resolution,
-	// or the soft-delete cascade check silently no-ops. LocalDataProvider wires
-	// this when it builds the store.
+	// Callers must still call `setDefinitionProvider` before token resolution or
+	// solve counting, or the soft-delete cascade check silently no-ops.
+	// LocalDataProvider wires this when it builds the store.
 	static fromEnv(env: Record<string, string | undefined>): LocalShareLinkStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
 		return new LocalShareLinkStore({
@@ -53,8 +53,8 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	}
 
 	/**
-	 * Wires the definition store so token resolution can check the parent
-	 * definition's `deletedAt`, mirroring the JOIN Supabase does. Optional: if
+	 * Wires the definition store so token resolution and solve counting can check
+	 * the parent definition's `deletedAt`, as Supabase does in SQL. Optional: if
 	 * unset, this falls back to the local-only revoke check, and the selva
 	 * app's route layer does the parent lookup as a safety net either way.
 	 */
@@ -176,20 +176,22 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		const all = await this.readAll();
 		const found = Object.values(all.links).find((l) => l.tokenHash === tokenHash);
 		if (!this.isLive(found)) return null;
-		// Token resolution must not see links whose parent definition is
-		// soft-deleted — Supabase enforces this via JOIN, here via lookup.
-		if (this.definitionProvider) {
-			const parent = await this.definitionProvider.get(SYSTEM_CONTEXT, found.definitionId);
-			if (!parent) return null;
-		}
-		return found;
+		return (await this.parentIsLive(found)) ? found : null;
+	}
+
+	// Token resolution and solve counting must not see links whose parent
+	// definition is soft-deleted — Supabase enforces this in SQL, here via lookup.
+	private async parentIsLive(link: ShareLink): Promise<boolean> {
+		if (!this.definitionProvider) return true;
+		return (await this.definitionProvider.get(SYSTEM_CONTEXT, link.definitionId)) !== null;
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
 		const revoked = await this.locked(async () => {
 			const all = await this.readAll();
 			const l = all.links[id];
-			if (!l || !this.isLive(l)) return false; // idempotent
+			if (!l) throw new ProviderError(`Share link '${id}' not found`, 404);
+			if (!this.isLive(l)) return false; // idempotent
 			l.revokedAt = new Date().toISOString();
 			await this.writeAll(all);
 			return true;
@@ -204,6 +206,7 @@ export class LocalShareLinkStore implements IShareLinkStore {
 			const l = all.links[id];
 			if (!l || !this.isLive(l)) return null;
 			if (l.maxSolves != null && l.solveCount >= l.maxSolves) return null;
+			if (!(await this.parentIsLive(l))) return null;
 			l.solveCount += 1;
 			await this.writeAll(all);
 			return l.solveCount;

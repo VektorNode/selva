@@ -30,7 +30,8 @@
 				"kit.config.ts",
 				"vite.config.ts",
 				"vite.config.js",
-				"tsdown.config.ts"
+				"tsdown.config.ts",
+				"$TURBO_ROOT$/packages/config/vite.config.js"
 			],
 			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
 		},
@@ -57,7 +58,14 @@
 		"@selvajs/solve#test": {
 			"dependsOn": ["build"],
 			"outputs": [],
-			"inputs": ["src/**", "tests/**", "scripts/**", "vitest.config.ts", ".env.test"]
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"scripts/**",
+				"vitest.config.ts",
+				".env.test",
+				"$TURBO_ROOT$/packages/config/vitest.config.js"
+			]
 		},
 		"check": {
 			"dependsOn": ["^build"],
@@ -79,13 +87,22 @@
 				"examples/**",
 				"eslint.config.js",
 				"eslint.config.mjs",
-				"package.json"
+				"package.json",
+				"$TURBO_ROOT$/packages/config/eslint.config.js",
+				"$TURBO_ROOT$/packages/config/eslint-rules/**"
 			]
 		},
 		"lint:types": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tsconfig.json", "eslint.typed.config.js", "package.json"]
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"eslint.typed.config.js",
+				"package.json",
+				"$TURBO_ROOT$/packages/config/eslint.config.js",
+				"$TURBO_ROOT$/packages/config/eslint-rules/**"
+			]
 		},
 		"test": {
 			"dependsOn": ["^build"],
@@ -96,7 +113,8 @@
 				"scripts/**",
 				"vitest.config.ts",
 				"kit.config.ts",
-				".env.test"
+				".env.test",
+				"$TURBO_ROOT$/packages/config/vitest.config.js"
 			]
 		},
 		"test:e2e": {

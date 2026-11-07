@@ -9,4 +9,4 @@ export {
 	assertCanManagePermissions,
 	assertCanReadPermissions,
 	assertCanReadPermissionsBatch
-} from '../context.js';
+} from './guards.js';

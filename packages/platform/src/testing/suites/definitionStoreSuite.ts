@@ -1,15 +1,19 @@
 /**
- * Adapter conformance suite for IDefinitionStore.
- *
- * The goal is to prove every adapter behaves identically from the consuming
- * app's perspective — `ctx` scoping, `pending` filtering, version CRUD +
- * reference protection (Permissions spec §6), and error shapes.
+ * Adapter conformance suite for IDefinitionStore: `pending` filtering, version
+ * CRUD and reference protection, error shapes, and (opt-in) `ctx` scoping.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../definitions/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
-import { makeSeedHelpers, makeUuid } from './helpers.js';
+import {
+	expectStatus,
+	makeExpectDenied,
+	makeSeedHelpers,
+	makeUuid,
+	nextTick,
+	noopSeedUser
+} from './helpers.js';
 
 /**
  * Scope the suite needs to reference from each test. Adapters that enforce
@@ -24,14 +28,17 @@ export interface DefinitionTestScope {
 	 * auth at the DB layer (Supabase RLS); ignored by local providers.
 	 */
 	ownerSessionToken?: string;
-	/** Default project id. Returned by `primaryProjectId()` in the suite. */
+	/** Default project id. Must be public when `publicListing` is set. */
 	projectId: string;
 	/**
 	 * Second project id used by `listByProject` tests to prove filtering.
 	 * Must reference a real row for FK-enforcing adapters.
 	 */
 	secondaryProjectId: string;
-	/** Used by the ctx-isolation cases when `projectId` is one anyone can see. */
+	/**
+	 * A project that isn't public. The ctx-isolation cases use it when `projectId` is
+	 * one anyone can see; `publicListing` requires it.
+	 */
 	privateProjectId?: string;
 	/** Optional third user id for ctx-isolation tests. Required when ctxIsolation is set. */
 	secondaryUserId?: string;
@@ -51,10 +58,22 @@ export interface DefinitionStoreConformanceOptions {
 	 */
 	createScope?: () => Promise<DefinitionTestScope> | DefinitionTestScope;
 	/**
-	 * Set to true for adapters that enforce per-user ctx scoping (e.g. Supabase RLS).
-	 * When false, ctx-isolation tests are skipped (local JSON adapter shares all records).
+	 * The adapter scopes reads by `ctx` in the store (Supabase RLS), so a user with no
+	 * stake in the project sees nothing. An adapter that leaves scoping to the server
+	 * guards (local) skips these cases.
 	 */
 	ctxIsolation?: boolean;
+	/** Denials assert the `ProviderError` status, not just a rejection. */
+	strictDenials?: boolean;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/**
+	 * Audit fields are checked against values the test didn't write: a creator who
+	 * isn't the owner keeps `createdBy`, and `update` moves `updatedAt` strictly later.
+	 */
+	auditStamps?: boolean;
+	/** `listPublic` leaves out definitions in a non-public project and keeps drafts. */
+	publicListing?: boolean;
 }
 
 const DEFAULT_SCOPE: DefinitionTestScope = {
@@ -63,17 +82,6 @@ const DEFAULT_SCOPE: DefinitionTestScope = {
 	secondaryProjectId: 'project-2',
 	secondaryUserId: 'user-b'
 };
-
-// `scopeFor` registers the scope's tokens, so `ctx` runs as the right user on an
-// adapter with DB-side auth (Supabase RLS). This suite seeds nobody itself.
-const { ctx, registerToken } = makeSeedHelpers(async (userId) => ({ userId }));
-
-function recordTokensFromScope(scope: DefinitionTestScope): void {
-	if (scope.ownerSessionToken) registerToken(scope.ownerId, scope.ownerSessionToken);
-	if (scope.secondaryUserId && scope.secondaryUserSessionToken) {
-		registerToken(scope.secondaryUserId, scope.secondaryUserSessionToken);
-	}
-}
 
 function record(
 	scope: DefinitionTestScope,
@@ -119,24 +127,24 @@ function version(
 }
 
 export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOptions): void {
-	const { name, createStore, createScope, ctxIsolation = false } = opts;
-	const scopeFor = async (): Promise<DefinitionTestScope> => {
-		const s = createScope ? await createScope() : DEFAULT_SCOPE;
-		recordTokensFromScope(s);
-		return s;
-	};
+	const {
+		name,
+		createStore,
+		createScope,
+		ctxIsolation = false,
+		strictDenials = false,
+		nonAdminCtx = false,
+		auditStamps = false,
+		publicListing = false
+	} = opts;
+	const { ctx, scopeFrom } = makeSeedHelpers(noopSeedUser, { nonAdminCtx });
+	const expectDenied = makeExpectDenied(strictDenials);
+	const scopeFor = scopeFrom(createScope, DEFAULT_SCOPE, (s) => [
+		{ userId: s.ownerId, sessionToken: s.ownerSessionToken },
+		{ userId: s.secondaryUserId, sessionToken: s.secondaryUserSessionToken }
+	]);
 
 	describe(`IDefinitionStore conformance: ${name}`, () => {
-		it('create + get returns the record', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const guid = makeUuid();
-			const rec = record(scope, { guid });
-			await store.create(ctx(scope.ownerId), rec);
-			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got?.guid).toBe(guid);
-		});
-
 		it('get returns null for missing guid', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
@@ -158,7 +166,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect((await store.getDefinitionsFor(ctx(scope.ownerId), [])).size).toBe(0);
 		});
 
-		it('list filters pending by default', async () => {
+		it('list filters pending by default and returns it with includePending', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const pub = makeUuid();
@@ -166,24 +174,12 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			await store.create(ctx(scope.ownerId), record(scope, { guid: pub, status: 'published' }));
 			await store.create(ctx(scope.ownerId), record(scope, { guid: pend, status: 'pending' }));
 
-			const page = await store.list(ctx(scope.ownerId));
-			const guids = page.items.map((r) => r.guid);
-			expect(guids).toContain(pub);
-			expect(guids).not.toContain(pend);
-		});
+			const byDefault = (await store.list(ctx(scope.ownerId))).items.map((r) => r.guid);
+			expect(byDefault).toContain(pub);
+			expect(byDefault).not.toContain(pend);
 
-		it('list with includePending returns pending too', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const pub = makeUuid();
-			const pend = makeUuid();
-			await store.create(ctx(scope.ownerId), record(scope, { guid: pub, status: 'published' }));
-			await store.create(ctx(scope.ownerId), record(scope, { guid: pend, status: 'pending' }));
-
-			const page = await store.list(ctx(scope.ownerId), { includePending: true });
-			const guids = page.items.map((r) => r.guid);
-			expect(guids).toContain(pub);
-			expect(guids).toContain(pend);
+			const withPending = (await store.list(ctx(scope.ownerId), { includePending: true })).items;
+			expect(withPending.map((r) => r.guid)).toEqual(expect.arrayContaining([pub, pend]));
 		});
 
 		it('list with statuses filter returns only matching statuses', async () => {
@@ -260,11 +256,16 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const guid = makeUuid();
 			const created = record(scope, { guid, displayName: 'Old' });
 			await store.create(ctx(scope.ownerId), created);
+			await nextTick();
 
 			await store.update(ctx(scope.ownerId), guid, { displayName: 'New' });
 			const got = await store.get(ctx(scope.ownerId), guid);
 			expect(got?.displayName).toBe('New');
-			expect(got!.updatedAt >= created.updatedAt).toBe(true);
+			if (auditStamps) {
+				expect(Date.parse(got!.updatedAt)).toBeGreaterThan(Date.parse(created.updatedAt));
+			} else {
+				expect(got!.updatedAt >= created.updatedAt).toBe(true);
+			}
 		});
 
 		it('update with null tags clears them', async () => {
@@ -340,15 +341,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		it('update on missing guid throws ProviderError with status 404', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			let thrown: unknown;
-			try {
-				await store.update(ctx(scope.ownerId), makeUuid(), { displayName: 'X' });
-			} catch (err) {
-				thrown = err;
-			}
-			expect(thrown).toBeTruthy();
-			const e = thrown as { statusCode?: number };
-			expect(e.statusCode).toBe(404);
+			await expectStatus(store.update(ctx(scope.ownerId), makeUuid(), { displayName: 'X' }), 404);
 		});
 
 		it('status flip pending → published via update', async () => {
@@ -378,13 +371,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		it('incrementSolveCount is a no-op for missing guid', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			let threw = false;
-			try {
-				await store.incrementSolveCount(ctx(scope.ownerId), makeUuid());
-			} catch {
-				threw = true;
-			}
-			expect(threw).toBe(false);
+			await store.incrementSolveCount(ctx(scope.ownerId), makeUuid());
 		});
 
 		it('reserveNextVersionNumber returns the record counter then advances it', async () => {
@@ -428,9 +415,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		it('reserveNextVersionNumber throws for a missing definition', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			await expect(
-				store.reserveNextVersionNumber(ctx(scope.ownerId), makeUuid())
-			).rejects.toThrow();
+			await expectDenied(store.reserveNextVersionNumber(ctx(scope.ownerId), makeUuid()), 404);
 		});
 
 		it('update advances updatedBy to the caller', async () => {
@@ -447,7 +432,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		// ============================================================================
-		// Versions (Permissions spec §6)
+		// Versions
 		// ============================================================================
 
 		it('createVersion + listVersions: rows return newest-first by versionNumber', async () => {
@@ -555,7 +540,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.draftVersionId).toBe(v2.id);
 		});
 
-		it('attachInitialVersion: bootstraps both pointers + status atomically', async () => {
+		it('attachInitialVersion sets both pointers and flips status to draft', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
@@ -583,13 +568,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const vForB = version(guidB, 1, scope.ownerId);
 			await store.createVersion(ctx(scope.ownerId), vForB);
 
-			let thrown: unknown;
-			try {
-				await store.attachInitialVersion(ctx(scope.ownerId), guidA, vForB.id);
-			} catch (err) {
-				thrown = err;
-			}
-			expect((thrown as { statusCode?: number })?.statusCode).toBe(404);
+			await expectStatus(store.attachInitialVersion(ctx(scope.ownerId), guidA, vForB.id), 404);
 
 			// And A's state must still be the bootstrap-pending shape.
 			const got = await store.get(ctx(scope.ownerId), guidA);
@@ -608,13 +587,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const vForB = version(guidB, 1, scope.ownerId);
 			await store.createVersion(ctx(scope.ownerId), vForB);
 
-			let thrown: unknown;
-			try {
-				await store.setLiveVersion(ctx(scope.ownerId), guidA, vForB.id);
-			} catch (err) {
-				thrown = err;
-			}
-			expect((thrown as { statusCode?: number })?.statusCode).toBe(404);
+			await expectStatus(store.setLiveVersion(ctx(scope.ownerId), guidA, vForB.id), 404);
 		});
 
 		it('deleteVersion: succeeds when not referenced by live or draft', async () => {
@@ -643,13 +616,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			await store.createVersion(ctx(scope.ownerId), v1);
 			await store.setLiveVersion(ctx(scope.ownerId), guid, v1.id);
 
-			let thrown: unknown;
-			try {
-				await store.deleteVersion(ctx(scope.ownerId), v1.id);
-			} catch (err) {
-				thrown = err;
-			}
-			expect((thrown as { statusCode?: number })?.statusCode).toBe(409);
+			await expectStatus(store.deleteVersion(ctx(scope.ownerId), v1.id), 409);
 		});
 
 		it('delete removes the record', async () => {
@@ -666,25 +633,21 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		// Audit fields + soft delete
 		// ============================================================================
 
-		it('create populates createdBy/updatedBy and deletedAt=null', async () => {
+		it('create stores createdBy and updatedBy, and no deletedAt', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
-			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			// Under auditStamps someone other than the owner creates it, so a store that
+			// copies ownerId into createdBy fails.
+			const creator = auditStamps ? (scope.secondaryUserId ?? makeUuid()) : scope.ownerId;
+			await store.create(
+				ctx(creator),
+				record(scope, { guid, createdBy: creator, updatedBy: creator })
+			);
 			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got?.createdBy).toBe(scope.ownerId);
-			expect(got?.updatedBy).toBe(scope.ownerId);
+			expect(got?.createdBy).toBe(creator);
+			expect(got?.updatedBy).toBe(creator);
 			expect(got?.deletedAt ?? null).toBeNull();
-		});
-
-		it('versioning scaffold: liveVersionId/draftVersionId default to null on create', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const guid = makeUuid();
-			await store.create(ctx(scope.ownerId), record(scope, { guid }));
-			const got = await store.get(ctx(scope.ownerId), guid);
-			expect(got?.liveVersionId ?? null).toBeNull();
-			expect(got?.draftVersionId ?? null).toBeNull();
 		});
 
 		it('delete soft-deletes — record excluded from list/listByProject', async () => {
@@ -761,6 +724,26 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(page.items.map((r) => r.guid)).not.toContain(pend);
 		});
 
+		if (publicListing) {
+			it('listPublic keeps drafts and leaves out a non-public project', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				if (!scope.privateProjectId)
+					throw new Error('publicListing requires scope.privateProjectId');
+				const draft = makeUuid();
+				const hidden = makeUuid();
+				await store.create(ctx(scope.ownerId), record(scope, { guid: draft, status: 'draft' }));
+				await store.create(
+					ctx(scope.ownerId),
+					record(scope, { guid: hidden, projectId: scope.privateProjectId })
+				);
+
+				const guids = (await store.listPublic(ctx(scope.ownerId))).items.map((r) => r.guid);
+				expect(guids).toContain(draft);
+				expect(guids).not.toContain(hidden);
+			});
+		}
+
 		it('pagination respects limit and nextCursor', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
@@ -781,6 +764,8 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		if (ctxIsolation) {
+			const outsiderPerms = { platformPermissions: [], orgPermissions: [] };
+
 			it('ctx isolation: records created by one user are not visible to another', async () => {
 				const store = await createStore();
 				const scope = await scopeFor();
@@ -792,7 +777,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
 				);
 
-				const page = await store.list(ctx(otherUser));
+				const page = await store.list(ctx(otherUser, outsiderPerms));
 				expect(page.items.map((r) => r.guid)).not.toContain(guid);
 			});
 
@@ -807,7 +792,7 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
 				);
 
-				const got = await store.get(ctx(otherUser), guid);
+				const got = await store.get(ctx(otherUser, outsiderPerms), guid);
 				expect(got).toBeNull();
 			});
 		}

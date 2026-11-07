@@ -24,6 +24,35 @@ function trimTrailing(s, ch) {
 	while (end > 0 && s[end - 1] === ch) end--;
 	return s.slice(0, end);
 }
+// ../platform/src/computeServer/key32.ts
+/**
+ * A 32-byte key written as 64 hex characters or base64 (padding optional), or
+ * null. No `node:crypto` here: the config boot check imports this too.
+ */
+function parseKey32(raw) {
+	const key = raw.trim();
+	if (/^[0-9a-fA-F]{64}$/.test(key)) return Buffer.from(key, 'hex');
+	const buf = Buffer.from(key, 'base64');
+	return buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(key, '=')
+		? buf
+		: null;
+}
+// ../platform/src/config/raw-value.ts
+/**
+ * The text a setting reads and the name it came from: its own key, else the
+ * first alias that is set. Blank counts as unset, so a `KEY=` line with stray
+ * spaces can't hide an alias or pass a required key as an empty string.
+ */
+function rawValue(spec, env) {
+	for (const name of [spec.key, ...(spec.aliases ?? [])]) {
+		const raw = env[name];
+		if (raw !== void 0 && raw.trim() !== '')
+			return {
+				name,
+				raw
+			};
+	}
+}
 // ../platform/src/config/resolve.ts
 var TRUE = /* @__PURE__ */ new Set(['true', '1', 'yes', 'on']);
 var FALSE = /* @__PURE__ */ new Set(['false', '0', 'no', 'off']);
@@ -41,7 +70,7 @@ function parse(spec, raw) {
 				value: v
 			};
 		case 'key':
-			return isKey32(v)
+			return parseKey32(v)
 				? {
 						ok: true,
 						value: v
@@ -50,25 +79,44 @@ function parse(spec, raw) {
 						ok: false,
 						problem: 'must be 32 bytes as 64 hex characters or base64'
 					};
-		case 'url':
+		case 'url': {
+			const value = trimTrailing(v, '/');
+			let url;
 			try {
-				new URL(v);
-				return {
-					ok: true,
-					value: trimTrailing(v, '/')
-				};
+				url = new URL(value);
 			} catch {
 				return {
 					ok: false,
 					problem: 'must be an absolute URL'
 				};
 			}
+			if (url.protocol !== 'http:' && url.protocol !== 'https:')
+				return {
+					ok: false,
+					problem: 'must start with http:// or https://'
+				};
+			if (spec.origin && (url.username || url.password || url.pathname !== '/' || /[?#]/.test(v)))
+				return {
+					ok: false,
+					problem:
+						'must be an origin such as https://selva.example.com: no path, query or credentials'
+				};
+			return {
+				ok: true,
+				value
+			};
+		}
 		case 'int': {
-			const n = Number(v);
-			if (!Number.isInteger(n))
+			if (!/^[+-]?\d+$/.test(v))
 				return {
 					ok: false,
 					problem: 'must be a whole number'
+				};
+			const n = Number(v);
+			if (!Number.isSafeInteger(n))
+				return {
+					ok: false,
+					problem: 'is too large'
 				};
 			if (spec.min !== void 0 && n < spec.min)
 				return {
@@ -82,7 +130,7 @@ function parse(spec, raw) {
 				};
 			return {
 				ok: true,
-				value: n
+				value: n === 0 ? 0 : n
 			};
 		}
 		case 'bool': {
@@ -125,11 +173,6 @@ function parse(spec, raw) {
 			};
 	}
 }
-function isKey32(v) {
-	if (/^[0-9a-fA-F]{64}$/.test(v)) return true;
-	const buf = Buffer.from(v, 'base64');
-	return buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(v, '=');
-}
 /** What `raw` meant to the reader before it parsed strictly. */
 function legacyValue(spec, raw) {
 	const legacy = spec.legacy;
@@ -141,54 +184,51 @@ function legacyValue(spec, raw) {
 	return parsed.ok ? parsed.value : void 0;
 }
 function resolveKey(spec, env) {
-	let raw = env[spec.key];
-	let source = 'env';
-	let alias;
-	if (raw === void 0 || raw === '') {
-		alias = spec.aliases?.find((a) => env[a] !== void 0 && env[a] !== '');
-		raw = alias ? env[alias] : void 0;
-		source = alias ? 'alias' : spec.default !== void 0 ? 'default' : 'unset';
-	}
-	const base = {
-		key: spec.key,
-		spec,
-		...(alias ? { alias } : {})
-	};
-	if (raw === void 0) {
+	const found = rawValue(spec, env);
+	if (!found) {
+		const source = spec.default !== void 0 ? 'default' : 'unset';
+		const base = {
+			key: spec.key,
+			spec,
+			source
+		};
 		if (spec.required)
 			return {
 				...base,
-				source,
 				status: 'error',
 				value: void 0,
 				problem: 'is required'
 			};
 		return {
 			...base,
-			source,
 			status: 'ok',
 			value: spec.default
 		};
 	}
-	const parsed = parse(spec, raw);
+	const alias = found.name === spec.key ? void 0 : found.name;
+	const source = alias ? 'alias' : 'env';
+	const base = {
+		key: spec.key,
+		spec,
+		source,
+		...(alias ? { alias } : {})
+	};
+	const parsed = parse(spec, found.raw);
 	if (parsed.ok)
 		return {
 			...base,
-			source,
 			status: 'ok',
 			value: parsed.value
 		};
 	if (spec.onInvalid === 'fail')
 		return {
 			...base,
-			source,
 			status: 'error',
 			value: void 0,
 			problem: parsed.problem
 		};
 	return {
 		...base,
-		source,
 		status: 'invalid',
 		value: spec.default,
 		problem: parsed.problem
@@ -263,7 +303,6 @@ function buildConfigReport(manifest, env, options = {}) {
 	const resolved = resolveConfig(manifest, env, options);
 	const rows = manifest.map((spec) => {
 		const k = resolved.keys[spec.key];
-		const raw = k.source === 'alias' ? env[k.alias] : env[spec.key];
 		return {
 			key: spec.key,
 			...(spec.label ? { label: spec.label } : {}),
@@ -277,7 +316,7 @@ function buildConfigReport(manifest, env, options = {}) {
 			...(spec.impact ? { impact: spec.impact } : {}),
 			source: k.source,
 			status: k.status,
-			display: display(spec.sensitive === true, spec.generated === true, k.source, raw, k.value),
+			display: display(spec, k, rawValue(spec, env)?.raw),
 			...(k.problem ? { problem: k.problem } : {}),
 			...(k.alias ? { alias: k.alias } : {})
 		};
@@ -288,12 +327,11 @@ function buildConfigReport(manifest, env, options = {}) {
 		unknown: resolved.unknown
 	};
 }
-function display(sensitive, generated, source, raw, value) {
-	if (source === 'unset') return '';
-	if (sensitive && raw !== void 0) return generated ? fingerprint(raw) : 'set';
-	if (sensitive) return 'set';
-	if (source === 'default' || raw === void 0) return formatValue(value);
-	return raw.trim();
+/** `raw` is the env text the value came from, undefined when it is the default. */
+function display(spec, k, raw) {
+	if (k.source === 'unset') return '';
+	if (spec.sensitive) return raw !== void 0 && spec.generated ? fingerprint(raw) : 'set';
+	return raw === void 0 ? formatValue(k.value) : raw.trim();
 }
 function formatValue(value) {
 	if (Array.isArray(value)) return value.join(',');
@@ -304,29 +342,36 @@ function fingerprint(value) {
 	return `sha256:${createHash('sha256').update(value.trim()).digest('hex').slice(0, 8)}`;
 }
 // ../platform/src/config/snapshot.ts
-function takeSnapshot(manifest, env, salt = randomBytes(16).toString('hex')) {
+var SENSITIVE_MARKER = 'set';
+function takeSnapshot(manifest, env, salt) {
+	const key = typeof salt === 'string' && salt !== '' ? salt : randomBytes(16).toString('hex');
 	const values = {};
 	const sensitive = [];
 	for (const spec of manifest) {
-		const name = [spec.key, ...(spec.aliases ?? [])].find(
-			(k) => env[k] !== void 0 && env[k] !== ''
-		);
-		if (name === void 0) continue;
-		const raw = env[name].trim();
+		const found = rawValue(spec, env);
+		if (!found) continue;
+		const raw = found.raw.trim();
 		if (spec.sensitive) {
-			values[spec.key] = createHmac('sha256', salt).update(raw).digest('hex').slice(0, 16);
+			values[spec.key] = spec.generated
+				? createHmac('sha256', key).update(raw).digest('hex').slice(0, 16)
+				: SENSITIVE_MARKER;
 			sensitive.push(spec.key);
 		} else values[spec.key] = raw;
 	}
 	return {
 		version: 1,
-		salt,
+		salt: key,
 		values,
 		sensitive
 	};
 }
-/** Only meaningful when both snapshots share a salt; pass `before.salt` when taking `after`. */
+/**
+ * What changed since `before`, the previous snapshot as read from disk; anything
+ * that is not a snapshot counts as none. Take `after` with `before.salt`, or every
+ * generated key reads as changed.
+ */
 function diffSnapshots(before, after) {
+	if (!isSnapshot(before)) return [];
 	const secret = /* @__PURE__ */ new Set([...before.sensitive, ...after.sensitive]);
 	const changes = [];
 	const plain = (key, from, to) =>
@@ -360,9 +405,25 @@ function diffSnapshots(before, after) {
 			});
 	return changes;
 }
+function isSnapshot(value) {
+	if (typeof value !== 'object' || value === null) return false;
+	const { version, salt, values, sensitive } = value;
+	return (
+		version === 1 &&
+		typeof salt === 'string' &&
+		salt !== '' &&
+		typeof values === 'object' &&
+		values !== null &&
+		!Array.isArray(values) &&
+		Object.values(values).every((v) => typeof v === 'string') &&
+		Array.isArray(sensitive) &&
+		sensitive.every((k) => typeof k === 'string')
+	);
+}
 // ../platform/src/config/previous-key.ts
 /** How long `selva keys rotate` keeps the previous key accepted. */
 var PREVIOUS_KEY_DAYS = 30;
+var MAX_DEADLINE_DAYS = 90;
 var DAY_MS = 864e5;
 /**
  * The previous key for `base` (`SELVA_HMAC_KEY` or `SELVA_AT_REST_KEY`), if it
@@ -378,8 +439,8 @@ function previousKey(env, base, now = Date.now()) {
 			state: 'no-deadline',
 			key
 		};
-	const at = Date.parse(expires);
-	if (!Number.isFinite(at) || at <= now)
+	const at = parseDeadline(expires);
+	if (at === null || at <= now || at - now > MAX_DEADLINE_DAYS * DAY_MS)
 		return {
 			state: 'expired',
 			expires
@@ -391,32 +452,34 @@ function previousKey(env, base, now = Date.now()) {
 		daysLeft: Math.ceil((at - now) / DAY_MS)
 	};
 }
-// ../platform/src/logging/interface.ts
+var ISO_DEADLINE =
+	/^(\d{4})-(\d{2})-(\d{2})(?:T([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(\.\d+)?)?(Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
 /**
- * Default `ILogger` — discards everything. Lets library code log
- * unconditionally without a configured backend, and keeps test output clean.
- * The app wires a real logger at its composition root; a consumer that wires
- * nothing gets silence rather than unsolicited stdout writes.
+ * `YYYY-MM-DD`, or an ISO timestamp, UTC unless it names an offset. Not
+ * `Date.parse`: it reads `12.1.2027` as 1 December and rolls `2026-11-31` over.
  */
-var NoopLogger = class {
-	debug(_message, _fields) {}
-	info(_message, _fields) {}
-	warn(_message, _fields) {}
-	error(_message, _fields) {}
-	child(_fields) {
-		return this;
-	}
-};
-new NoopLogger();
-// ../server/src/api/rate-limit.ts
-var DEFAULT_API_RATE_LIMIT = Object.freeze({
-	windowMs: 6e4,
-	maxPerWindow: 600
-});
-Object.freeze({
-	windowMs: 36e5,
-	maxPerWindow: 20
-});
+function parseDeadline(text) {
+	const m = ISO_DEADLINE.exec(text);
+	if (!m) return null;
+	const [, year, month, day, hour = '0', minute = '0', second = '0', fraction = '', zone = 'Z'] = m;
+	const midnight = Date.UTC(Number(year), Number(month) - 1, Number(day));
+	const date = new Date(midnight);
+	if (
+		date.getUTCFullYear() !== Number(year) ||
+		date.getUTCMonth() !== Number(month) - 1 ||
+		date.getUTCDate() !== Number(day)
+	)
+		return null;
+	const offsetMinutes =
+		zone === 'Z'
+			? 0
+			: (zone.startsWith('-') ? -1 : 1) * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4)));
+	return (
+		midnight +
+		((Number(hour) * 60 + Number(minute) - offsetMinutes) * 60 + Number(second)) * 1e3 +
+		Math.floor(Number(`0${fraction}`) * 1e3)
+	);
+}
 // ../server/src/config/settings.ts
 var flag = (key, label, description, impact) =>
 	defineSetting({
@@ -442,6 +505,95 @@ var tunableInt = (key, fallback, label, description, extra = {}) =>
 		...extra
 	});
 var MB = 1048576;
+var SIGN_IN_MAX_AGE_SETTING = defineSetting({
+	key: 'SIGN_IN_MAX_AGE_DAYS',
+	label: 'Force sign-in again after',
+	type: 'int',
+	min: 0,
+	default: 0,
+	onInvalid: 'fail',
+	class: 'setting',
+	summary: true,
+	zero: 'Never',
+	unit: 'days',
+	description: 'Days before users must sign in at the identity provider again. 0 is never.',
+	impact: 'API tokens of anyone who has not signed in within this many days are revoked.'
+});
+var COMPUTE_LIMIT_SETTINGS = composeManifest([
+	tunableInt(
+		'COMPUTE_RATE_LIMIT_MAX',
+		120,
+		'Solves per window',
+		'Solves per user or share link per 100-second window.'
+	),
+	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
+		unit: 'bytes'
+	}),
+	tunableInt(
+		'COMPUTE_MAX_QUEUE_DEPTH',
+		0,
+		'Solve queue length',
+		'Solves allowed to wait per compute server. 0 is unbounded.',
+		{
+			min: 0,
+			zero: 'No limit'
+		}
+	),
+	tunableInt(
+		'COMPUTE_QUEUE_WAIT_MS',
+		0,
+		'Max queue wait',
+		'Longest a solve may wait queued. 0 is no deadline.',
+		{
+			min: 0,
+			unit: 'ms',
+			zero: 'No limit'
+		}
+	),
+	tunableInt(
+		'COMPUTE_DEFINITION_CACHE_MB',
+		256,
+		'Definition cache size',
+		'Definition cache budget. 0 turns it off.',
+		{
+			min: 0,
+			unit: 'mb',
+			zero: 'Off',
+			aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB']
+		}
+	),
+	tunableInt(
+		'COMPUTE_SOLVE_CACHE_MB',
+		256,
+		'Solve cache size',
+		'Solve cache budget per warm compute server. 0 turns it off.',
+		{
+			min: 0,
+			unit: 'mb',
+			zero: 'Off',
+			aliases: ['COMPUTE_RESPONSE_CACHE_MB']
+		}
+	),
+	defineSetting({
+		key: 'COMPUTE_SERVER_CACHESOLVE',
+		label: 'Compute server solve cache',
+		type: 'bool',
+		default: true,
+		onInvalid: 'default',
+		class: 'tunable',
+		description: 'Ask Rhino.Compute to cache solve results server-side.'
+	})
+]);
+var API_TOKEN_RATE_LIMIT_SETTING = tunableInt(
+	'API_TOKEN_RATE_LIMIT_MAX',
+	600,
+	'API requests per minute',
+	'Requests per API token per minute. 0 is off.',
+	{
+		min: 0,
+		zero: 'Off'
+	}
+);
 var ENGINE_SETTINGS = composeManifest([
 	...[
 		[
@@ -581,20 +733,7 @@ var ENGINE_SETTINGS = composeManifest([
 		description:
 			'While no instance admin exists, only this address may become one. For first setup and lockouts.'
 	}),
-	defineSetting({
-		key: 'SIGN_IN_MAX_AGE_DAYS',
-		label: 'Force sign-in again after',
-		type: 'int',
-		min: 0,
-		default: 0,
-		onInvalid: 'fail',
-		class: 'setting',
-		summary: true,
-		zero: 'Never',
-		unit: 'days',
-		description: 'Days before users must sign in at the identity provider again. 0 is never.',
-		impact: 'API tokens of anyone who has not signed in within this many days are revoked.'
-	}),
+	SIGN_IN_MAX_AGE_SETTING,
 	flag('ALLOW_ORG_CREATION', 'Users create orgs', 'Self-service org creation (read by host apps).'),
 	flag(
 		'ALLOW_CROSS_ORG_PUBLIC',
@@ -688,79 +827,8 @@ var ENGINE_SETTINGS = composeManifest([
 		description: 'Override the TLS mode inferred from the port.',
 		legacy: { bool: 'exact-true' }
 	}),
-	tunableInt(
-		'COMPUTE_RATE_LIMIT_MAX',
-		120,
-		'Solves per window',
-		'Solves per user or share link per 100-second window.'
-	),
-	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
-		unit: 'bytes'
-	}),
-	tunableInt(
-		'COMPUTE_MAX_QUEUE_DEPTH',
-		0,
-		'Solve queue length',
-		'Solves allowed to wait per compute server. 0 is unbounded.',
-		{
-			min: 0,
-			zero: 'No limit'
-		}
-	),
-	tunableInt(
-		'COMPUTE_QUEUE_WAIT_MS',
-		0,
-		'Max queue wait',
-		'Longest a solve may wait queued. 0 is no deadline.',
-		{
-			min: 0,
-			unit: 'ms',
-			zero: 'No limit'
-		}
-	),
-	tunableInt(
-		'COMPUTE_DEFINITION_CACHE_MB',
-		256,
-		'Definition cache size',
-		'Definition cache budget. 0 turns it off.',
-		{
-			min: 0,
-			unit: 'mb',
-			zero: 'Off',
-			aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB']
-		}
-	),
-	tunableInt(
-		'COMPUTE_SOLVE_CACHE_MB',
-		256,
-		'Solve cache size',
-		'Solve cache budget per warm compute server. 0 turns it off.',
-		{
-			min: 0,
-			unit: 'mb',
-			zero: 'Off',
-			aliases: ['COMPUTE_RESPONSE_CACHE_MB']
-		}
-	),
-	defineSetting({
-		key: 'COMPUTE_SERVER_CACHESOLVE',
-		label: 'Compute server solve cache',
-		type: 'bool',
-		default: true,
-		onInvalid: 'default',
-		class: 'tunable',
-		description: 'Ask Rhino.Compute to cache solve results server-side.'
-	}),
-	tunableInt(
-		'API_TOKEN_RATE_LIMIT_MAX',
-		DEFAULT_API_RATE_LIMIT.maxPerWindow,
-		'API requests per minute',
-		'Requests per API token per minute. 0 is off.',
-		{
-			min: 0,
-			zero: 'Off'
-		}
-	)
+	COMPUTE_LIMIT_SETTINGS,
+	API_TOKEN_RATE_LIMIT_SETTING
 ]);
 // ../providers/header-auth/src/config.ts
 var header = (key, fallback, slot) =>
@@ -901,12 +969,24 @@ var SUPABASE_SETTINGS = composeManifest([
 	})
 ]);
 // src/lib/server/config/settings.ts
+var COMPUTE_DEBUG = defineSetting({
+	key: 'SELVA_FLAG_COMPUTE_DEBUG',
+	label: 'Compute debug logging',
+	type: 'string',
+	default: 'off',
+	onInvalid: 'default',
+	class: 'setting',
+	description:
+		'off, on (cache and timing lines per solve) or verbose (adds Compute’s raw error bodies).',
+	impact: 'verbose can write what was solved to the log, which erasure cannot reach.'
+});
 /** Keys only this app reads. adapter-node's own keys are here too: they decide whether it works. */
 var APP_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'ORIGIN',
 		label: 'Public address',
 		type: 'url',
+		origin: true,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
@@ -1016,6 +1096,7 @@ var APP_SETTINGS = composeManifest([
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
 		label: 'Solve event callback address',
 		type: 'url',
+		origin: true,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		description:
@@ -1039,17 +1120,7 @@ var APP_SETTINGS = composeManifest([
 		class: 'setting',
 		description: 'Lowest severity written to the log. Default info (debug in development).'
 	}),
-	defineSetting({
-		key: 'SELVA_FLAG_COMPUTE_DEBUG',
-		label: 'Compute debug logging',
-		type: 'string',
-		default: 'off',
-		onInvalid: 'default',
-		class: 'setting',
-		description:
-			'off, on (cache and timing lines per solve) or verbose (adds Compute’s raw error bodies).',
-		impact: 'verbose can write what was solved to the log, which erasure cannot reach.'
-	}),
+	COMPUTE_DEBUG,
 	defineSetting({
 		key: 'SENTRY_DSN',
 		label: 'Sentry error reporting',

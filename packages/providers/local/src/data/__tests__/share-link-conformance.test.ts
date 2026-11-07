@@ -23,6 +23,8 @@ describe('LocalShareLinkStore', () => {
 	runShareLinkStoreConformance({
 		name: 'LocalShareLinkStore',
 		orgRoster: true,
+		nonAdminCtx: true,
+		revocationState: true,
 		// Built through the real composition root rather than `new
 		// LocalShareLinkStore(...)`: `listByOrg` walks link → definition → project,
 		// and those hops are wired by setters in `fromEnv`. Constructing the store

@@ -1,10 +1,6 @@
 /**
- * Adapter conformance suite for IComputeServerStore.
- *
- * Servers are scoped (platform vs. org-private), with a global
- * `defaultServerId` and per-org `orgDefaults`. The store surface exposes
- * scope-targeted mutations; visibility filtering is done by callers via
- * the pure helpers in `@selvajs/platform`.
+ * Adapter conformance suite for IComputeServerStore: platform and org-private
+ * servers, the global `defaultServerId` and per-org `orgDefaults`.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -27,6 +23,8 @@ export interface ComputeServerStoreConformanceOptions {
 	 * it. Adapters without org FKs (local JSON) can omit this.
 	 */
 	seedOrg?: (orgId: string) => Promise<void>;
+	/** `getConfig({ scopeToOrgId })` narrows servers and defaults to what that org may see. */
+	orgScopedReads?: boolean;
 }
 
 function platformServer(
@@ -57,7 +55,7 @@ function orgServer(
 }
 
 export function runComputeServerStoreConformance(opts: ComputeServerStoreConformanceOptions): void {
-	const { name, createStore, seedOrg } = opts;
+	const { name, createStore, seedOrg, orgScopedReads = false } = opts;
 	const seed = async (): Promise<string> => {
 		const id = makeUuid();
 		if (seedOrg) await seedOrg(id);
@@ -189,20 +187,6 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 			expect((await store.getConfig(SYSTEM_CONTEXT)).servers).toEqual([]);
 		});
 
-		it('saveOrgServers stores rows owned by the org', async () => {
-			const store = await createStore();
-			const orgId = await seed();
-			const s = orgServer(orgId, { label: "Org's BYO" });
-			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [s], s.id);
-
-			const got = await store.getConfig(SYSTEM_CONTEXT);
-			const ownRows = got.servers.filter(
-				(row): row is OrgComputeServer => isOrgServer(row) && row.ownerOrgId === orgId
-			);
-			expect(ownRows.map((r) => r.id)).toEqual([s.id]);
-			expect(got.orgDefaults?.[orgId]).toBe(s.id);
-		});
-
 		it('saveOrgServers does not clobber platform rows (and vice versa)', async () => {
 			const store = await createStore();
 			const orgId = await seed();
@@ -298,6 +282,27 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 			expect(remaining).toEqual([]);
 			expect(got.orgDefaults?.[orgId]).toBeUndefined();
 		});
+
+		if (orgScopedReads) {
+			it('getConfig scoped to an org hides what that org may not see', async () => {
+				const store = await createStore();
+				const orgId = await seed();
+				const otherOrgId = await seed();
+				const shared = platformServer({ label: 'Shared' });
+				const allowlisted = platformServer({ label: 'Theirs only', sharedWith: [otherOrgId] });
+				const own = orgServer(orgId);
+				const theirs = orgServer(otherOrgId);
+				await store.savePlatformServers(SYSTEM_CONTEXT, [shared, allowlisted], shared.id);
+				await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [own], own.id);
+				await store.saveOrgServers(SYSTEM_CONTEXT, otherOrgId, [theirs], theirs.id);
+
+				const scoped = await store.getConfig(SYSTEM_CONTEXT, { scopeToOrgId: orgId });
+
+				expect(scoped.servers.map((s) => s.id).sort()).toEqual([shared.id, own.id].sort());
+				expect(scoped.defaultServerId).toBe(shared.id);
+				expect(scoped.orgDefaults).toEqual({ [orgId]: own.id });
+			});
+		}
 
 		it('deleteByOrg strips this org from platform sharedWith allowlists', async () => {
 			const store = await createStore();

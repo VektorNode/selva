@@ -20,6 +20,7 @@
  */
 
 import { z } from 'zod';
+import { DefinitionChannelSchema } from '@selvajs/platform';
 
 // ============================================================================
 // Share links
@@ -28,7 +29,7 @@ import { z } from 'zod';
 export const ShareLinkResponseSchema = z.object({
 	id: z.string(),
 	definitionId: z.string(),
-	channel: z.enum(['live', 'draft']),
+	channel: DefinitionChannelSchema,
 	name: z.string().optional(),
 	createdBy: z.string(),
 	createdAt: z.string(),

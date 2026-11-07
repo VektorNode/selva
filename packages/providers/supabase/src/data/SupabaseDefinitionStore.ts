@@ -202,13 +202,16 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Soft-delete, matching the local provider. A retention sweep running
 		// as service-role hard-deletes later, which cascades versions +
 		// share_links via FK.
-		const { error } = await this.clients
+		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('definitions')
 			.update(stampSoftDelete(ctx))
 			.eq('guid', guid)
-			.is('deleted_at', null);
+			.is('deleted_at', null)
+			.select('guid');
 		if (error) throw mapPostgrestError(error);
+		// No row: already deleted, or RLS hid it. Neither is a deletion to record.
+		if (!data || data.length === 0) return;
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,

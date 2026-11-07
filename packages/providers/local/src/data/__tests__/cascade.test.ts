@@ -408,7 +408,7 @@ describe('Cross-store cascade', () => {
 		expect(await dataProvider.definitions.get(ownerCtx, defId)).toBeNull();
 	});
 
-	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
+	it('share-link token resolution and solve counting stop when the parent definition is soft-deleted', async () => {
 		// Token resolution must fail closed when its parent definition is soft-deleted.
 		// Supabase enforces this via JOIN; the local store gets the same behavior by
 		// injecting a definition provider (see LocalShareLinkStore.setDefinitionProvider).
@@ -488,11 +488,13 @@ describe('Cross-store cascade', () => {
 
 		// Sanity: token resolves while parent is live.
 		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).not.toBeNull();
+		expect(await shareLinks.tryIncrementSolveCount(SYSTEM_CONTEXT, linkId)).toBe(1);
 
 		// Soft-delete the parent definition.
 		await definitions.delete(ownerCtx, definitionId);
 
 		// Cascade contract: token resolution must now fail closed.
 		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).toBeNull();
+		expect(await shareLinks.tryIncrementSolveCount(SYSTEM_CONTEXT, linkId)).toBeNull();
 	});
 });

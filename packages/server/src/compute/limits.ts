@@ -11,6 +11,11 @@
  */
 
 import { NoopLogger, type ILogger } from '@selvajs/platform';
+import type { EnvRecord } from '@selvajs/platform/config';
+import { readSettings } from '../config/read-settings.js';
+import { COMPUTE_LIMIT_SETTINGS } from '../config/settings.js';
+
+export type { EnvRecord };
 
 const MB = 1024 * 1024;
 
@@ -21,16 +26,18 @@ const MB = 1024 * 1024;
  */
 export const COMPUTE_REQUEST_MAX_BYTES = 256 * MB;
 
-/** Env source: any string→string map. `$env/dynamic/private` satisfies this. */
-export type EnvRecord = Record<string, string | undefined>;
-
 /**
  * Default logger for the env-parsing warnings below. This is library code, so an
  * embedder that wires nothing gets silence rather than unsolicited stdout writes.
  */
 const noop = new NoopLogger();
 
-/** Parse a positive integer env value; absent, or present but not finite and positive, falls back. */
+/**
+ * Parse a positive integer env value; absent, or present but not finite and positive, falls back.
+ *
+ * @deprecated Looser than the manifest (`0.5` floors to 0): declare the key and read it with
+ * `readSetting` from `@selvajs/platform/config`, so the config report shows what runs.
+ */
 export function readPositiveInt(
 	env: EnvRecord,
 	name: string,
@@ -52,7 +59,11 @@ export function readPositiveInt(
 	return Math.floor(parsed);
 }
 
-/** Like {@link readPositiveInt}, but `0` is valid — knobs where it means "disable". */
+/**
+ * Like {@link readPositiveInt}, but `0` is valid — knobs where it means "disable".
+ *
+ * @deprecated Same reason as {@link readPositiveInt}.
+ */
 export function readNonNegativeInt(
 	env: EnvRecord,
 	name: string,
@@ -72,24 +83,6 @@ export function readNonNegativeInt(
 		return fallback;
 	}
 	return Math.floor(parsed);
-}
-
-/**
- * Fall back to a variable's previous name, warning when the old one is used.
- * Setting both is not an error: the new name wins silently, which is what an
- * operator mid-migration expects.
- *
- * A var that quietly stops being read looks exactly like one that is working —
- * the failure only surfaces as a memory number nobody is watching.
- */
-function readRenamed(env: EnvRecord, name: string, oldName: string, logger: ILogger): EnvRecord {
-	if (env[name] !== undefined || env[oldName] === undefined) return env;
-	logger.warn('Deprecated env var: rename it', {
-		component: 'selva',
-		envVar: oldName,
-		renamedTo: name
-	});
-	return { ...env, [name]: env[oldName] };
 }
 
 /**
@@ -214,21 +207,13 @@ export interface ComputeLimits {
  * once at its composition root with `$env/dynamic/private`.
  */
 export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): ComputeLimits {
-	// Deprecation shims, so each var says what it HOLDS and what it bounds — one
-	// solve — rather than a vague "duration". Drop one minor version on.
-	env = readRenamed(env, 'COMPUTE_DEFINITION_CACHE_MB', 'COMPUTE_DEFINITION_BYTE_CACHE_MB', logger);
-	env = readRenamed(env, 'COMPUTE_SOLVE_CACHE_MB', 'COMPUTE_RESPONSE_CACHE_MB', logger);
+	const values = readSettings(COMPUTE_LIMIT_SETTINGS, env, logger);
+	const int = (key: string) => values[key] as number;
 
-	// Clean-cut rename with no old-name dual-read: deliberate pre-1.0 breaking change.
-	const maxDefinitionFileSize = readPositiveInt(
-		env,
-		'MAX_DEFINITION_FILE_SIZE_BYTES',
-		50 * MB,
-		logger
-	);
+	const maxDefinitionFileSize = int('MAX_DEFINITION_FILE_SIZE_BYTES');
 	return {
 		rateLimitWindowMs: 100_000,
-		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
+		rateLimitMaxRequests: int('COMPUTE_RATE_LIMIT_MAX'),
 		maxDefinitionFileSize,
 		maxImageFileSize: 10 * MB,
 		computeRequestMaxBytes: COMPUTE_REQUEST_MAX_BYTES,
@@ -236,17 +221,10 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		remoteDefinitionMaxBytes: maxDefinitionFileSize,
 		remoteDefinitionFetchTimeoutMs: 30_000,
 		remoteDefinitionCacheTtlMs: 5 * 60 * 1000,
-		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
-		// Both default to off — nothing is rejected until an operator who has measured
-		// their pool opts in. readNonNegativeInt throughout, so `0` reads as "disabled"
-		// rather than as an invalid value that falls back.
-		computeMaxQueueDepth: readNonNegativeInt(env, 'COMPUTE_MAX_QUEUE_DEPTH', 0, logger),
-		computeQueueWaitMs: readNonNegativeInt(env, 'COMPUTE_QUEUE_WAIT_MS', 0, logger),
-		// 256 MB holds a handful of typical definitions warm without pinning gigabytes.
-		computeDefinitionCacheBytes:
-			readNonNegativeInt(env, 'COMPUTE_DEFINITION_CACHE_MB', 256, logger) * MB,
-		// 256 MB keeps a scrub session's recent solves warm; PER warm client, so see
-		// the field doc for the ×16 worst case.
-		computeSolveCacheBytes: readNonNegativeInt(env, 'COMPUTE_SOLVE_CACHE_MB', 256, logger) * MB
+		computeServerCachesolve: values.COMPUTE_SERVER_CACHESOLVE as boolean,
+		computeMaxQueueDepth: int('COMPUTE_MAX_QUEUE_DEPTH'),
+		computeQueueWaitMs: int('COMPUTE_QUEUE_WAIT_MS'),
+		computeDefinitionCacheBytes: int('COMPUTE_DEFINITION_CACHE_MB') * MB,
+		computeSolveCacheBytes: int('COMPUTE_SOLVE_CACHE_MB') * MB
 	};
 }

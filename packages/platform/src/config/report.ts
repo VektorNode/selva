@@ -3,11 +3,13 @@ import type { IntUnit, Manifest, SettingClass, SettingSpec } from './manifest.js
 import {
 	resolveConfig,
 	type EnvRecord,
+	type KeyReport,
 	type KeyStatus,
 	type ResolveOptions,
 	type UnknownKey,
 	type ValueSource
 } from './resolve.js';
+import { rawValue } from './raw-value.js';
 
 export interface ReportRow {
 	key: string;
@@ -49,7 +51,6 @@ export function buildConfigReport(
 	const resolved = resolveConfig(manifest, env, options);
 	const rows: ReportRow[] = manifest.map((spec) => {
 		const k = resolved.keys[spec.key];
-		const raw = k.source === 'alias' ? env[k.alias!] : env[spec.key];
 		return {
 			key: spec.key,
 			...(spec.label ? { label: spec.label } : {}),
@@ -63,7 +64,7 @@ export function buildConfigReport(
 			...(spec.impact ? { impact: spec.impact } : {}),
 			source: k.source,
 			status: k.status,
-			display: display(spec.sensitive === true, spec.generated === true, k.source, raw, k.value),
+			display: display(spec, k, rawValue(spec, env)?.raw),
 			...(k.problem ? { problem: k.problem } : {}),
 			...(k.alias ? { alias: k.alias } : {})
 		};
@@ -75,22 +76,15 @@ export function buildConfigReport(
 	};
 }
 
-function display(
-	sensitive: boolean,
-	generated: boolean,
-	source: ValueSource,
-	raw: string | undefined,
-	value: unknown
-): string {
-	if (source === 'unset') return '';
-	if (sensitive && raw !== undefined) {
+/** `raw` is the env text the value came from, undefined when it is the default. */
+function display(spec: SettingSpec, k: KeyReport, raw: string | undefined): string {
+	if (k.source === 'unset') return '';
+	if (spec.sensitive) {
 		// A fingerprint of a 256-bit random key reveals nothing; of a password it
 		// would be an offline guessing oracle.
-		return generated ? fingerprint(raw) : 'set';
+		return raw !== undefined && spec.generated ? fingerprint(raw) : 'set';
 	}
-	if (sensitive) return 'set';
-	if (source === 'default' || raw === undefined) return formatValue(value);
-	return raw.trim();
+	return raw === undefined ? formatValue(k.value) : raw.trim();
 }
 
 function formatValue(value: unknown): string {

@@ -1,5 +1,7 @@
 import type { Manifest, SettingSpec } from './manifest.js';
 import { trimTrailing } from '../utils/trim.js';
+import { parseKey32 } from '../computeServer/key32.js';
+import { rawValue } from './raw-value.js';
 
 export type EnvRecord = Record<string, string | undefined>;
 
@@ -56,24 +58,40 @@ function parse(spec: SettingSpec, raw: string): Parsed {
 			}
 			return { ok: true, value: v };
 		case 'key':
-			return isKey32(v)
+			return parseKey32(v)
 				? { ok: true, value: v }
 				: { ok: false, problem: 'must be 32 bytes as 64 hex characters or base64' };
-		case 'url':
+		case 'url': {
+			const value = trimTrailing(v, '/');
+			let url: URL;
 			try {
-				new URL(v);
-				return { ok: true, value: trimTrailing(v, '/') };
+				url = new URL(value);
 			} catch {
 				return { ok: false, problem: 'must be an absolute URL' };
 			}
+			if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+				return { ok: false, problem: 'must start with http:// or https://' };
+			}
+			if (spec.origin && (url.username || url.password || url.pathname !== '/' || /[?#]/.test(v))) {
+				return {
+					ok: false,
+					problem:
+						'must be an origin such as https://selva.example.com: no path, query or credentials'
+				};
+			}
+			return { ok: true, value };
+		}
 		case 'int': {
+			// Not `Number(v)` alone: it reads `0x10`, `1e3` and blank as numbers.
+			if (!/^[+-]?\d+$/.test(v)) return { ok: false, problem: 'must be a whole number' };
 			const n = Number(v);
-			if (!Number.isInteger(n)) return { ok: false, problem: 'must be a whole number' };
+			if (!Number.isSafeInteger(n)) return { ok: false, problem: 'is too large' };
 			if (spec.min !== undefined && n < spec.min)
 				return { ok: false, problem: `must be ≥ ${spec.min}` };
 			if (spec.max !== undefined && n > spec.max)
 				return { ok: false, problem: `must be ≤ ${spec.max}` };
-			return { ok: true, value: n };
+			// `-0` is a different value to `Object.is` and to `1 / n`.
+			return { ok: true, value: n === 0 ? 0 : n };
 		}
 		case 'bool': {
 			const lower = v.toLowerCase();
@@ -99,14 +117,6 @@ function parse(spec: SettingSpec, raw: string): Parsed {
 	}
 }
 
-// Same rule as decodeSecretKey: only a round trip proves the whole string was
-// base64, since Buffer.from skips what it can't decode.
-function isKey32(v: string): boolean {
-	if (/^[0-9a-fA-F]{64}$/.test(v)) return true;
-	const buf = Buffer.from(v, 'base64');
-	return buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(v, '=');
-}
-
 /** What `raw` meant to the reader before it parsed strictly. */
 export function legacyValue(spec: SettingSpec, raw: string): unknown {
 	const legacy = spec.legacy;
@@ -121,29 +131,30 @@ export function legacyValue(spec: SettingSpec, raw: string): unknown {
 }
 
 function resolveKey(spec: SettingSpec, env: EnvRecord): KeyReport {
-	let raw = env[spec.key];
-	let source: ValueSource = 'env';
-	let alias: string | undefined;
-	if (raw === undefined || raw === '') {
-		alias = spec.aliases?.find((a) => env[a] !== undefined && env[a] !== '');
-		raw = alias ? env[alias] : undefined;
-		source = alias ? 'alias' : spec.default !== undefined ? 'default' : 'unset';
-	}
-
-	const base = { key: spec.key, spec, ...(alias ? { alias } : {}) };
-	if (raw === undefined) {
+	const found = rawValue(spec, env);
+	if (!found) {
+		const source: ValueSource = spec.default !== undefined ? 'default' : 'unset';
+		const base = { key: spec.key, spec, source };
 		if (spec.required) {
-			return { ...base, source, status: 'error', value: undefined, problem: 'is required' };
+			return { ...base, status: 'error', value: undefined, problem: 'is required' };
 		}
-		return { ...base, source, status: 'ok', value: spec.default };
+		return { ...base, status: 'ok', value: spec.default };
 	}
 
-	const parsed = parse(spec, raw);
-	if (parsed.ok) return { ...base, source, status: 'ok', value: parsed.value };
+	const alias = found.name === spec.key ? undefined : found.name;
+	const source: ValueSource = alias ? 'alias' : 'env';
+	const base = { key: spec.key, spec, source, ...(alias ? { alias } : {}) };
+	const parsed = parse(spec, found.raw);
+	if (parsed.ok) return { ...base, status: 'ok', value: parsed.value };
 	if (spec.onInvalid === 'fail') {
-		return { ...base, source, status: 'error', value: undefined, problem: parsed.problem };
+		return { ...base, status: 'error', value: undefined, problem: parsed.problem };
 	}
-	return { ...base, source, status: 'invalid', value: spec.default, problem: parsed.problem };
+	return { ...base, status: 'invalid', value: spec.default, problem: parsed.problem };
+}
+
+/** One setting's value by the manifest's rules: its default when unset or invalid. */
+export function readSetting(spec: SettingSpec, env: EnvRecord): unknown {
+	return resolveKey(spec, env).value;
 }
 
 /** Resolve every declared key from an env map. Pure: reads nothing ambient. */

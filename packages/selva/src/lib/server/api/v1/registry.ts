@@ -16,6 +16,9 @@ import {
 	type Endpoint,
 	type HttpMethod,
 	SolveBodySchema,
+	UpdateDefinitionBodySchema,
+	PublishVersionBodySchema,
+	CreateShareLinkBodySchema,
 	CreateProjectBodySchema,
 	UpdateProjectBodySchema,
 	AddProjectMemberBodySchema,
@@ -136,6 +139,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'write',
 		summary: 'Update definition metadata.',
 		response: 'empty',
+		requestBody: UpdateDefinitionBodySchema,
 		errors: [400, 404]
 	},
 	{
@@ -216,6 +220,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'upload',
 		summary: 'Promote a version to live.',
 		response: 'object',
+		requestBody: PublishVersionBodySchema,
 		errors: [400, 404]
 	},
 	{
@@ -243,6 +248,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		summary: 'Create a share link. The raw token is returned once and never again.',
 		response: 'object',
 		status: 201,
+		requestBody: CreateShareLinkBodySchema,
 		errors: [400, 404]
 	},
 	{

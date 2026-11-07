@@ -7,18 +7,11 @@ import { SolveEngine, type CachedClient } from '@selvajs/solve/server';
 import { env } from '#lib/server/env.js';
 import { getLogger } from '#lib/server/providers.server.js';
 import { computeLimits } from '#lib/server/computeLimits.js';
+import { computeDebugMode } from '#lib/server/config/settings.js';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
-/**
- * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
- * `on` (concise cache/timing logs), or `verbose` (adds lib-level request logs and
- * Compute's raw error bodies). `verbose` implies `on`.
- */
-const COMPUTE_DEBUG_MODE = (() => {
-	const raw = (env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase();
-	if (raw === 'verbose') return 'verbose';
-	return ['true', '1', 'yes', 'on'].includes(raw) ? 'on' : 'off';
-})();
+// `verbose` adds lib-level request logs and Compute's raw error bodies, and implies `on`.
+const COMPUTE_DEBUG_MODE = computeDebugMode(env);
 
 export const COMPUTE_DEBUG = COMPUTE_DEBUG_MODE !== 'off';
 export const COMPUTE_DEBUG_VERBOSE = COMPUTE_DEBUG_MODE === 'verbose';

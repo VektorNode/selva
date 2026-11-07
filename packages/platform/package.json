@@ -151,10 +151,14 @@
 		"zod": "catalog:"
 	},
 	"peerDependencies": {
+		"@types/node": ">=20",
 		"sharp": "^0.34.0 || ^0.35.0",
 		"vitest": "^3.2.4 || ^4.0.0 || ^5.0.0"
 	},
 	"peerDependenciesMeta": {
+		"@types/node": {
+			"optional": true
+		},
 		"sharp": {
 			"optional": true
 		},
@@ -164,6 +168,7 @@
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
 		"sharp": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"

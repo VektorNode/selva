@@ -8,7 +8,7 @@
  * build time.
  */
 
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selvajs/platform';
+import { clampPageLimit } from '@selvajs/platform';
 import type { DefinitionListOptions, ListOptions } from '@selvajs/platform';
 
 /**
@@ -17,10 +17,8 @@ import type { DefinitionListOptions, ListOptions } from '@selvajs/platform';
  * walking a cursor.
  */
 export function parseListOptions(url: URL): ListOptions {
-	const raw = Number(url.searchParams.get('limit') ?? DEFAULT_PAGE_LIMIT);
-	const limit = Number.isFinite(raw)
-		? Math.min(Math.max(Math.trunc(raw), 1), MAX_PAGE_LIMIT)
-		: DEFAULT_PAGE_LIMIT;
+	const raw = url.searchParams.get('limit');
+	const limit = clampPageLimit(raw === null ? undefined : Number(raw));
 
 	const orderByRaw = url.searchParams.get('orderBy');
 	const orderBy =

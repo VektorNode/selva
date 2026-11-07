@@ -1,5 +1,4 @@
 import { composeManifest, defineSetting, type IntSetting } from '@selvajs/platform/config';
-import { DEFAULT_API_RATE_LIMIT } from '../api/rate-limit.js';
 
 // Keys the engine reads, wherever the host app runs it. Providers declare their
 // own (`@selvajs/*-provider/config`); the host app declares what only it reads.
@@ -36,6 +35,81 @@ const tunableInt = (
 	});
 
 const MB = 1024 * 1024;
+
+export const SIGN_IN_MAX_AGE_SETTING = defineSetting({
+	key: 'SIGN_IN_MAX_AGE_DAYS',
+	label: 'Force sign-in again after',
+	type: 'int',
+	min: 0,
+	default: 0,
+	onInvalid: 'fail',
+	class: 'setting',
+	summary: true,
+	zero: 'Never',
+	unit: 'days',
+	description: 'Days before users must sign in at the identity provider again. 0 is never.',
+	impact: 'API tokens of anyone who has not signed in within this many days are revoked.'
+});
+
+export const COMPUTE_LIMIT_SETTINGS = composeManifest([
+	tunableInt(
+		'COMPUTE_RATE_LIMIT_MAX',
+		120,
+		'Solves per window',
+		'Solves per user or share link per 100-second window.'
+	),
+	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
+		unit: 'bytes'
+	}),
+	// Off by default: nothing is refused until an operator who has measured their pool opts in.
+	tunableInt(
+		'COMPUTE_MAX_QUEUE_DEPTH',
+		0,
+		'Solve queue length',
+		'Solves allowed to wait per compute server. 0 is unbounded.',
+		{ min: 0, zero: 'No limit' }
+	),
+	tunableInt(
+		'COMPUTE_QUEUE_WAIT_MS',
+		0,
+		'Max queue wait',
+		'Longest a solve may wait queued. 0 is no deadline.',
+		{ min: 0, unit: 'ms', zero: 'No limit' }
+	),
+	// 256 MB keeps a handful of typical definitions warm without pinning gigabytes.
+	tunableInt(
+		'COMPUTE_DEFINITION_CACHE_MB',
+		256,
+		'Definition cache size',
+		'Definition cache budget. 0 turns it off.',
+		{ min: 0, unit: 'mb', zero: 'Off', aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB'] }
+	),
+	// Per warm client: see `ComputeLimits.computeSolveCacheBytes` for the worst case.
+	tunableInt(
+		'COMPUTE_SOLVE_CACHE_MB',
+		256,
+		'Solve cache size',
+		'Solve cache budget per warm compute server. 0 turns it off.',
+		{ min: 0, unit: 'mb', zero: 'Off', aliases: ['COMPUTE_RESPONSE_CACHE_MB'] }
+	),
+	defineSetting({
+		key: 'COMPUTE_SERVER_CACHESOLVE',
+		label: 'Compute server solve cache',
+		type: 'bool',
+		default: true,
+		onInvalid: 'default',
+		class: 'tunable',
+		description: 'Ask Rhino.Compute to cache solve results server-side.'
+	})
+]);
+
+export const API_TOKEN_RATE_LIMIT_SETTING = tunableInt(
+	'API_TOKEN_RATE_LIMIT_MAX',
+	600,
+	'API requests per minute',
+	'Requests per API token per minute. 0 is off.',
+	{ min: 0, zero: 'Off' }
+);
 
 export const ENGINE_SETTINGS = composeManifest([
 	// ── Wiring ───────────────────────────────────────────────────────────────
@@ -185,20 +259,7 @@ export const ENGINE_SETTINGS = composeManifest([
 		description:
 			'While no instance admin exists, only this address may become one. For first setup and lockouts.'
 	}),
-	defineSetting({
-		key: 'SIGN_IN_MAX_AGE_DAYS',
-		label: 'Force sign-in again after',
-		type: 'int',
-		min: 0,
-		default: 0,
-		onInvalid: 'fail',
-		class: 'setting',
-		summary: true,
-		zero: 'Never',
-		unit: 'days',
-		description: 'Days before users must sign in at the identity provider again. 0 is never.',
-		impact: 'API tokens of anyone who has not signed in within this many days are revoked.'
-	}),
+	SIGN_IN_MAX_AGE_SETTING,
 	flag('ALLOW_ORG_CREATION', 'Users create orgs', 'Self-service org creation (read by host apps).'),
 	flag(
 		'ALLOW_CROSS_ORG_PUBLIC',
@@ -300,57 +361,6 @@ export const ENGINE_SETTINGS = composeManifest([
 	}),
 
 	// ── Compute limits ───────────────────────────────────────────────────────
-	tunableInt(
-		'COMPUTE_RATE_LIMIT_MAX',
-		120,
-		'Solves per window',
-		'Solves per user or share link per 100-second window.'
-	),
-	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
-		unit: 'bytes'
-	}),
-	tunableInt(
-		'COMPUTE_MAX_QUEUE_DEPTH',
-		0,
-		'Solve queue length',
-		'Solves allowed to wait per compute server. 0 is unbounded.',
-		{ min: 0, zero: 'No limit' }
-	),
-	tunableInt(
-		'COMPUTE_QUEUE_WAIT_MS',
-		0,
-		'Max queue wait',
-		'Longest a solve may wait queued. 0 is no deadline.',
-		{ min: 0, unit: 'ms', zero: 'No limit' }
-	),
-	tunableInt(
-		'COMPUTE_DEFINITION_CACHE_MB',
-		256,
-		'Definition cache size',
-		'Definition cache budget. 0 turns it off.',
-		{ min: 0, unit: 'mb', zero: 'Off', aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB'] }
-	),
-	tunableInt(
-		'COMPUTE_SOLVE_CACHE_MB',
-		256,
-		'Solve cache size',
-		'Solve cache budget per warm compute server. 0 turns it off.',
-		{ min: 0, unit: 'mb', zero: 'Off', aliases: ['COMPUTE_RESPONSE_CACHE_MB'] }
-	),
-	defineSetting({
-		key: 'COMPUTE_SERVER_CACHESOLVE',
-		label: 'Compute server solve cache',
-		type: 'bool',
-		default: true,
-		onInvalid: 'default',
-		class: 'tunable',
-		description: 'Ask Rhino.Compute to cache solve results server-side.'
-	}),
-	tunableInt(
-		'API_TOKEN_RATE_LIMIT_MAX',
-		DEFAULT_API_RATE_LIMIT.maxPerWindow,
-		'API requests per minute',
-		'Requests per API token per minute. 0 is off.',
-		{ min: 0, zero: 'Off' }
-	)
+	COMPUTE_LIMIT_SETTINGS,
+	API_TOKEN_RATE_LIMIT_SETTING
 ]);

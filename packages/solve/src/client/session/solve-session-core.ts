@@ -9,6 +9,7 @@
 import type { UISchema } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/schemas';
 import { getExternalInputs, type ExternalValueRef } from '../external-storage.js';
+import { serverSourcedInputIds } from '../../shared/server-sourced.js';
 import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
 
 /**
@@ -173,13 +174,17 @@ export function isRepeatOfLastSolve(
  * Solve outputs live in the same `values` map as inputs (so widgets like dynamic value
  * lists can read them) but must not be echoed back to the driver: a measured 6.4 MB
  * options-list output showed this can re-upload a multi-MB payload no backend reads.
+ *
+ * Server-sourced inputs stay out too: the server refuses a solve that sets one.
  */
 export function pickInputValues(
 	schema: UISchema,
 	values: Record<string, unknown>
 ): Record<string, unknown> {
+	const serverSourced = serverSourcedInputIds(schema);
 	const picked: Record<string, unknown> = {};
 	for (const input of schema.inputs) {
+		if (serverSourced.has(input.id)) continue;
 		if (Object.hasOwn(values, input.id)) picked[input.id] = values[input.id];
 	}
 	return picked;

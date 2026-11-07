@@ -54,11 +54,7 @@ export interface SelvaConfig {
 	events?: IEventSink;
 	/** Records per-solve wall time. Defaults to `NoopSolveMetricSink`, which discards every metric. */
 	solveMetrics?: ISolveMetricSink;
-	/**
-	 * Resolves values for inputs marked `source.kind === 'server'`. Defaults to
-	 * `NoopBindingResolver`, which resolves nothing — hosts that use server-resolved
-	 * inputs must supply a real resolver.
-	 */
+	/** Nothing reads this: see `IBindingResolver`. */
 	bindingResolver?: IBindingResolver;
 }
 

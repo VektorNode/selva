@@ -7,8 +7,7 @@ import type {
 	UserErasureOptions
 } from '@selvajs/platform';
 import { ERASED_ACTOR_ID, NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
-import { decodeSecretKey } from '@selvajs/platform/computeServer';
-import { previousKey } from '@selvajs/platform/config';
+import { readAtRestKeys } from '@selvajs/platform/computeServer';
 import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle, clientBundleFromEnv } from './client.js';
@@ -32,6 +31,7 @@ import { SupabasePlatformPermissionStore } from '../permissions/SupabasePlatform
  */
 const NOT_IMPLEMENTED_MSG = 'Platform projects are not supported on this deployment yet.';
 const notImplementedGrantStore: IPlatformProjectGrantStore = {
+	unsupported: true,
 	listByProject: async () => {
 		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
 	},
@@ -107,21 +107,13 @@ export class SupabaseDataProvider implements IDataProvider {
 	): SupabaseDataProvider {
 		const bundle = clientBundleFromEnv(env);
 		// Same encryption-at-rest guarantee as the local provider's on-disk envelope.
-		if (!env.SELVA_AT_REST_KEY) {
-			throw new Error(
-				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
-					'Required to encrypt compute-server API keys at rest. ' +
-					"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
-			);
-		}
-		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
-		const previous = previousKey(env, 'SELVA_AT_REST_KEY').key;
+		const keys = readAtRestKeys(env);
 		return new SupabaseDataProvider(
 			bundle,
 			events ?? new SupabaseEventSink(bundle, { logger }),
-			secretKey,
+			keys.current,
 			logger,
-			previous ? decodeSecretKey(previous) : undefined
+			keys.previous
 		);
 	}
 

@@ -39,8 +39,9 @@ async function run(): Promise<BootHealth> {
 	let atRestSecrets: SecretVerificationReport | null = null;
 
 	const store = providers.data.computeServer;
-	// Before verifying: rows sealed under SELVA_AT_REST_KEY_PREVIOUS move to the
-	// current key, so the previous one can be dropped. Once per process, here,
+	// Before verifying: rows sealed under SELVA_AT_REST_KEY_PREVIOUS or in an
+	// older envelope move to the current key and envelope, so the previous key
+	// can be dropped. Once per process, here,
 	// because verifySecrets also serves an admin GET and must not write.
 	if (typeof store.reencryptSecrets === 'function') {
 		try {

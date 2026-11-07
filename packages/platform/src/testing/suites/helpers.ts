@@ -1,14 +1,13 @@
+import { expect } from 'vitest';
 import type { RequestContext } from '../../context.js';
 import { ALL_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 
 /**
- * Build a test `RequestContext`. Defaults to a platform admin to keep existing
- * suites permissive; tests that verify permission gating should pass explicit
- * platform/org permission arrays.
+ * Build a test `RequestContext`. Defaults to a platform admin; a suite run with
+ * `nonAdminCtx` passes `platformPermissions: []` through its seed helpers.
  *
- * `sessionToken`, when supplied, is stuffed into `adapterContext.sessionToken`
- * so adapters that enforce auth at the DB layer (Supabase RLS) can run the
- * call as a real authenticated user. Local providers ignore it.
+ * `sessionToken` goes into `adapterContext.sessionToken`, so an adapter that
+ * enforces auth in the database (Supabase RLS) runs the call as that user.
  */
 export function makeCtx(
 	userId: string,
@@ -36,60 +35,105 @@ export function makeSystemCtx(userId = ''): RequestContext {
 	return { userId, platformPermissions: [], orgPermissions: [], system: true };
 }
 
+/** An anonymous share-link holder: `system` for adapter dispatch, never authority. */
+export function makeShareCtx(): RequestContext {
+	return {
+		userId: '',
+		platformPermissions: [],
+		orgPermissions: [],
+		system: true,
+		shareLinkId: makeUuid()
+	};
+}
+
 export function makeUuid(): string {
 	return crypto.randomUUID();
 }
 
+export function randomSlug(prefix = 'test'): string {
+	return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Lets the clock move past the current millisecond, so a timestamp written next is strictly later. */
+export function nextTick(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 5));
+}
+
 /**
- * Optional hook adapters pass when their backend enforces referential
- * integrity on user ids (e.g. Supabase `auth.users`). Returns the id the
- * adapter actually stored AND, optionally, a session token the suite can
- * thread back into `makeCtx({ sessionToken })` so the resulting calls run
- * as that user.
- *
- * Adapters without user FKs (local JSON) return the suggested id as-is and
- * omit the token. Adapters with auth (Supabase) ignore the suggested id,
- * create a fresh user, sign in as them, and return the real id + access JWT.
- *
- * The conformance suite calls this to get a usable id *before* constructing
- * any record that references a user. It never assumes the suggested id is
- * the one used.
+ * Optional hook for adapters whose backend enforces referential integrity on user
+ * ids (Supabase `auth.users`). Returns the id the adapter actually stored and,
+ * optionally, a session token the suite threads into `ctx` so calls run as that
+ * user. Adapters without user FKs echo the suggested id and omit the token.
  */
 export type SeedUserResult = { userId: string; sessionToken?: string };
 export type SeedUserFn = (suggestedId: string) => Promise<SeedUserResult>;
 
-/** Default no-op for adapters that don't need to seed users. Echoes the id back, no token. */
 export const noopSeedUser: SeedUserFn = async (id) => ({ userId: id });
 
+/** Fails unless `promise` rejects with this `statusCode`. A `TypeError` from a bug does not pass. */
+export async function expectStatus(promise: Promise<unknown>, status: number): Promise<void> {
+	await expect(promise).rejects.toMatchObject({ statusCode: status });
+}
+
 /**
- * Wraps a `SeedUserFn` so suites can keep their existing `seed() → userId` and
- * `ctx(userId)` shape while transparently threading session tokens for adapters
- * that return them. Build one per test (Map is mutable & local).
+ * The denial check a suite uses: the exact status under `strictDenials`, any
+ * rejection otherwise.
  */
-export function makeSeedHelpers(seedUser: SeedUserFn) {
+export function makeExpectDenied(
+	strictDenials: boolean
+): (promise: Promise<unknown>, status: number) => Promise<void> {
+	return (promise, status) =>
+		strictDenials ? expectStatus(promise, status) : expect(promise).rejects.toThrow();
+}
+
+/**
+ * Per-run user bookkeeping: seeds users, remembers their session tokens, and
+ * builds a `ctx` that carries the right token. Call it inside a `run*` function
+ * so each suite registration has its own token map.
+ */
+export function makeSeedHelpers(seedUser: SeedUserFn, opts: { nonAdminCtx?: boolean } = {}) {
 	const tokens = new Map<string, string>();
+
+	function remember(user: { userId?: string; sessionToken?: string }): void {
+		if (user.userId && user.sessionToken) tokens.set(user.userId, user.sessionToken);
+	}
 
 	async function seed(): Promise<string> {
 		const result = await seedUser(makeUuid());
-		if (result.sessionToken) tokens.set(result.userId, result.sessionToken);
+		remember(result);
 		return result.userId;
-	}
-
-	/** Register a token for a user that wasn't created via `seed()` (e.g. one returned by `createStore`). */
-	function registerToken(userId: string, sessionToken: string): void {
-		tokens.set(userId, sessionToken);
 	}
 
 	function ctx(
 		userId: string,
-		opts: {
+		perms: {
 			actingOrgId?: string;
 			platformPermissions?: RequestContext['platformPermissions'];
 			orgPermissions?: RequestContext['orgPermissions'];
 		} = {}
 	): RequestContext {
-		return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
+		return makeCtx(userId, {
+			...perms,
+			platformPermissions: perms.platformPermissions ?? (opts.nonAdminCtx ? [] : undefined),
+			sessionToken: tokens.get(userId)
+		});
 	}
 
-	return { seed, ctx, registerToken, tokens };
+	/**
+	 * The adapter's per-test scope (or `fallback` when it supplies none), with the
+	 * session tokens of the users `usersOf` names registered.
+	 */
+	function scopeFrom<S>(
+		createScope: (() => Promise<S> | S) | undefined,
+		fallback: S,
+		usersOf: (scope: S) => Array<{ userId?: string; sessionToken?: string }>
+	): () => Promise<S> {
+		return async () => {
+			const scope = createScope ? await createScope() : fallback;
+			for (const user of usersOf(scope)) remember(user);
+			return scope;
+		};
+	}
+
+	return { seed, ctx, remember, scopeFrom };
 }

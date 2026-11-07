@@ -8,7 +8,7 @@
  * - `getByTokenHash` returns null for missing, expired, or already-consumed
  *   invites. The store sees only HMAC digests; the route layer hashes raw
  *   tokens before lookup.
- * - `markAccepted` is idempotent (no-op if already accepted).
+ * - `markAccepted` succeeds once; a repeat returns false and changes nothing.
  * - `revoke` removes pending invites but must not un-consume accepted ones.
  */
 
@@ -16,7 +16,7 @@ import { describe, it, expect } from 'vitest';
 import type { IInviteStore } from '../../invites/interface.js';
 import type { Invite } from '../../invites/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, noopSeedUser, randomSlug, type SeedUserFn } from './helpers.js';
 
 export interface InviteTestScope {
 	/** User that creates invites. Must be seeded + have `manage_org_members` in the org. */
@@ -28,6 +28,8 @@ export interface InviteTestScope {
 	adminSessionToken?: string;
 	/** Org invites are issued for. Must be seeded with the admin as a member. */
 	orgId: string;
+	/** A second org, for the `orgScoping` cases. The admin needn't belong to it. */
+	otherOrgId?: string;
 }
 
 export interface InviteStoreConformanceOptions {
@@ -35,19 +37,24 @@ export interface InviteStoreConformanceOptions {
 	createStore: () => Promise<IInviteStore> | IInviteStore;
 	createScope?: () => Promise<InviteTestScope> | InviteTestScope;
 	seedUser?: SeedUserFn;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/** `revoke` of an accepted invite is a no-op that leaves it on record as accepted. */
+	revokeAccepted?: boolean;
+	/**
+	 * `listByOrg` leaves out another org's invites, and `deleteByOrg` removes only
+	 * that org's. Needs `scope.otherOrgId` when `createScope` is supplied.
+	 */
+	orgScoping?: boolean;
 }
 
 function invite(scope: InviteTestScope, overrides: Partial<Invite> = {}): Invite {
 	const now = new Date();
 	return {
 		id: overrides.id ?? makeUuid(),
-		// Conformance treats `tokenHash` as opaque — the suite stores whatever
-		// the adapter receives and looks it up by the same value. The route
-		// layer is the one that mints raw tokens and HMACs them; the store
-		// contract is "lookup by stored digest".
-		tokenHash:
-			overrides.tokenHash ?? `hash-${makeUuid()}-${Math.random().toString(36).slice(2, 8)}`,
-		email: overrides.email ?? `invitee-${Math.random().toString(36).slice(2, 6)}@test.local`,
+		// Opaque to the store: it looks invites up by the digest it was given.
+		tokenHash: overrides.tokenHash ?? `hash-${makeUuid()}`,
+		email: overrides.email ?? `${randomSlug('invitee')}@test.local`,
 		orgId: overrides.orgId ?? scope.orgId,
 		orgRole: overrides.orgRole ?? 'member',
 		orgPermissions: overrides.orgPermissions ?? [],
@@ -61,17 +68,24 @@ function invite(scope: InviteTestScope, overrides: Partial<Invite> = {}): Invite
 
 const DEFAULT_SCOPE: InviteTestScope = {
 	adminId: 'admin-1',
-	orgId: 'org-1'
+	orgId: 'org-1',
+	otherOrgId: 'org-2'
 };
 
 export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): void {
-	const { name, createStore, createScope, seedUser = noopSeedUser } = opts;
-	const { ctx, registerToken } = makeSeedHelpers(seedUser);
-	const scopeFor = async (): Promise<InviteTestScope> => {
-		const s = createScope ? await createScope() : DEFAULT_SCOPE;
-		if (s.adminSessionToken) registerToken(s.adminId, s.adminSessionToken);
-		return s;
-	};
+	const {
+		name,
+		createStore,
+		createScope,
+		seedUser = noopSeedUser,
+		nonAdminCtx = false,
+		revokeAccepted = false,
+		orgScoping = false
+	} = opts;
+	const { ctx, scopeFrom } = makeSeedHelpers(seedUser, { nonAdminCtx });
+	const scopeFor = scopeFrom(createScope, DEFAULT_SCOPE, (s) => [
+		{ userId: s.adminId, sessionToken: s.adminSessionToken }
+	]);
 
 	describe(`IInviteStore conformance: ${name}`, () => {
 		it('create + getByTokenHash round-trips', async () => {
@@ -101,34 +115,22 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			expect(got).toBeNull();
 		});
 
-		it('markAccepted sets acceptedAt + acceptedByUserId; getByTokenHash then returns null', async () => {
+		it('markAccepted consumes the invite once, and the first acceptor stays', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const { userId: acceptor } = await seedUser(makeUuid());
+			const { userId: second } = await seedUser(makeUuid());
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
-			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
-			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
-			expect(got).toBeNull();
 
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, second)).toBe(false);
+
+			expect(await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash)).toBeNull();
 			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
 			const row = page.items.find((i) => i.id === inv.id);
 			expect(row?.acceptedAt).toBeTruthy();
 			expect(row?.acceptedByUserId).toBe(acceptor);
-		});
-
-		it('markAccepted is idempotent: the first acceptor stays', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const { userId: acceptor } = await seedUser(makeUuid());
-			const inv = invite(scope);
-			await store.create(ctx(scope.adminId), inv);
-			const { userId: second } = await seedUser(makeUuid());
-			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
-			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, second)).toBe(false);
-
-			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
-			expect(page.items.find((i) => i.id === inv.id)?.acceptedByUserId).toBe(acceptor);
 		});
 
 		it('listByOrg returns invites for the org', async () => {
@@ -154,30 +156,19 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			expect(got).toBeNull();
 		});
 
-		it('revokePendingByEmail kills every pending invite to that address', async () => {
+		it('revokePendingByEmail revokes every pending invite to that address, and no other', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const email = `offboard-${makeUuid()}@test.local`;
 			const first = invite(scope, { email });
 			const second = invite(scope, { email });
-			await store.create(ctx(scope.adminId), first);
-			await store.create(ctx(scope.adminId), second);
+			const bystander = invite(scope, { email: `bystander-${makeUuid()}@test.local` });
+			for (const inv of [first, second, bystander]) await store.create(ctx(scope.adminId), inv);
 
 			const revoked = await store.revokePendingByEmail(ctx(scope.adminId), scope.orgId, email);
 			expect(revoked.sort()).toEqual([first.id, second.id].sort());
 			expect(await store.getByTokenHash(SYSTEM_CONTEXT, first.tokenHash)).toBeNull();
 			expect(await store.getByTokenHash(SYSTEM_CONTEXT, second.tokenHash)).toBeNull();
-		});
-
-		it('revokePendingByEmail leaves other addresses and other orgs alone', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const target = `target-${makeUuid()}@test.local`;
-			const bystander = invite(scope, { email: `bystander-${makeUuid()}@test.local` });
-			await store.create(ctx(scope.adminId), invite(scope, { email: target }));
-			await store.create(ctx(scope.adminId), bystander);
-
-			await store.revokePendingByEmail(ctx(scope.adminId), scope.orgId, target);
 			expect(await store.getByTokenHash(SYSTEM_CONTEXT, bystander.tokenHash)).not.toBeNull();
 		});
 
@@ -212,5 +203,57 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			);
 			expect(revoked).toEqual([inv.id]);
 		});
+
+		if (revokeAccepted) {
+			it('revoke of an accepted invite leaves it on record as accepted', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const { userId: acceptor } = await seedUser(makeUuid());
+				const inv = invite(scope);
+				await store.create(ctx(scope.adminId), inv);
+				await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
+
+				await store.revoke(ctx(scope.adminId), inv.id);
+
+				const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
+				expect(page.items.find((i) => i.id === inv.id)?.acceptedByUserId).toBe(acceptor);
+			});
+		}
+
+		if (orgScoping) {
+			const otherOrgOf = (scope: InviteTestScope): string => {
+				if (!scope.otherOrgId) throw new Error('orgScoping requires scope.otherOrgId');
+				return scope.otherOrgId;
+			};
+
+			it('listByOrg leaves out another org’s invites', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const mine = invite(scope);
+				const theirs = invite(scope, { orgId: otherOrgOf(scope) });
+				await store.create(ctx(scope.adminId), mine);
+				await store.create(SYSTEM_CONTEXT, theirs);
+
+				const ids = (
+					await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 })
+				).items.map((i) => i.id);
+				expect(ids).toContain(mine.id);
+				expect(ids).not.toContain(theirs.id);
+			});
+
+			it('deleteByOrg removes that org’s invites and no other', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const doomed = invite(scope);
+				const kept = invite(scope, { orgId: otherOrgOf(scope) });
+				await store.create(ctx(scope.adminId), doomed);
+				await store.create(SYSTEM_CONTEXT, kept);
+
+				await store.deleteByOrg(SYSTEM_CONTEXT, scope.orgId);
+
+				expect(await store.getByTokenHash(SYSTEM_CONTEXT, doomed.tokenHash)).toBeNull();
+				expect(await store.getByTokenHash(SYSTEM_CONTEXT, kept.tokenHash)).not.toBeNull();
+			});
+		}
 	});
 }

@@ -1,10 +1,13 @@
 import type { UISchema } from '@selvajs/schemas';
 import type { z } from 'zod';
-import type { DefinitionChannelSchema } from './schemas.js';
+import type { ListOptions } from '../pagination.js';
+import type { DefinitionChannelSchema, DefinitionStatusSchema } from './schemas.js';
 
-export type DefinitionFileExt = 'gh' | 'ghx';
+const DEFINITION_FILE_EXTS = ['gh', 'ghx'] as const;
 
-export const GH_EXTENSIONS: string[] = ['.gh', '.ghx'];
+export type DefinitionFileExt = (typeof DEFINITION_FILE_EXTS)[number];
+
+export const GH_EXTENSIONS: string[] = DEFINITION_FILE_EXTS.map((ext) => `.${ext}`);
 
 export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.jpg': 'image/jpeg',
@@ -23,7 +26,33 @@ export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
  * List endpoints filter out `pending` and `archived` by default (opt in via
  * `DefinitionListOptions.includePending`/`includeArchived`, or an explicit `statuses` filter).
  */
-export type DefinitionStatus = 'pending' | 'draft' | 'published' | 'archived';
+export type DefinitionStatus = z.infer<typeof DefinitionStatusSchema> | 'pending';
+
+/** Definition-specific filtering on top of `ListOptions`. */
+export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
+	orderBy?: 'createdAt' | 'updatedAt' | 'name' | 'solveCount';
+	/** Include `status='pending'` records. Default false. */
+	includePending?: boolean;
+	/** Include `status='archived'` records. Default false. */
+	includeArchived?: boolean;
+	/**
+	 * Filter to specific editorial statuses. Omit for the default view (all
+	 * non-pending, non-archived). When set, `includePending` / `includeArchived`
+	 * are ignored.
+	 */
+	statuses?: DefinitionStatus[];
+	/**
+	 * Restrict to definitions in these projects. An empty array matches nothing,
+	 * distinct from omitting the filter.
+	 *
+	 * Applying this in the adapter query — rather than filtering a fetched page
+	 * afterwards — is what keeps `limit` and `nextCursor` accurate: filtering
+	 * post-fetch can return a page of 50 with 3 items.
+	 */
+	projectIds?: readonly string[];
+	/** Only definitions whose `sourceDocumentId` equals this lowercase GUID. */
+	sourceDocumentId?: string;
+}
 
 /**
  * Immutable snapshot of a definition's `.gh` file at a point in time. New
@@ -63,12 +92,9 @@ export interface DefinitionRecord {
 	/** Falls back to the org default, then the platform default. */
 	computeServerId?: string;
 	/**
-	 * Per-definition quota for a shared solve-result cache: `0` = caching off,
-	 * `N` = keep at most N cached solves, absent = inherit the backend default.
-	 *
-	 * **Dormant.** No shared backend ships today (see `ISolveResultCache`), so
-	 * this affects nothing at solve time yet. Kept as a persisted column rather
-	 * than removed, since it's the right knob once a backend exists.
+	 * Per-definition quota for the shared solve-result cache (`ISolveResultCache`):
+	 * `0` = caching off, `N` = keep at most N cached solves, absent = inherit the
+	 * backend default.
 	 */
 	solveCacheLimit?: number;
 	displayName: string;

@@ -65,6 +65,9 @@ describe('LocalProjectStore', () => {
 				}
 			);
 			return { store, orgId, ownerId };
-		}
+		},
+		strictDenials: true,
+		nonAdminCtx: true,
+		auditStamps: true
 	});
 });

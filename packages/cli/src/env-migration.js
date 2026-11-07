@@ -48,7 +48,7 @@ function canonical(value) {
 function meaning(spec, env, { legacy }) {
 	if (EFFECTIVE[spec.key]) return EFFECTIVE[spec.key](env);
 	const name = [spec.key, ...(spec.aliases ?? [])].find(
-		(k) => env[k] !== undefined && env[k] !== ''
+		(k) => env[k] !== undefined && env[k].trim() !== ''
 	);
 	if (name === undefined) return spec.default;
 	const raw = env[name];

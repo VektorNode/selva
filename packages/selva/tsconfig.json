@@ -4,12 +4,9 @@
 		"rewriteRelativeImportExtensions": true,
 		"sourceMap": true,
 		"strict": true,
-		// NOTE: vitest reads workspace-package source directly via the
-		// `"selva-source"` export condition (see vitest.config.ts). `tsc` here
-		// continues to read dist so each package's type errors surface in its
-		// own build, not re-attributed here. Run `pnpm build` (turbo will only
-		// rebuild what changed) before `pnpm type-check` if you've edited a
-		// platform rule and need it reflected in type errors.
+		// `tsc` reads workspace packages from dist so each package's type errors
+		// surface in its own build. Run `pnpm build` (turbo rebuilds only what
+		// changed) before `pnpm type-check` after editing a platform rule.
 		//
 		// @selvajs/ui's published "." entry is the curated public SDK (dist/public);
 		// internally we use its full barrel (primitives, layout, toast), so map it
@@ -20,6 +17,13 @@
 		}
 	},
 	// playwright.config.ts is here so ESLint's typed-lint project service owns it.
-	// The e2e/*.ts specs are covered by e2e/tsconfig.json.
-	"include": ["src", "vite.config.ts", "kit.config.ts", "playwright.config.ts"]
+	// The e2e/*.ts specs are covered by e2e/tsconfig.json. `src` alone skips
+	// dot-folders, so `.well-known` is listed explicitly.
+	"include": [
+		"src",
+		"src/routes/.well-known/**/*.ts",
+		"vite.config.ts",
+		"kit.config.ts",
+		"playwright.config.ts"
+	]
 }

@@ -6,6 +6,7 @@ export * from './auth/index.js';
 export * from './computeServer/public.js';
 export * from './data/index.js';
 export * from './definitions/index.js';
+export * from './errors/index.js';
 export * from './events/index.js';
 export * from './invites/index.js';
 export * from './notifications/index.js';
@@ -29,9 +30,6 @@ export type {
 } from './solveCache/interface.js';
 export { NoopSolveResultCache } from './solveCache/interface.js';
 
-export type { IErrorReporter, ErrorContext } from './errors/interface.js';
-export { NoopErrorReporter } from './errors/interface.js';
-
 export type { ILogger, LogFields, LogLevel } from './logging/interface.js';
 export { NoopLogger } from './logging/interface.js';
 
@@ -47,7 +45,8 @@ export {
 	assertNotShareContext
 } from './context.js';
 
-export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
+export type { ListOptions, Page } from './pagination.js';
+export type { DefinitionListOptions } from './definitions/types.js';
 export {
 	DEFAULT_PAGE_LIMIT,
 	MAX_PAGE_LIMIT,
@@ -64,7 +63,5 @@ export type {
 	SelvaBranding,
 	SelvaConfig,
 	SelvaConfigFactory
-} from './config.js';
-export { isFlagEnabled, defineConfig } from './config.js';
-
-export { ProviderError } from './errors.js';
+} from './selva-config.js';
+export { isFlagEnabled, defineConfig } from './selva-config.js';

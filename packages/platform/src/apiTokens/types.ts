@@ -28,16 +28,22 @@ export interface ApiScope {
 
 // Ids are uuids or guids in practice; the charset only has to keep `:` out so
 // the string form stays unambiguous.
-const SCOPE_PATTERN =
-	/^(read|write|solve|upload|create_projects):(all|(org|project|definition):([A-Za-z0-9_-]{1,128}))$/;
+const SCOPE_PATTERN = new RegExp(
+	`^(${ApiScopeActionSchema.options.join('|')}):(all|(org|project|definition):([A-Za-z0-9_-]{1,128}))$`
+);
 
-/** `read:all`, `write:org:<id>`, `solve:project:<id>`, `read:definition:<guid>`. */
+/**
+ * `read:all`, `write:org:<id>`, `solve:project:<id>`, `read:definition:<guid>`.
+ * `create_projects` takes only `all` or `org`: a project-scoped one could create nothing.
+ */
 export function parseApiScope(value: string): ApiScope | null {
 	const m = SCOPE_PATTERN.exec(value);
 	if (!m) return null;
 	const action = m[1] as ApiScopeAction;
 	if (m[2] === 'all') return { action, resource: { kind: 'all' } };
-	return { action, resource: { kind: m[3] as 'org' | 'project' | 'definition', id: m[4]! } };
+	const kind = m[3] as 'org' | 'project' | 'definition';
+	if (action === 'create_projects' && kind !== 'org') return null;
+	return { action, resource: { kind, id: m[4]! } };
 }
 
 export function formatApiScope(scope: ApiScope): string {
@@ -102,7 +108,7 @@ const ACTION_WORDS: Record<ApiScopeAction, string> = {
 	write: 'Read and change',
 	solve: 'Read and run solves on',
 	upload: 'Read and upload definitions to',
-	create_projects: 'Create private projects in'
+	create_projects: 'Read and create private projects in'
 };
 
 /** "Read and change everything in the org". Names no ids, so it suits an email. */

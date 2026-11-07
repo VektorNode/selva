@@ -6,18 +6,21 @@ import type { DefinitionRecord } from '../definitions/types.js';
 import type { PlatformProjectGrant } from '../platformProjects/types.js';
 
 /**
- * Pure access-control rules — single source of truth for UI gating across
- * adapters. Mutating store methods MUST re-enforce the same predicate
- * independently (RLS in SQL, code in local/JSON).
+ * Pure access rules: already-loaded rows in, boolean out. Callers load the rows and the rules
+ * hold the logic, so UI gating and server guards agree.
  *
- * `instance_admin` bypass is not baked into rule bodies — wrap calls with
- * `withAdminBypass` at the call site.
+ * Each rule decides `instance_admin` itself. An admin sees no private project without a
+ * member row, and no rule opens a `platform` project while `enablePlatformProjects` is off.
  */
 
 function isInstanceAdmin(platformPermissions: readonly PlatformPermission[]): boolean {
 	return platformPermissions.includes('instance_admin');
 }
 
+/**
+ * @deprecated Unsafe on a content rule: wrapping `canView` opens `platform` projects with the
+ * feature off, and private projects to an admin with no member row. Call the rule alone.
+ */
 export function withAdminBypass(
 	platformPermissions: readonly PlatformPermission[],
 	rule: () => boolean
@@ -27,7 +30,8 @@ export function withAdminBypass(
 }
 
 export interface ProjectAccessInput {
-	orgPermissions: readonly OrgPermission[];
+	/** @deprecated No rule reads it. */
+	orgPermissions?: readonly OrgPermission[];
 	platformPermissions: readonly PlatformPermission[];
 	project: Project | null;
 	member: ProjectMember | null;
@@ -51,6 +55,33 @@ export interface ProjectAccessInput {
 	userId: string;
 }
 
+function grantMatches(
+	grant: PlatformProjectGrant,
+	who: { userId?: string; actingOrgId?: string | null }
+): boolean {
+	return (
+		(grant.granteeType === 'user' && grant.granteeId === who.userId) ||
+		(grant.granteeType === 'org' && grant.granteeId === who.actingOrgId)
+	);
+}
+
+/**
+ * The verdict on a `platform`-visibility project, or `undefined` for any other, which the
+ * calling rule decides. The flag is read before `instance_admin`, so switching the feature
+ * off hides these projects from admins too. Without `grantAllows`, no grant is enough.
+ */
+function platformGate(
+	input: Pick<ProjectAccessInput, 'project' | 'enablePlatformProjects' | 'platformPermissions'> &
+		Partial<Pick<ProjectAccessInput, 'platformGrants' | 'actingOrgId' | 'userId'>>,
+	grantAllows?: (grant: PlatformProjectGrant) => boolean
+): boolean | undefined {
+	if (input.project?.visibility !== 'platform') return undefined;
+	if (!input.enablePlatformProjects) return false;
+	if (isInstanceAdmin(input.platformPermissions)) return true;
+	if (!grantAllows) return false;
+	return (input.platformGrants ?? []).some((g) => grantAllows(g) && grantMatches(g, input));
+}
+
 /**
  * Authenticated-user view rule. Anonymous access goes through share-link
  * tokens instead — the route resolves a valid token before this runs.
@@ -59,28 +90,11 @@ export interface ProjectAccessInput {
  * (view-only or canSolve) satisfies view access.
  */
 export function canView(input: ProjectAccessInput): boolean {
-	const {
-		project,
-		member,
-		orgMember,
-		allowCrossOrgPublic,
-		enablePlatformProjects,
-		platformPermissions,
-		platformGrants,
-		actingOrgId,
-		userId
-	} = input;
+	const { project, member, orgMember, allowCrossOrgPublic, actingOrgId } = input;
 	if (!project) return false;
 
-	if (project.visibility === 'platform') {
-		if (!enablePlatformProjects) return false;
-		if (isInstanceAdmin(platformPermissions)) return true;
-		return platformGrants.some(
-			(g) =>
-				(g.granteeType === 'user' && g.granteeId === userId) ||
-				(g.granteeType === 'org' && g.granteeId === actingOrgId)
-		);
-	}
+	const platform = platformGate(input, () => true);
+	if (platform !== undefined) return platform;
 
 	// A project member sees the project at any visibility. Leaving the org ends the
 	// membership, so this only widens access for someone who reclaimed from outside.
@@ -98,28 +112,7 @@ export function canView(input: ProjectAccessInput): boolean {
  * satisfies `canView` but not `canSolve` — the grant needs `canSolve: true`.
  */
 export function canSolve(input: ProjectAccessInput): boolean {
-	const {
-		project,
-		enablePlatformProjects,
-		platformPermissions,
-		platformGrants,
-		actingOrgId,
-		userId
-	} = input;
-	if (!project) return false;
-
-	if (project.visibility === 'platform') {
-		if (!enablePlatformProjects) return false;
-		if (isInstanceAdmin(platformPermissions)) return true;
-		return platformGrants.some(
-			(g) =>
-				g.canSolve &&
-				((g.granteeType === 'user' && g.granteeId === userId) ||
-					(g.granteeType === 'org' && g.granteeId === actingOrgId))
-		);
-	}
-
-	return canView(input);
+	return platformGate(input, (g) => g.canSolve) ?? canView(input);
 }
 
 /**
@@ -127,13 +120,9 @@ export function canSolve(input: ProjectAccessInput): boolean {
  * All other visibilities: project owner/editor.
  */
 export function canEdit(input: ProjectAccessInput): boolean {
-	const { member, project, enablePlatformProjects, platformPermissions } = input;
+	const { member, project } = input;
 	if (!project) return false;
-	if (project.visibility === 'platform') {
-		if (!enablePlatformProjects) return false;
-		return isInstanceAdmin(platformPermissions);
-	}
-	return member?.role === 'owner' || member?.role === 'editor';
+	return platformGate(input) ?? (member?.role === 'owner' || member?.role === 'editor');
 }
 
 /**
@@ -148,11 +137,7 @@ export function canCreateDefinition(input: ProjectAccessInput): boolean {
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
 	if (!input.project) return false;
-	if (input.project.visibility === 'platform') {
-		if (!input.enablePlatformProjects) return false;
-		return isInstanceAdmin(input.platformPermissions);
-	}
-	return input.member?.role === 'owner';
+	return platformGate(input) ?? input.member?.role === 'owner';
 }
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
@@ -202,22 +187,12 @@ export interface DefinitionAccessInput {
  * their own, as long as they still belong to the project's org.
  */
 export function canEditDefinition(input: DefinitionAccessInput): boolean {
-	const {
-		project,
-		definition,
-		member,
-		orgMember,
-		userId,
-		platformPermissions,
-		enablePlatformProjects
-	} = input;
+	const { project, definition, member, orgMember, userId } = input;
 	if (!project || !definition) return false;
 	if (definition.projectId !== project.id) return false;
 
-	if (project.visibility === 'platform') {
-		if (!enablePlatformProjects) return false;
-		return isInstanceAdmin(platformPermissions);
-	}
+	const platform = platformGate(input);
+	if (platform !== undefined) return platform;
 
 	if (member?.role === 'owner' || member?.role === 'editor') return true;
 

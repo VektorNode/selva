@@ -13,7 +13,12 @@
 
 import { makeSystemCtx } from './helpers.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { ISolveMetricSink, SolveMetric, RequestContext } from '../../index.js';
+import type {
+	ISolveMetricSink,
+	SolveMetric,
+	SolveFailureKind,
+	RequestContext
+} from '../../index.js';
 
 /**
  * Adapter's view of a persisted metric, normalized back to the `SolveMetric`
@@ -44,7 +49,21 @@ export interface SolveMetricSinkConformanceOptions {
 	createFailingSink?: () => Promise<ISolveMetricSink> | ISolveMetricSink;
 	/** Optional per-test cleanup (truncate the metrics table, etc.). */
 	cleanup?: () => Promise<void> | void;
+	/** Every `SolveFailureKind` persists, on both channels. */
+	allFailureKinds?: boolean;
 }
+
+// A record keyed by the union, so a new kind fails to compile until it is listed here.
+const FAILURE_KINDS = Object.keys({
+	ok: true,
+	timeout: true,
+	client_abort: true,
+	rate_limited: true,
+	share_cap: true,
+	too_large: true,
+	shed: true,
+	compute_error: true
+} satisfies Record<SolveFailureKind, true>) as SolveFailureKind[];
 
 function sysCtx(userId: string): RequestContext {
 	return makeSystemCtx(userId);
@@ -67,7 +86,15 @@ function baseMetric(overrides: Partial<SolveMetric> = {}): SolveMetric {
 }
 
 export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOptions): void {
-	const { name, createSink, readRows, flushSink, createFailingSink, cleanup } = opts;
+	const {
+		name,
+		createSink,
+		readRows,
+		flushSink,
+		createFailingSink,
+		cleanup,
+		allFailureKinds = false
+	} = opts;
 
 	describe(`ISolveMetricSink conformance: ${name}`, () => {
 		let sink: ISolveMetricSink;
@@ -95,32 +122,42 @@ export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOp
 			expect(rows[0]).toMatchObject({ ...metric, actorId: 'user-1' });
 		});
 
-		it('records the actor from the RequestContext', async () => {
-			await sink.record(sysCtx('user-xyz'), baseMetric());
-			const rows = await drainAndRead();
-			expect(rows[0].actorId).toBe('user-xyz');
-		});
-
 		it('falls back to "system" when the context has no user id', async () => {
 			await sink.record(sysCtx(''), baseMetric());
 			const rows = await drainAndRead();
 			expect(rows[0].actorId).toBe('system');
 		});
 
-		it('persists a failed solve with its failureKind and zero duration', async () => {
-			await sink.record(
-				sysCtx('user-1'),
-				baseMetric({ ok: false, failureKind: 'timeout', durationMs: 0 })
-			);
+		it('persists a failed solve with its failureKind, zero duration and counts', async () => {
+			const failed = {
+				ok: false,
+				failureKind: 'timeout',
+				durationMs: 0,
+				errorCount: 2,
+				warningCount: 5
+			} as const;
+			await sink.record(sysCtx('user-1'), baseMetric(failed));
 			const rows = await drainAndRead();
-			expect(rows[0]).toMatchObject({ ok: false, failureKind: 'timeout', durationMs: 0 });
+			expect(rows[0]).toMatchObject(failed);
 		});
 
-		it('persists error/warning counts on an otherwise-ok solve', async () => {
-			await sink.record(sysCtx('user-1'), baseMetric({ errorCount: 2, warningCount: 5 }));
-			const rows = await drainAndRead();
-			expect(rows[0]).toMatchObject({ ok: true, errorCount: 2, warningCount: 5 });
-		});
+		if (allFailureKinds) {
+			it('persists every failureKind on both channels', async () => {
+				for (const [i, failureKind] of FAILURE_KINDS.entries()) {
+					await sink.record(
+						sysCtx('user-1'),
+						baseMetric({
+							ok: failureKind === 'ok',
+							failureKind,
+							channel: i % 2 === 0 ? 'live' : 'draft'
+						})
+					);
+				}
+				const rows = await drainAndRead();
+				expect(rows.map((r) => r.failureKind).sort()).toEqual([...FAILURE_KINDS].sort());
+				expect(new Set(rows.map((r) => r.channel))).toEqual(new Set(['live', 'draft']));
+			});
+		}
 
 		it('persists null definition/version/org for remote-URL solves', async () => {
 			await sink.record(
@@ -142,7 +179,7 @@ export function runSolveMetricSinkConformance(opts: SolveMetricSinkConformanceOp
 				// The contract: record swallows the failure and resolves. For a
 				// buffering sink the write happens on flush, so that must swallow too.
 				await expect(failing.record(sysCtx('user-1'), baseMetric())).resolves.toBeUndefined();
-				if (flushSink) await expect(flushSink(failing)).resolves.not.toThrow();
+				if (flushSink) await expect(Promise.resolve(flushSink(failing))).resolves.not.toThrow();
 			});
 		}
 	});

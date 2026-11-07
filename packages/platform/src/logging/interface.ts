@@ -1,11 +1,8 @@
 /**
- * Structured logging seam: the interface + a safe default live here, the real
- * backend (pino) ships from `@selvajs/server` so `@selvajs/platform` never
- * gains a logging dependency and browser-side consumers never pull a Node
- * logger into a bundle. A hard pino import would also impose a transport
- * config on every embedder, including ones that already own a logging stack.
- * Call sites describe WHAT happened and hand over fields; formatting,
- * redaction and routing are the backend's business.
+ * Structured logging seam with a silent default. The host supplies the backend, so this
+ * package takes no logging dependency and a browser bundle never pulls in a Node logger.
+ * Call sites describe WHAT happened and hand over fields; formatting, redaction and
+ * routing are the backend's business.
  */
 
 /**

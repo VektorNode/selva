@@ -21,6 +21,7 @@ describe('LocalComputeServerStore', () => {
 	runComputeServerStoreConformance({
 		name: 'LocalComputeServerStore',
 		createStore: () =>
-			new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'), TEST_SECRET_KEY)
+			new LocalComputeServerStore(path.join(tempDir, 'compute.config.json'), TEST_SECRET_KEY),
+		orgScopedReads: true
 	});
 });

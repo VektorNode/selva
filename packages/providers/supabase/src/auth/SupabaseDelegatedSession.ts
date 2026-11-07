@@ -1,11 +1,11 @@
 import { createHmac, createPrivateKey, randomUUID, sign } from 'node:crypto';
-import { trimTrailing } from '../trim.js';
 import {
 	NoopLogger,
 	ProviderError,
 	type DelegatedSessionStatus,
 	type IDelegatedSession,
-	type ILogger
+	type ILogger,
+	trimTrailing
 } from '@selvajs/platform';
 
 export interface SupabaseDelegatedSessionConfig {

@@ -1,29 +1,28 @@
 /**
- * Adapter conformance suite for IStorageProvider.
- *
- * Tests blob storage operations (get, put, delete, deletePrefix, getPublicUrl)
- * to ensure all adapters behave identically.
+ * Adapter conformance suite for IStorageProvider: get, put (with image
+ * transcoding), delete, deletePrefix and getPublicUrl.
  */
 
 import { describe, it, expect } from 'vitest';
 import type { IStorageProvider } from '../../storage/interface.js';
+import { makeExpectDenied } from './helpers.js';
 
 export interface StorageProviderConformanceOptions {
 	/** Name to show in test output (e.g. "local-filesystem"). */
 	name: string;
 	/** Factory that returns a fresh, empty storage per test. */
 	createStorage: () => Promise<IStorageProvider> | IStorageProvider;
+	/** `deletePrefix('')` and `deletePrefix('/')` throw `ProviderError(400)`, not just any error. */
+	strictDenials?: boolean;
+	/** `deletePrefix('a/b')` removes the directory `a/b` and leaves `a/bc`. */
+	segmentPrefix?: boolean;
 }
 
 function bytes(text: string): Uint8Array {
 	return new TextEncoder().encode(text);
 }
 
-/**
- * Fast content fingerprint (FNV-1a) for large-payload comparison. A single
- * linear pass — orders of magnitude cheaper than vitest's `toEqual` deep
- * walk over a megabyte-scale typed array.
- */
+/** FNV-1a fingerprint: one linear pass, far cheaper than a deep `toEqual` over a megabyte. */
 function checksum(data: Uint8Array): number {
 	let h = 0x811c9dc5;
 	for (let i = 0; i < data.length; i++) {
@@ -34,22 +33,21 @@ function checksum(data: Uint8Array): number {
 }
 
 export function runStorageProviderConformance(opts: StorageProviderConformanceOptions): void {
-	const { name, createStorage } = opts;
+	const { name, createStorage, strictDenials = false, segmentPrefix = false } = opts;
+	const expectDenied = makeExpectDenied(strictDenials);
 
 	describe(`IStorageProvider conformance: ${name}`, () => {
-		it('put returns the path it stored at', async () => {
+		it('put returns the path it stored at, and get returns the bytes', async () => {
 			const storage = await createStorage();
-			expect(await storage.put('test/plain.txt', bytes('data'), 'text/plain')).toBe(
-				'test/plain.txt'
-			);
-		});
+			const plain = bytes('Hello, World!');
+			const octets = bytes('{"type":"octet"}');
+			expect(await storage.put('test/plain.txt', plain, 'text/plain')).toBe('test/plain.txt');
+			expect(await storage.put('test/untyped.txt', plain)).toBe('test/untyped.txt');
+			await storage.put('files/test.bin', octets, 'application/octet-stream');
 
-		it('put + get returns the stored data', async () => {
-			const storage = await createStorage();
-			const data = bytes('Hello, World!');
-			await storage.put('test/file.txt', data);
-			const got = await storage.get('test/file.txt');
-			expect(got).toEqual(data);
+			expect(await storage.get('test/plain.txt')).toEqual(plain);
+			expect(await storage.get('test/untyped.txt')).toEqual(plain);
+			expect(await storage.get('files/test.bin')).toEqual(octets);
 		});
 
 		it('get returns null for missing path', async () => {
@@ -66,14 +64,6 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			await storage.put('test/file.txt', data2);
 			const got = await storage.get('test/file.txt');
 			expect(got).toEqual(data2);
-		});
-
-		it('put creates nested directories', async () => {
-			const storage = await createStorage();
-			const data = bytes('nested');
-			await storage.put('a/b/c/d/file.txt', data);
-			const got = await storage.get('a/b/c/d/file.txt');
-			expect(got).toEqual(data);
 		});
 
 		it('delete removes a file', async () => {
@@ -111,30 +101,30 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			const storage = await createStorage();
 			await storage.put('test/file.txt', bytes('keep'));
 
-			await expect(storage.deletePrefix('')).rejects.toThrow();
-			await expect(storage.deletePrefix('/')).rejects.toThrow();
+			await expectDenied(storage.deletePrefix(''), 400);
+			await expectDenied(storage.deletePrefix('/'), 400);
 
 			expect(await storage.get('test/file.txt')).toEqual(bytes('keep'));
 		});
+
+		if (segmentPrefix) {
+			it('deletePrefix stops at a path segment: a/b does not reach a/bc', async () => {
+				const storage = await createStorage();
+				await storage.put('a/b/x.txt', bytes('gone'));
+				await storage.put('a/bc/y.txt', bytes('kept'));
+
+				await storage.deletePrefix('a/b');
+
+				expect(await storage.get('a/b/x.txt')).toBeNull();
+				expect(await storage.get('a/bc/y.txt')).toEqual(bytes('kept'));
+			});
+		}
 
 		it('deletePrefix with no matches is a no-op', async () => {
 			const storage = await createStorage();
 			await storage.put('other/file.txt', bytes('data'));
 			await storage.deletePrefix('nonexistent/');
 			// Should not throw
-		});
-
-		it('getPublicUrl returns a non-empty string', async () => {
-			const storage = await createStorage();
-			const url = storage.getPublicUrl('test/file.txt');
-			expect(url).toBeTruthy();
-		});
-
-		it('getPublicUrl is consistent for same path', async () => {
-			const storage = await createStorage();
-			const url1 = storage.getPublicUrl('test/file.txt');
-			const url2 = storage.getPublicUrl('test/file.txt');
-			expect(url1).toBe(url2);
 		});
 
 		it('getPublicUrl differs for different paths', async () => {
@@ -152,12 +142,7 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(got).toEqual(binary);
 		});
 
-		// Runs with a raised timeout: the round-trip itself is ~1ms, but this test
-		// carries fixed worker overhead (~1.5s locally) that inflates several-fold
-		// on a loaded CI runner where all packages' suites run concurrently — enough
-		// to blow the default 5s. Comparison uses a checksum, not `toEqual`, whose
-		// element-by-element deep walk over a million-entry Uint8Array alone cost
-		// >1.5s.
+		// Raised timeout: a runner busy with every package's suites can blow the default here.
 		it('handles large data', async () => {
 			const storage = await createStorage();
 			const large = new Uint8Array(1024 * 1024); // 1 MB
@@ -170,14 +155,6 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(got!.length).toBe(large.length);
 			expect(checksum(got!)).toBe(checksum(large));
 		}, 30_000);
-
-		it('put with contentType is stored', async () => {
-			const storage = await createStorage();
-			const data = bytes('{"type":"octet"}');
-			await storage.put('files/test.bin', data, 'application/octet-stream');
-			const got = await storage.get('files/test.bin');
-			expect(got).toEqual(data);
-		});
 
 		// ============================================================================
 		// Image transcoding

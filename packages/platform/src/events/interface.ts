@@ -5,9 +5,8 @@ type DomainEventBody =
 	| { type: 'org.deleted'; orgId: string; actorId: string }
 	| { type: 'org_member.added'; orgId: string; userId: string; actorId: string }
 	| { type: 'org_member.removed'; orgId: string; userId: string; actorId: string }
-	// Offboarding that left projects with no owner. Removal is deliberately not
-	// blocked on this (see the org members DELETE handler), so this event is the
-	// only signal that someone needs to reclaim them.
+	// Offboarding that left projects with no owner. Removal doesn't wait for a new
+	// owner, so this event is the only signal that someone needs to reclaim them.
 	| {
 			type: 'org_member.removed_orphaning_projects';
 			orgId: string;
@@ -166,13 +165,18 @@ export interface IEventSink {
  * `ctx.userId === ''` is the `SYSTEM_CONTEXT` convention for a server-internal
  * caller (bootstrap, janitors, migrations), which resolves to `'system'` here.
  */
-export function actorFrom(ctx: { userId: string; system?: boolean }): string {
+export function actorFrom(ctx: {
+	userId: string;
+	/** @deprecated Never read: an empty `userId` alone marks a system caller. */
+	system?: boolean;
+}): string {
 	return ctx.userId || 'system';
 }
 
 /** `actorId` plus, for an API-token request, `tokenId`. Spread into an event. */
 export function actorOf(ctx: {
 	userId: string;
+	/** @deprecated Never read: an empty `userId` alone marks a system caller. */
 	system?: boolean;
 	apiScope?: { tokenId: string };
 }): { actorId: string; tokenId?: string } {

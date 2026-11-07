@@ -12,8 +12,11 @@
  */
 
 import type { ILogger, RequestContext } from '@selvajs/platform';
+import { NoopLogger } from '@selvajs/platform';
+import type { EnvRecord } from '@selvajs/platform/config';
 import { createComputeRateLimiter } from '../compute/rate-limit.js';
-import { readNonNegativeInt, type EnvRecord } from '../compute/limits.js';
+import { readSettings } from '../config/read-settings.js';
+import { API_TOKEN_RATE_LIMIT_SETTING } from '../config/settings.js';
 import { ApiError, ApiErrorCode, toErrorBody } from './errors.js';
 
 export interface ApiRateLimitVerdict {
@@ -39,19 +42,18 @@ export interface ApiRateLimitConfig {
 
 export const DEFAULT_API_RATE_LIMIT: Readonly<ApiRateLimitConfig> = Object.freeze({
 	windowMs: 60_000,
-	maxPerWindow: 600
+	maxPerWindow: API_TOKEN_RATE_LIMIT_SETTING.default
 });
 
 /** Read `API_TOKEN_RATE_LIMIT_MAX` (requests per window, `0` = off) from an injected env map. */
-export function resolveApiRateLimitConfig(env: EnvRecord, logger?: ILogger): ApiRateLimitConfig {
+export function resolveApiRateLimitConfig(
+	env: EnvRecord,
+	logger: ILogger = new NoopLogger()
+): ApiRateLimitConfig {
+	const values = readSettings([API_TOKEN_RATE_LIMIT_SETTING], env, logger);
 	return {
 		windowMs: DEFAULT_API_RATE_LIMIT.windowMs,
-		maxPerWindow: readNonNegativeInt(
-			env,
-			'API_TOKEN_RATE_LIMIT_MAX',
-			DEFAULT_API_RATE_LIMIT.maxPerWindow,
-			logger
-		)
+		maxPerWindow: values.API_TOKEN_RATE_LIMIT_MAX as number
 	};
 }
 

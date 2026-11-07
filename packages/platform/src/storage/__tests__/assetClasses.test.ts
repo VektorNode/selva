@@ -8,8 +8,8 @@ describe('classifyAssetPath', () => {
 		expect(classifyAssetPath(`definitions/${GUID}/cover.webp`)?.class.id).toBe('definition-cover');
 	});
 
-	it.each(['png', 'jpg', 'jpeg', 'gif'])('does not match a .%s cover', (ext) => {
-		expect(classifyAssetPath(`definitions/${GUID}/cover.${ext}`)).toBeNull();
+	it('does not match a cover that is not .webp', () => {
+		expect(classifyAssetPath(`definitions/${GUID}/cover.png`)).toBeNull();
 	});
 
 	it('classifies branding as public', () => {

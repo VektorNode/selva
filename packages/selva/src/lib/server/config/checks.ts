@@ -4,7 +4,7 @@ import {
 	type EnvRecord,
 	type KeyRotation
 } from '@selvajs/platform/config';
-import { deploymentManifest } from './settings.js';
+import { computeDebugMode, deploymentManifest } from './settings.js';
 
 /**
  * Plain-language findings for the admin Configuration page: what is wrong with
@@ -208,7 +208,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 		});
 	}
 
-	if (values.SELVA_FLAG_COMPUTE_DEBUG === 'verbose') {
+	if (computeDebugMode(env) === 'verbose') {
 		out.push({
 			id: 'verbose-debug',
 			level: 'warning',

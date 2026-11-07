@@ -139,11 +139,7 @@
 	}
 
 	const invitePermissionOptions = $derived<OrgPermission[]>(
-		inviteRole === 'member'
-			? ALL_ORG_PERMISSIONS.filter(
-					(p) => !(OWNER_ADMIN_ONLY_PERMISSIONS as readonly OrgPermission[]).includes(p)
-				)
-			: [...ALL_ORG_PERMISSIONS]
+		inviteRole === 'member' ? [...MEMBER_ASSIGNABLE_PERMISSIONS] : [...ALL_ORG_PERMISSIONS]
 	);
 
 	function toggleInvitePermission(p: OrgPermission, checked: boolean) {

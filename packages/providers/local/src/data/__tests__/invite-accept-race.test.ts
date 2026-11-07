@@ -15,24 +15,26 @@ afterEach(async () => {
 	await fs.rm(dir, { recursive: true, force: true });
 });
 
+const invite = (expiresInMs: number) =>
+	({
+		id: 'i',
+		tokenHash: 'h',
+		email: 'new@acme.test',
+		orgId: 'acme',
+		orgRole: 'member',
+		orgPermissions: [],
+		invitedBy: 'a',
+		createdAt: new Date().toISOString(),
+		expiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+		acceptedAt: null,
+		acceptedByUserId: null
+	}) as unknown as Invite;
+
 describe('markAccepted under a double submit', () => {
 	it('accepts once and keeps the first acceptor', async () => {
 		const emit = vi.fn(async () => {});
 		const store = new LocalInviteStore(dir, { emit });
-		const invite = {
-			id: 'i',
-			tokenHash: 'h',
-			email: 'new@acme.test',
-			orgId: 'acme',
-			orgRole: 'member',
-			orgPermissions: [],
-			invitedBy: 'a',
-			createdAt: new Date().toISOString(),
-			expiresAt: new Date(Date.now() + 60_000).toISOString(),
-			acceptedAt: null,
-			acceptedByUserId: null
-		} as unknown as Invite;
-		await store.create(SYSTEM_CONTEXT, invite);
+		await store.create(SYSTEM_CONTEXT, invite(60_000));
 		emit.mockClear();
 
 		const claimed = await Promise.all([
@@ -44,5 +46,21 @@ describe('markAccepted under a double submit', () => {
 		expect(emit).toHaveBeenCalledOnce();
 		const { invites } = JSON.parse(await fs.readFile(path.join(dir, 'invites.json'), 'utf8'));
 		expect(invites[0].acceptedByUserId).toBe('first');
+	});
+});
+
+// `getByTokenHash` hides an expired invite, so only a claim that read it just
+// before the deadline gets here.
+describe('markAccepted after the invite expired', () => {
+	it('refuses the claim', async () => {
+		const emit = vi.fn(async () => {});
+		const store = new LocalInviteStore(dir, { emit });
+		await store.create(SYSTEM_CONTEXT, invite(-1));
+		emit.mockClear();
+
+		expect(await store.markAccepted(SYSTEM_CONTEXT, 'i', 'late')).toBe(false);
+		expect(emit).not.toHaveBeenCalled();
+		const { invites } = JSON.parse(await fs.readFile(path.join(dir, 'invites.json'), 'utf8'));
+		expect(invites[0].acceptedAt).toBeNull();
 	});
 });

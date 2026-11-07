@@ -18,6 +18,8 @@ describe('LocalApiTokenStore', () => {
 
 	runApiTokenStoreConformance({
 		name: 'LocalApiTokenStore',
-		createStore: () => new LocalApiTokenStore(tempDir)
+		createStore: () => new LocalApiTokenStore(tempDir),
+		nonAdminCtx: true,
+		auditStamps: true
 	});
 });

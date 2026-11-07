@@ -112,8 +112,9 @@ export interface IComputeServerStore {
 	 */
 	verifySecrets?(): Promise<SecretVerificationReport>;
 	/**
-	 * Re-seal under the current key every `apiKey` only `SELVA_AT_REST_KEY_PREVIOUS`
-	 * opens. Separate from `verifySecrets`, which a GET calls and must stay
+	 * Re-seal, under the current key and bound to the server's id and URL, every
+	 * `apiKey` that only `SELVA_AT_REST_KEY_PREVIOUS` opens or that sits in a legacy
+	 * envelope. Separate from `verifySecrets`, which a GET calls and must stay
 	 * read-only. Returns how many rows it re-sealed.
 	 */
 	reencryptSecrets?(): Promise<number>;

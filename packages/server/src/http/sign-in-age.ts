@@ -1,4 +1,5 @@
-import type { EnvRecord } from '../compute/limits.js';
+import { readSetting, type EnvRecord } from '@selvajs/platform/config';
+import { SIGN_IN_MAX_AGE_SETTING } from '../config/settings.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -15,12 +16,13 @@ const FUTURE_SKEW_MS = 60_000;
  * the check off would leave a leaver's keys working.
  */
 export function resolveSignInMaxAgeMs(env: EnvRecord): number | undefined {
-	const raw = env.SIGN_IN_MAX_AGE_DAYS?.trim();
-	if (!raw) return undefined;
-	if (!/^\d+$/.test(raw)) {
-		throw new Error(`SIGN_IN_MAX_AGE_DAYS must be a whole number of days, got "${raw}".`);
+	// A fail-closed setting reads as undefined when its value breaks the rule.
+	const days = readSetting(SIGN_IN_MAX_AGE_SETTING, env) as number | undefined;
+	if (days === undefined) {
+		throw new Error(
+			`SIGN_IN_MAX_AGE_DAYS must be a whole number of days, got "${env.SIGN_IN_MAX_AGE_DAYS}".`
+		);
 	}
-	const days = Number(raw);
 	return days > 0 ? days * DAY_MS : undefined;
 }
 

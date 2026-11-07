@@ -123,6 +123,32 @@ describe('config parsing', () => {
 	});
 });
 
+// Supabase wires a grant store that 501s every read: with the flag on, admins
+// would get a platform-projects page that fails on every action.
+describe('platform projects on a provider without grants', () => {
+	class StubGrantData {
+		platformProjectGrants = { unsupported: true };
+	}
+	const flagOn = { SELVA_FLAG_ENABLE_PLATFORM_PROJECTS: 'true' };
+
+	function withStubGrants() {
+		const { registry } = makeRegistry();
+		registry.data.local = vi.fn(() => new StubGrantData() as unknown as IDataProvider);
+		return registry;
+	}
+
+	it('refuses to wire with ENABLE_PLATFORM_PROJECTS on, on every resolve', async () => {
+		const runtime = await createSelvaProviders(flagOn, { registry: withStubGrants(), ...noBoot });
+		expect(() => runtime.resolve()).toThrow(/ENABLE_PLATFORM_PROJECTS.*StubGrantData/);
+		expect(() => runtime.flag('ENABLE_SHARING')).toThrow(/ENABLE_PLATFORM_PROJECTS/);
+	});
+
+	it('wires as usual with the flag off', async () => {
+		const runtime = await createSelvaProviders({}, { registry: withStubGrants(), ...noBoot });
+		expect(runtime.resolve().data).toBeInstanceOf(StubGrantData);
+	});
+});
+
 describe('solve metric sink', () => {
 	it('falls back to a noop sink when the data provider has no solveMetrics', async () => {
 		const { registry } = makeRegistry();

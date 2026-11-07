@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { ProviderError } from '@selvajs/platform';
 import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
 import { renameReplacing } from '../data/fsJson.js';
 import type { IStorageProvider } from '@selvajs/platform/storage';
@@ -35,12 +36,12 @@ export class LocalStorageProvider implements IStorageProvider {
 		const base = path.resolve(this.basePath);
 		const full = path.resolve(base, storagePath);
 		if (full !== base && !full.startsWith(base + path.sep)) {
-			throw new Error(`Path escapes base: ${storagePath}`);
+			throw new ProviderError(`Path escapes base: ${storagePath}`, 400);
 		}
 		// The storage root is `DATA_PATH`, which also holds the stores' JSON files,
 		// `auth-users.json` among them. No asset lives directly in the root.
 		if (path.dirname(full) === base && full.endsWith('.json')) {
-			throw new Error(`Path is a data file, not an asset: ${storagePath}`);
+			throw new ProviderError(`Path is a data file, not an asset: ${storagePath}`, 400);
 		}
 		return full;
 	}
@@ -85,7 +86,7 @@ export class LocalStorageProvider implements IStorageProvider {
 		const fullPath = this.resolvePath(prefix);
 		// The root is `DATA_PATH`, so this would take every store with it.
 		if (fullPath === path.resolve(this.basePath)) {
-			throw new Error(`Refusing to delete the whole store: ${JSON.stringify(prefix)}`);
+			throw new ProviderError(`Refusing to delete the whole store: ${JSON.stringify(prefix)}`, 400);
 		}
 		await fs.rm(fullPath, { recursive: true, force: true });
 	}

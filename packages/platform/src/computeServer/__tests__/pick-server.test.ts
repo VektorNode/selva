@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pickServer, resolveServerForOrg } from '../utils.js';
-import type { ComputeConfig } from '../types.js';
+import { pickServer } from '../utils.js';
 
 const a = { id: 'a' };
 const b = { id: 'b' };
@@ -14,12 +13,5 @@ describe('pickServer', () => {
 
 	it('finds nothing in an empty list', () => {
 		expect(pickServer([], 'a', 'b')).toBeUndefined();
-	});
-});
-
-describe('resolveServerForOrg', () => {
-	it('throws when nothing is visible', () => {
-		const config: ComputeConfig = { servers: [] };
-		expect(() => resolveServerForOrg(config, 'acme')).toThrow(/No compute servers/);
 	});
 });

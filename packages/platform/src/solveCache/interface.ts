@@ -7,12 +7,10 @@ import type { RequestContext } from '../context.js';
  *
  * Design contract:
  *
- * - **Async.** The in-memory backend returns promises too, so a network store
- *   (Redis) fits without any call site changing shape.
+ * - **Async**, so a network store fits without any call site changing shape.
  * - **Entries are opaque bytes** — the pre-gzipped response envelope plus a
- *   small metadata header. The backend never inspects them, so a hit stays
- *   near-CPU-free in either backend and there's no serialization drift between
- *   implementations.
+ *   small metadata header. The backend never inspects them, so a hit costs
+ *   almost no CPU and implementations can't drift in how they serialize.
  * - **Best-effort.** `get` may miss at any time (restart, eviction, network
  *   blip); `set` may silently drop. Correctness never depends on cache presence
  *   — this is what makes the no-TTL/versionId keying safe under any eviction
@@ -53,12 +51,8 @@ export interface SolveCacheSetOptions {
 }
 
 /**
- * Durable solve-result cache — the seam a shared backend mounts on.
- *
- * No implementation ships today: the app runs on `adapter-node`, one
- * long-lived process, where in-process caching already works. Run N instances
- * behind a proxy and the in-process hit rate divides by N — that's when Redis
- * mounts here.
+ * Durable solve-result cache — the seam a shared backend mounts on. No solve
+ * path calls it, and `NoopSolveResultCache` is the only implementation.
  *
  * Implementations must not throw — both methods sit on the hot path of every
  * live solve. A backend failure resolves as a miss (`get`) or a silent drop
@@ -82,11 +76,7 @@ export interface ISolveResultCache {
 	): Promise<void>;
 }
 
-/**
- * Default `ISolveResultCache` — never stores, always misses. The only
- * implementation that ships today; a shared backend replaces it when horizontal
- * scaling makes in-process caching insufficient.
- */
+/** Default `ISolveResultCache` — never stores, always misses. */
 export class NoopSolveResultCache implements ISolveResultCache {
 	async get(_ctx: RequestContext, _key: SolveCacheKey): Promise<Uint8Array | null> {
 		return null;

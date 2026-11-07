@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { DataTree } from '@selvajs/compute/grasshopper';
 import type { SchemaInput, UISchema } from '@selvajs/schemas';
-import { buildSolveInputTree, solveInputsFromSchema } from '../transform-input.js';
+import {
+	buildSolveInputTree,
+	postedServerSourcedIds,
+	solveInputsFromSchema
+} from '../transform-input.js';
 
 type Input = SchemaInput & { minimum?: number; maximum?: number };
 
@@ -96,5 +100,35 @@ describe('solveInputsFromSchema', () => {
 	it('ignores layout items that are not inputs', () => {
 		const a = input({ id: 'a' });
 		expect(solveInputsFromSchema(schema([{ type: 'output', paramId: 'a' }], [a]))).toEqual([a]);
+	});
+});
+
+// No resolver fills a `server` input, and an author marks one to keep it out of the caller's
+// hands: a posted value must neither reach the tree nor pass unremarked.
+describe('a server-sourced input', () => {
+	const sourced = solveInputsFromSchema({
+		inputs: [input({ id: 'srv', default: 'from-schema' }), input({ id: 'free', nickname: 'Free' })],
+		outputs: [],
+		layout: {
+			type: 'flat',
+			groups: [
+				{
+					items: [
+						{ type: 'input', widgetType: 'text', paramId: 'srv', source: { kind: 'server' } },
+						{ type: 'input', widgetType: 'text', paramId: 'free', source: { kind: 'client' } }
+					]
+				}
+			]
+		}
+	} as unknown as UISchema);
+
+	it('solves with its schema default whatever the caller posts', () => {
+		const [tree] = buildSolveInputTree(sourced, { srv: 'forged' });
+		expect(tree.InnerTree['{0}'].map((item) => item.data)).toEqual(['from-schema']);
+	});
+
+	it('is named when posted, so the host can refuse the request', () => {
+		expect(postedServerSourcedIds(sourced, { srv: null, free: 'x' })).toEqual(['srv']);
+		expect(postedServerSourcedIds(sourced, { free: 'x' })).toEqual([]);
 	});
 });

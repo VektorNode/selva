@@ -7,4 +7,6 @@ import type { SchemaInput } from '@selvajs/schemas';
 export type SolveInput = SchemaInput & {
 	minimum?: number;
 	maximum?: number;
+	/** The schema marks it `server`-sourced: the input tree never takes a caller's value for it. */
+	serverSourced?: boolean;
 };

@@ -65,9 +65,9 @@ describe('resolveServerForOrg', () => {
 		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);
 
-		await expect(
-			resolveServerForOrg(ctxFor(acme.id), acme.id, tp.config.data.computeServer)
-		).rejects.toBeInstanceOf(ComputeServerUnconfiguredError);
+		const resolving = resolveServerForOrg(ctxFor(acme.id), acme.id, tp.config.data.computeServer);
+		await expect(resolving).rejects.toBeInstanceOf(ComputeServerUnconfiguredError);
+		await expect(resolving).rejects.toThrow(/No compute servers/);
 	});
 
 	it('never resolves to another org private server', async () => {

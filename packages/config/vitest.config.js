@@ -18,9 +18,10 @@ export function createVitestConfig(overrides = {}) {
 	return mergeConfig(
 		defineConfig({
 			resolve: {
-				// Read workspace @selvajs/* packages as TypeScript source, so editing an
-				// upstream package doesn't need a rebuild before its consumers' tests see
-				// the change. Production resolution picks `import` (dist/) instead.
+				// Client-environment resolution only. Node-environment tests resolve through
+				// `ssr.resolve.conditions`, left at Vite's default, so they import workspace
+				// @selvajs/* packages from dist/: turbo's `test` depends on `^build` for that.
+				// The selva app's Vite build resolves `selva-source` and bundles the source.
 				conditions: ['selva-source']
 			},
 			test: {

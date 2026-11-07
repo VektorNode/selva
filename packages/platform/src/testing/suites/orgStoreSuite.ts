@@ -1,9 +1,4 @@
-/**
- * Adapter conformance suite for IOrgStore.
- *
- * Tests organization CRUD and org membership management to ensure all
- * adapters behave identically.
- */
+/** Adapter conformance suite for IOrgStore: organization CRUD and org membership. */
 
 import { describe, it, expect } from 'vitest';
 import type { IOrgStore } from '../../organizations/interface.js';
@@ -12,7 +7,7 @@ import type { IInviteStore } from '../../invites/interface.js';
 import type { Organization, OrgMember, OrgRole, Invite, ComputeServerConfig } from '../../index.js';
 import { DEFAULT_ORG_PERMISSIONS } from '../../organizations/schemas.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import { makeSeedHelpers, makeUuid, noopSeedUser, randomSlug, type SeedUserFn } from './helpers.js';
 
 export interface OrgStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
@@ -32,8 +27,16 @@ export interface OrgStoreConformanceOptions {
 	seedOutsider?: SeedUserFn;
 	/** If true, skip createOrg/deleteOrg tests (e.g. single-org providers). */
 	singleOrgMode?: boolean;
-	/** If true, run ctx-isolation tests (adapters with row-level security). */
+	/**
+	 * The adapter scopes reads by `ctx` in the store (Supabase RLS), so a user outside
+	 * the org sees nothing. An adapter that leaves scoping to the server guards
+	 * (local) skips these cases.
+	 */
 	ctxIsolation?: boolean;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/** `createOrg` keeps the `createdBy` of a creator who isn't the owner. */
+	auditStamps?: boolean;
 	/**
 	 * When supplied, an extra `deleteOrg` cascade test runs that asserts
 	 * pending invites and the org's compute override are cleaned up too.
@@ -51,7 +54,7 @@ function org(ownerId: string, overrides: Partial<Organization> = {}): Organizati
 	return {
 		id: overrides.id ?? makeUuid(),
 		name: overrides.name ?? 'Test Org',
-		slug: overrides.slug ?? `test-${Math.random().toString(36).slice(2, 8)}`,
+		slug: overrides.slug ?? randomSlug(),
 		ownerId: overrides.ownerId ?? ownerId,
 		createdBy: overrides.createdBy ?? ownerId,
 		updatedBy: overrides.updatedBy ?? ownerId,
@@ -84,10 +87,13 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		seedOutsider = seedUser,
 		singleOrgMode = false,
 		ctxIsolation = false,
+		nonAdminCtx = false,
+		auditStamps = false,
 		createCompanionStores
 	} = opts;
-	const { seed, ctx } = makeSeedHelpers(seedUser);
+	const { seed, ctx } = makeSeedHelpers(seedUser, { nonAdminCtx });
 	const outsider = makeSeedHelpers(seedOutsider);
+	const outsiderPerms = { platformPermissions: [], orgPermissions: [] };
 
 	describe(`IOrgStore conformance: ${name}`, () => {
 		// ============================================================================
@@ -95,7 +101,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		// ============================================================================
 
 		if (!singleOrgMode) {
-			it('createOrg + getOrg returns the organization', async () => {
+			it('createOrg, then getOrg and getOrgBySlug find it', async () => {
 				const store = await createStore();
 				const u1 = await seed();
 				const orgId = makeUuid();
@@ -103,6 +109,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				const got = await store.getOrg(ctx(u1), orgId);
 				expect(got?.name).toBe('Test Org');
 				expect(got?.slug).toBe('acme');
+				expect((await store.getOrgBySlug(ctx(u1), 'acme'))?.id).toBe(orgId);
 			});
 
 			it('getOrg returns null for missing id', async () => {
@@ -110,15 +117,6 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				const u1 = await seed();
 				const got = await store.getOrg(ctx(u1), makeUuid());
 				expect(got).toBeNull();
-			});
-
-			it('getOrgBySlug finds org by slug', async () => {
-				const store = await createStore();
-				const u1 = await seed();
-				const orgId = makeUuid();
-				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: 'acme-corp' }));
-				const got = await store.getOrgBySlug(ctx(u1), 'acme-corp');
-				expect(got?.id).toBe(orgId);
 			});
 
 			it('getOrgBySlug returns null for missing slug', async () => {
@@ -154,16 +152,6 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				// Replace the whole map (drops logo) — the store persists what it's given.
 				await store.updateOrg(ctx(u1), orgId, { assets: {} });
 				expect((await store.getOrg(ctx(u1), orgId))?.assets?.logo ?? null).toBeNull();
-			});
-
-			it('deleteOrg removes the organization', async () => {
-				const store = await createStore();
-				const u1 = await seed();
-				const orgId = makeUuid();
-				await store.createOrg(ctx(u1), org(u1, { id: orgId }));
-				await store.deleteOrg(ctx(u1), orgId);
-				const got = await store.getOrg(ctx(u1), orgId);
-				expect(got).toBeNull();
 			});
 
 			it('listOrgs returns all organizations with pagination', async () => {
@@ -284,16 +272,6 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			});
 		});
 
-		it('removeOrgMember deletes the member', async () => {
-			const store = await createStore();
-			const { u1, orgId } = await setupOrg(store);
-			const u2 = await seed();
-			await store.addOrgMember(ctx(u1), member(orgId, u2));
-			await store.removeOrgMember(ctx(u1), orgId, u2);
-			const got = await store.getOrgMember(ctx(u1), orgId, u2);
-			expect(got).toBeNull();
-		});
-
 		it('findUserMembership returns one (org, member) for a member', async () => {
 			const store = await createStore();
 			const { u1, orgId } = await setupOrg(store);
@@ -356,14 +334,25 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		// ============================================================================
 
 		if (!singleOrgMode) {
-			it('createOrg populates createdBy and updatedBy', async () => {
+			it('createOrg stores createdBy and updatedBy, and no deletedAt', async () => {
 				const store = await createStore();
-				const u1 = await seed();
+				const owner = await seed();
+				// Under auditStamps someone other than the owner creates it, so a store that
+				// copies ownerId into createdBy fails.
+				const creator = auditStamps ? await seed() : owner;
 				const orgId = makeUuid();
-				await store.createOrg(ctx(u1), org(u1, { id: orgId, slug: `audit-${orgId.slice(0, 8)}` }));
-				const got = await store.getOrg(ctx(u1), orgId);
-				expect(got?.createdBy).toBe(u1);
-				expect(got?.updatedBy).toBe(u1);
+				await store.createOrg(
+					ctx(creator),
+					org(owner, {
+						id: orgId,
+						slug: `audit-${orgId.slice(0, 8)}`,
+						createdBy: creator,
+						updatedBy: creator
+					})
+				);
+				const got = await store.getOrg(ctx(owner), orgId);
+				expect(got?.createdBy).toBe(creator);
+				expect(got?.updatedBy).toBe(creator);
 				expect(got?.deletedAt ?? null).toBeNull();
 			});
 
@@ -424,7 +413,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 						expiresAt: new Date(Date.now() + 86_400_000).toISOString()
 					};
 					await invites.create(ctx(u1), invite);
-					const orgCtx = { ...ctx(u1), actingOrgId: orgId };
+					const orgCtx = ctx(u1, { actingOrgId: orgId });
 					const server: ComputeServerConfig = {
 						id: makeUuid(),
 						scope: 'org',
@@ -470,7 +459,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 					org(userA, { id: orgA, slug: `org-a-${orgA.slice(0, 8)}` })
 				);
 
-				const page = await store.listOrgs(outsider.ctx(userB));
+				const page = await store.listOrgs(outsider.ctx(userB, outsiderPerms));
 				expect(page.items.map((o) => o.id)).not.toContain(orgA);
 			});
 
@@ -484,7 +473,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 					org(userA, { id: orgA, slug: `org-a-${orgA.slice(0, 8)}` })
 				);
 
-				const got = await store.getOrg(outsider.ctx(userB), orgA);
+				const got = await store.getOrg(outsider.ctx(userB, outsiderPerms), orgA);
 				expect(got).toBeNull();
 			});
 		}

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
-import { NoopLogger, type ILogger } from '@selvajs/platform';
+import { NoopLogger, clampPageLimit, type ILogger } from '@selvajs/platform';
 import { DEFAULT_SCHEMA, type SelvaSchemaClient } from '../data/client.js';
 import { SupabaseDelegatedSession } from './SupabaseDelegatedSession.js';
 import { resolveSupabaseEnv } from '../config.js';
@@ -265,13 +265,12 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 
 	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
-		// GoTrue paginates by page number, not offset — translate our cursor.
-		const perPage = opts?.limit ?? 50;
-		const page = opts?.cursor ? parseInt(opts.cursor, 10) : 1;
-		const { data, error } = await this.admin.auth.admin.listUsers({
-			page: Number.isFinite(page) && page >= 1 ? page : 1,
-			perPage
-		});
+		// GoTrue paginates by page number, not offset — translate our cursor. It
+		// accepts any perPage, answers 0 with a 500 and refuses negatives: clamp here.
+		const perPage = clampPageLimit(opts?.limit);
+		const requested = opts?.cursor ? parseInt(opts.cursor, 10) : 1;
+		const page = Number.isFinite(requested) && requested >= 1 ? requested : 1;
+		const { data, error } = await this.admin.auth.admin.listUsers({ page, perPage });
 		if (error) throw error;
 
 		const users = data.users;

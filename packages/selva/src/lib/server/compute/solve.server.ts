@@ -33,6 +33,7 @@ import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '#lib/server/comput
 import { computeErrorLogFields } from '#lib/server/compute/errorLogFields.js';
 import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
 import {
+	postedServerSourcedIds,
 	solveInputsFromSchema,
 	type ByteCacheRef,
 	type SolveDefinition,
@@ -402,6 +403,14 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		);
 	}
 	const solveInputs = storedSchema ? solveInputsFromSchema(storedSchema) : readRemoteInputs(inputs);
+	const serverOnly = postedServerSourcedIds(solveInputs, values);
+	if (serverOnly.length > 0) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			`These inputs are filled on the server and may not be posted in values: ${serverOnly.join(', ')}.`
+		);
+	}
 
 	// `SolveEngine.solve` owns warm-client lookup, input-tree build, single-flight
 	// coalescing (a coalesced solve aborts only when its last caller leaves), and

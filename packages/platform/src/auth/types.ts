@@ -6,7 +6,11 @@
 export interface AuthUser {
 	id: string;
 	email?: string;
-	/** Provider-specific only — never PII, credentials, or tokens. */
+	/**
+	 * Provider-specific, and may hold personal data (header auth keeps the UPN and display
+	 * name here, Supabase passes its `user_metadata` through), so never log it. Never holds
+	 * credentials or tokens.
+	 */
 	metadata?: Record<string, unknown>;
 	createdAt?: string;
 	/**

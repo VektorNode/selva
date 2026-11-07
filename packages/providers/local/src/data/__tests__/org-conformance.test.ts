@@ -40,6 +40,8 @@ describe('LocalOrgStore', () => {
 		createCompanionStores: () => ({
 			invites: makeInvites(),
 			computeServer: makeCompute()
-		})
+		}),
+		nonAdminCtx: true,
+		auditStamps: true
 	});
 });

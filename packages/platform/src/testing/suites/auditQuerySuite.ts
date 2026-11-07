@@ -8,14 +8,28 @@ import { makeSystemCtx, makeUuid } from './helpers.js';
 import type { AuditCursor, IAuditQuery } from '../../events/audit.js';
 import type { DomainEvent, IEventSink } from '../../events/interface.js';
 
+interface AuditStores {
+	query: IAuditQuery;
+	sink: IEventSink;
+	/** Persist `event` as if the sink wrote it at `occurredAt`. Needed by `tiedTimestamps`. */
+	emitAt?: (event: DomainEvent, occurredAt: string) => Promise<void>;
+}
+
 export interface AuditQueryConformanceOptions {
 	name: string;
 	/** A query and the sink that feeds it, over storage that starts empty. */
-	createStores: () =>
-		Promise<{ query: IAuditQuery; sink: IEventSink }> | { query: IAuditQuery; sink: IEventSink };
+	createStores: () => Promise<AuditStores> | AuditStores;
+	/** `limit` clamps to the documented bounds: `0` returns one row, a huge limit returns 200. */
+	limitClamp?: boolean;
+	/**
+	 * Pages through rows that share one `occurredAt`, which only the `(occurredAt, id)`
+	 * cursor keeps from skipping or repeating a row. Needs `emitAt` from `createStores`.
+	 */
+	tiedTimestamps?: boolean;
 }
 
 const ctx = makeSystemCtx();
+const MAX_LIMIT = 200;
 
 const deleted = (orgId: string, actorId: string): DomainEvent => ({
 	type: 'org.deleted',
@@ -29,7 +43,18 @@ const created = (orgId: string, actorId: string): DomainEvent => ({
 });
 
 export function runAuditQueryConformance(opts: AuditQueryConformanceOptions): void {
-	const { name, createStores } = opts;
+	const { name, createStores, limitClamp = false, tiedTimestamps = false } = opts;
+
+	async function collectAllIds(query: IAuditQuery, actorId: string): Promise<string[]> {
+		const seen: string[] = [];
+		let cursor: AuditCursor | undefined;
+		for (;;) {
+			const page = await query.list(ctx, { actorId, limit: 2, cursor });
+			seen.push(...page.rows.map((r) => r.id));
+			if (!page.nextCursor) return seen;
+			cursor = page.nextCursor;
+		}
+	}
 
 	describe(`IAuditQuery conformance: ${name}`, () => {
 		it("returns one actor's events newest first, in the order they were emitted", async () => {
@@ -72,18 +97,39 @@ export function runAuditQueryConformance(opts: AuditQueryConformanceOptions): vo
 			const actor = makeUuid();
 			for (let i = 0; i < 5; i++) await sink.emit(deleted(makeUuid(), actor));
 
-			const seen: string[] = [];
-			let cursor: AuditCursor | undefined;
-			for (;;) {
-				const page = await query.list(ctx, { actorId: actor, limit: 2, cursor });
-				seen.push(...page.rows.map((r) => r.id));
-				if (!page.nextCursor) break;
-				cursor = page.nextCursor;
-			}
+			const seen = await collectAllIds(query, actor);
 
 			expect(seen).toHaveLength(5);
 			expect(new Set(seen).size).toBe(5);
 		});
+
+		if (tiedTimestamps) {
+			it('pages through rows that share one occurredAt exactly once', async () => {
+				const { query, emitAt } = await createStores();
+				if (!emitAt) throw new Error('tiedTimestamps requires createStores to return emitAt');
+				const actor = makeUuid();
+				const at = new Date().toISOString();
+				for (let i = 0; i < 5; i++) await emitAt(deleted(makeUuid(), actor), at);
+
+				const seen = await collectAllIds(query, actor);
+
+				expect(seen).toHaveLength(5);
+				expect(new Set(seen).size).toBe(5);
+			});
+		}
+
+		if (limitClamp) {
+			it('clamps limit to at least one row and at most the maximum', async () => {
+				const { query, sink } = await createStores();
+				const actor = makeUuid();
+				for (let i = 0; i <= MAX_LIMIT; i++) await sink.emit(deleted(makeUuid(), actor));
+
+				expect((await query.list(ctx, { actorId: actor, limit: 0 })).rows).toHaveLength(1);
+				expect((await query.list(ctx, { actorId: actor, limit: 10_000 })).rows).toHaveLength(
+					MAX_LIMIT
+				);
+			}, 60_000);
+		}
 
 		it('still returns a row for a fractional limit', async () => {
 			const { query, sink } = await createStores();

@@ -68,7 +68,8 @@ export interface CreateSelvaProvidersOptions {
 export interface SelvaProviderRuntime {
 	/**
 	 * Memoized wiring. The first call instantiates providers from env and throws
-	 * if a required secret is missing — never call it at build time.
+	 * if a required secret is missing, or if `ENABLE_PLATFORM_PROJECTS` is on
+	 * over a grant store marked `unsupported` — never call it at build time.
 	 */
 	resolve(): SelvaConfig;
 	/** Defaults to `'single'` when the config omits it. */
@@ -195,7 +196,17 @@ export async function createSelvaProviders(
 
 	function resolve(): SelvaConfig {
 		if (config) return config;
-		config = typeof raw === 'function' ? raw(env) : raw;
+		const candidate = typeof raw === 'function' ? raw(env) : raw;
+		if (
+			isFlagEnabled(candidate, 'ENABLE_PLATFORM_PROJECTS') &&
+			candidate.data.platformProjectGrants.unsupported
+		) {
+			throw new Error(
+				`ENABLE_PLATFORM_PROJECTS is on, but ${candidate.data.constructor.name} cannot store ` +
+					'platform-project grants. Turn SELVA_FLAG_ENABLE_PLATFORM_PROJECTS off.'
+			);
+		}
+		config = candidate;
 
 		// Boot summary so operators can confirm what got wired without grepping
 		// env vars. Auth exposes a `name` field; data/storage adapters don't, so

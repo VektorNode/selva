@@ -85,7 +85,7 @@ export function checkConfigAtBoot(): void {
 		if (r.state === 'expired' || r.state === 'no-deadline') {
 			log.warn(
 				r.state === 'expired'
-					? 'Previous key passed its deadline and is no longer accepted: remove it'
+					? 'Previous key is no longer accepted (deadline passed, unreadable or too far out): remove it'
 					: 'Previous key has no deadline and is accepted for good',
 				{ component: 'config', envVar: `${r.key}_PREVIOUS`, expires: r.expires }
 			);
@@ -116,7 +116,10 @@ function recordSnapshot(): ConfigChange[] {
 	} catch {
 		previous = null;
 	}
-	const next = deploymentSnapshot(env, previous?.salt);
+	const next = deploymentSnapshot(
+		env,
+		typeof previous?.salt === 'string' ? previous.salt : undefined
+	);
 	try {
 		writeFileSync(path, JSON.stringify(next, null, '\t') + '\n', { mode: 0o600 });
 		if (process.platform !== 'win32') chmodSync(path, 0o600);
@@ -126,5 +129,11 @@ function recordSnapshot(): ConfigChange[] {
 			err: err instanceof Error ? err.message : String(err)
 		});
 	}
-	return previous ? diffSnapshots(previous, next) : [];
+	if (!previous) return [];
+	// A hand-edited or truncated file counts as no previous snapshot: it must not stop boot.
+	try {
+		return diffSnapshots(previous, next);
+	} catch {
+		return [];
+	}
 }

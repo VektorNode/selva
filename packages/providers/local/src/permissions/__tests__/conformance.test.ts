@@ -34,6 +34,8 @@ describe('LocalPlatformPermissionStore', () => {
 					return id;
 				}
 			};
-		}
+		},
+		strictDenials: true,
+		refusesEscalation: true
 	});
 });

@@ -24,5 +24,7 @@ runEventSinkConformance({
 	cleanup: async () => {
 		await Promise.all(tempDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
 		tempDirs.length = 0;
-	}
+	},
+	strictDenials: true,
+	silentNoops: true
 });

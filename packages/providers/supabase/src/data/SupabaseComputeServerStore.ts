@@ -13,7 +13,13 @@ import {
 } from '@selvajs/platform';
 import { NoopLogger } from '@selvajs/platform';
 // `node:crypto`-based, so it's a server-only subpath, not the root barrel.
-import { decryptWithKeys, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
+import {
+	decryptWithKeys,
+	encryptSecret,
+	isEncryptedSecret,
+	isLegacyEnvelope,
+	type SecretBinding
+} from '@selvajs/platform/computeServer';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 
@@ -22,6 +28,11 @@ import { mapPostgrestError } from './errors.js';
 const SERVER_COLUMNS = 'id, scope, owner_org_id, shared_with_all, label, server_url, has_api_key';
 const SHARE_COLUMNS = 'server_id, org_id';
 const ORG_DEFAULT_COLUMNS = 'org_id, default_server_id';
+
+/** The columns a key read needs: `server_url` is half the key's binding. */
+type KeyRow = Pick<ServerRow, 'id' | 'label' | 'server_url' | 'api_key'>;
+
+const bindingOf = (row: KeyRow): SecretBinding => ({ id: row.id, url: row.server_url });
 
 /**
  * Compute-server config backed by three tables:
@@ -119,12 +130,12 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 		const { data, error } = await this.clients.serviceClient
 			.from('compute_servers')
-			.select('id, label, api_key')
+			.select('id, label, server_url, api_key')
 			.eq('id', serverId)
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);
 		if (!data) return undefined;
-		return this.decryptRowApiKey(data as ServerRow).api_key ?? undefined;
+		return this.decryptRowApiKey(data as KeyRow).api_key ?? undefined;
 	}
 
 	/** `rows` must come from a session read: this reaches keys with the service role. */
@@ -223,9 +234,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	// ==========================================================================
 
 	/**
-	 * Encrypt a server's `apiKey` before it is written to the DB, bound to its id.
-	 * Throws on a value that is already an envelope, and if the store was built
-	 * without a key, so we never silently persist plaintext.
+	 * Encrypt a server's `apiKey` before it is written to the DB, bound to its id
+	 * and URL. Throws on a value that is already an envelope, and if the store was
+	 * built without a key, so we never silently persist plaintext.
 	 */
 	private encryptServerApiKey(s: ComputeServerConfig): ComputeServerConfig {
 		if (!s.apiKey) return s;
@@ -235,7 +246,10 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 					'Set it so secrets are encrypted at rest.'
 			);
 		}
-		return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, s.id) };
+		return {
+			...s,
+			apiKey: encryptSecret(s.apiKey, this.secretKey, { id: s.id, url: s.serverUrl })
+		};
 	}
 
 	/**
@@ -246,7 +260,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	 * plaintext value that predates encryption is passed through unchanged and
 	 * surfaced by `verifySecrets()` — never silently dropped.
 	 */
-	private decryptRowApiKey(row: ServerRow): ServerRow {
+	private decryptRowApiKey<R extends KeyRow>(row: R): R {
 		if (!row.api_key) return row;
 		if (!isEncryptedSecret(row.api_key)) {
 			this.logger.warn(
@@ -263,7 +277,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			return { ...row, api_key: null };
 		}
 		try {
-			return { ...row, api_key: decryptWithKeys(row.api_key, this.keys, row.id).plaintext };
+			return { ...row, api_key: decryptWithKeys(row.api_key, this.keys, bindingOf(row)).plaintext };
 		} catch (cause) {
 			this.logger.warn(
 				'Could not decrypt api_key: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -289,17 +303,16 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	async verifySecrets(): Promise<SecretVerificationReport> {
 		const { data, error } = await this.clients.serviceClient
 			.from('compute_servers')
-			.select('id, label, api_key');
+			.select('id, label, server_url, api_key');
 		if (error) throw mapPostgrestError(error);
 
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
 		let onPreviousKey = 0;
+		let legacyEnvelopes = 0;
 
-		for (const row of data ?? []) {
-			const apiKey = (row as { api_key: string | null }).api_key;
-			const id = (row as { id: string }).id;
-			const label = (row as { label: string }).label;
+		for (const row of (data ?? []) as KeyRow[]) {
+			const { api_key: apiKey, id, label } = row;
 			if (!apiKey) continue;
 			if (!isEncryptedSecret(apiKey)) {
 				plaintextFound = true;
@@ -315,8 +328,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				});
 				continue;
 			}
+			if (isLegacyEnvelope(apiKey)) legacyEnvelopes += 1;
 			try {
-				if (decryptWithKeys(apiKey, this.keys, id).keyIndex > 0) onPreviousKey += 1;
+				if (decryptWithKeys(apiKey, this.keys, bindingOf(row)).keyIndex > 0) onPreviousKey += 1;
 			} catch (cause) {
 				failures.push({
 					serverId: id,
@@ -331,38 +345,41 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			ok: failures.length === 0,
 			failures,
 			plaintextFound,
-			...(this.keys.length > 1 ? { onPreviousKey } : {})
+			...(this.keys.length > 1 ? { onPreviousKey } : {}),
+			...(legacyEnvelopes > 0 ? { legacyEnvelopes } : {})
 		};
 	}
 
 	/**
-	 * Re-seal under the current key every row only the previous key opens. The
-	 * update matches on the old ciphertext too, so a row an admin re-saved in
-	 * between is left alone rather than overwritten.
+	 * Re-seal, under the current key and the row's binding, every row only the
+	 * previous key opens or that sits in a legacy envelope. The update matches on
+	 * the old ciphertext and URL too, so a row an admin re-saved in between is
+	 * left alone rather than overwritten.
 	 */
 	async reencryptSecrets(): Promise<number> {
-		if (this.keys.length < 2 || !this.secretKey) return 0;
+		if (!this.secretKey) return 0;
 		const { data, error } = await this.clients.serviceClient
 			.from('compute_servers')
-			.select('id, api_key');
+			.select('id, label, server_url, api_key');
 		if (error) throw mapPostgrestError(error);
 		let changed = 0;
-		for (const row of (data ?? []) as { id: string; api_key: string | null }[]) {
+		for (const row of (data ?? []) as KeyRow[]) {
 			if (!row.api_key || !isEncryptedSecret(row.api_key)) continue;
 			let opened: { plaintext: string; keyIndex: number };
 			try {
-				opened = decryptWithKeys(row.api_key, this.keys, row.id);
+				opened = decryptWithKeys(row.api_key, this.keys, bindingOf(row));
 			} catch {
 				continue;
 			}
-			if (opened.keyIndex === 0) continue;
+			if (opened.keyIndex === 0 && !isLegacyEnvelope(row.api_key)) continue;
 			const { error: updateError, count } = await this.clients.serviceClient
 				.from('compute_servers')
 				.update(
-					{ api_key: encryptSecret(opened.plaintext, this.secretKey, row.id) },
+					{ api_key: encryptSecret(opened.plaintext, this.secretKey, bindingOf(row)) },
 					{ count: 'exact' }
 				)
 				.eq('id', row.id)
+				.eq('server_url', row.server_url)
 				.eq('api_key', row.api_key);
 			if (updateError) throw mapPostgrestError(updateError);
 			changed += count ?? 0;

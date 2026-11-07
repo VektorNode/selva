@@ -2,6 +2,7 @@ import {
 	buildConfigReport,
 	composeManifest,
 	previousKey,
+	readSetting,
 	type KeyRotation,
 	defineSetting,
 	takeSnapshot,
@@ -15,12 +16,31 @@ import { HEADER_AUTH_SETTINGS } from '@selvajs/header-auth-provider/config';
 import { LOCAL_SETTINGS } from '@selvajs/local-provider/config';
 import { SUPABASE_SETTINGS } from '@selvajs/supabase-provider/config';
 
+const COMPUTE_DEBUG = defineSetting({
+	key: 'SELVA_FLAG_COMPUTE_DEBUG',
+	label: 'Compute debug logging',
+	type: 'string',
+	default: 'off',
+	onInvalid: 'default',
+	class: 'setting',
+	description:
+		'off, on (cache and timing lines per solve) or verbose (adds Compute’s raw error bodies).',
+	impact: 'verbose can write what was solved to the log, which erasure cannot reach.'
+});
+
+/** `SELVA_FLAG_COMPUTE_DEBUG`: `verbose`, or on and off in the manifest's boolean words. */
+export function computeDebugMode(env: EnvRecord): 'off' | 'on' | 'verbose' {
+	if ((readSetting(COMPUTE_DEBUG, env) as string).toLowerCase() === 'verbose') return 'verbose';
+	return readSetting({ ...COMPUTE_DEBUG, type: 'bool', default: false }, env) ? 'on' : 'off';
+}
+
 /** Keys only this app reads. adapter-node's own keys are here too: they decide whether it works. */
 export const APP_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'ORIGIN',
 		label: 'Public address',
 		type: 'url',
+		origin: true,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
@@ -130,6 +150,7 @@ export const APP_SETTINGS = composeManifest([
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
 		label: 'Solve event callback address',
 		type: 'url',
+		origin: true,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		description:
@@ -153,17 +174,7 @@ export const APP_SETTINGS = composeManifest([
 		class: 'setting',
 		description: 'Lowest severity written to the log. Default info (debug in development).'
 	}),
-	defineSetting({
-		key: 'SELVA_FLAG_COMPUTE_DEBUG',
-		label: 'Compute debug logging',
-		type: 'string',
-		default: 'off',
-		onInvalid: 'default',
-		class: 'setting',
-		description:
-			'off, on (cache and timing lines per solve) or verbose (adds Compute’s raw error bodies).',
-		impact: 'verbose can write what was solved to the log, which erasure cannot reach.'
-	}),
+	COMPUTE_DEBUG,
 	defineSetting({
 		key: 'SENTRY_DSN',
 		label: 'Sentry error reporting',

@@ -19,6 +19,9 @@ describe('LocalInviteStore', () => {
 	// No FK constraints to satisfy here, unlike Supabase's createScope — default scope ids are fine.
 	runInviteStoreConformance({
 		name: 'LocalInviteStore',
-		createStore: () => new LocalInviteStore(tempDir)
+		createStore: () => new LocalInviteStore(tempDir),
+		nonAdminCtx: true,
+		revokeAccepted: true,
+		orgScoping: true
 	});
 });

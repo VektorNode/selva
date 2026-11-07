@@ -1,16 +1,13 @@
 /**
- * Adapter conformance suite for IPlatformPermissionStore.
- *
- * Covers `getFor` / `getForBatch` / `set` / `hasInstanceAdmin` /
- * `countInstanceAdminsExcluding`, plus the §2 sole-`instance_admin`
- * invariant — `set` must return `'last_admin'` when dropping the only admin,
- * and `countInstanceAdminsExcluding` must exclude the named user.
+ * Adapter conformance suite for IPlatformPermissionStore, including the
+ * sole-`instance_admin` invariant: `set` returns `'last_admin'` rather than drop the
+ * only admin, and `countInstanceAdminsExcluding` leaves out the named user.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { makeSystemCtx } from './helpers.js';
+import { describe, it, expect, afterEach } from 'vitest';
+import { expectStatus, makeCtx, makeExpectDenied, makeShareCtx, makeSystemCtx } from './helpers.js';
 import type { IPlatformPermissionStore, RequestContext } from '../../index.js';
-import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '../../index.js';
+import { ALL_PLATFORM_PERMISSIONS } from '../../index.js';
 
 export interface PlatformPermissionStoreConformanceOptions {
 	name: string;
@@ -24,53 +21,45 @@ export interface PlatformPermissionStoreConformanceOptions {
 		seedUser: () => Promise<string>;
 	}>;
 	/**
-	 * Optional: disable a user in the adapter's auth backend, in a way the
-	 * store's enabled-admin invariant queries observe. When present, the
-	 * disabled-admin exclusion tests run (docs/contributing/permissions.md §10 counts only
-	 * *enabled* instance_admins). Adapters whose permission store can't see
-	 * disabled state (local — documented boundary) omit it; the tests then
-	 * show as skipped rather than silently green.
+	 * Disable a user in the adapter's auth backend, in a way the store's admin
+	 * counts observe: only enabled `instance_admin`s count. When present, the
+	 * disabled-admin cases run; an adapter whose permission store can't see disabled
+	 * state omits it, and those cases show as skipped rather than silently green.
 	 */
 	disableUser?: (userId: string) => Promise<void>;
 	cleanup?: () => Promise<void> | void;
+	/** Denials assert `ProviderError(403)`, not just a rejection. */
+	strictDenials?: boolean;
+	/**
+	 * Run the escalation cases: a plain user granting themselves `instance_admin`,
+	 * and a share-link context reading or setting permissions. Each must fail with 403.
+	 */
+	refusesEscalation?: boolean;
 }
 
 export function runPlatformPermissionStoreConformance(
 	opts: PlatformPermissionStoreConformanceOptions
 ): void {
-	const { name, createStore, disableUser, cleanup } = opts;
+	const {
+		name,
+		createStore,
+		disableUser,
+		cleanup,
+		strictDenials = false,
+		refusesEscalation = false
+	} = opts;
 	const itWithDisable = disableUser ? it : it.skip;
+	const expectDenied = makeExpectDenied(strictDenials);
 
-	function adminCtx(userId: string): RequestContext {
-		return {
-			userId,
-			platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-			orgPermissions: [...ALL_ORG_PERMISSIONS]
-		};
-	}
-
-	function selfCtx(userId: string): RequestContext {
-		return {
-			userId,
-			platformPermissions: [],
-			orgPermissions: []
-		};
-	}
-
-	/** §8's user-admin role: runs `/admin/users`, holds no `instance_admin`. */
-	function userAdminCtx(userId: string): RequestContext {
-		return {
-			userId,
-			platformPermissions: ['manage_instance_users'],
-			orgPermissions: []
-		};
-	}
+	const adminCtx = (userId: string): RequestContext =>
+		makeCtx(userId, { platformPermissions: [...ALL_PLATFORM_PERMISSIONS] });
+	const selfCtx = (userId: string): RequestContext =>
+		makeCtx(userId, { platformPermissions: [], orgPermissions: [] });
+	/** The user-admin role: runs the user list, holds no `instance_admin`. */
+	const userAdminCtx = (userId: string): RequestContext =>
+		makeCtx(userId, { platformPermissions: ['manage_instance_users'], orgPermissions: [] });
 
 	describe(`IPlatformPermissionStore conformance: ${name}`, () => {
-		beforeEach(() => {
-			// Every test creates its own store via createStore — no shared state.
-		});
-
 		afterEach(async () => {
 			if (cleanup) await cleanup();
 		});
@@ -105,14 +94,14 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const target = await seedUser();
 			const attacker = await seedUser();
-			await expect(store.set(selfCtx(attacker), target, ['instance_admin'])).rejects.toThrow();
+			await expectDenied(store.set(selfCtx(attacker), target, ['instance_admin']), 403);
 		});
 
 		it('non-admin caller cannot read another user’s permissions', async () => {
 			const { store, seedUser } = await createStore();
 			const target = await seedUser();
 			const attacker = await seedUser();
-			await expect(store.getFor(selfCtx(attacker), target)).rejects.toThrow();
+			await expectDenied(store.getFor(selfCtx(attacker), target), 403);
 		});
 
 		it('user can read their own permissions', async () => {
@@ -131,7 +120,6 @@ export function runPlatformPermissionStoreConformance(
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
 		});
 
-		// §2 invariant — the load-bearing test.
 		it('set refuses to remove instance_admin from the sole admin', async () => {
 			const { store, seedUser } = await createStore();
 			const adminId = await seedUser();
@@ -212,10 +200,9 @@ export function runPlatformPermissionStoreConformance(
 
 		it('a burst of concurrent first-admin claims produces exactly one admin', async () => {
 			const { store, seedUser } = await createStore();
-			// The §2 "first signer wins" promise. With no
-			// BOOTSTRAP_INSTANCE_ADMIN_EMAIL configured every signer is eligible,
-			// so this is four different people hitting a fresh install at once —
-			// the read-then-write version granted all four.
+			// First signer wins. With no bootstrap email configured every signer is
+			// eligible, so this is four people hitting a fresh install at once; a
+			// read-then-write claim grants all four.
 			const ids: string[] = [];
 			for (let i = 0; i < 4; i++) ids.push(await seedUser());
 			const sysCtx: RequestContext = makeSystemCtx();
@@ -289,15 +276,12 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const attacker = await seedUser();
 			const target = await seedUser();
-			await expect(store.getForBatch(selfCtx(attacker), [target])).rejects.toThrow();
+			await expectDenied(store.getForBatch(selfCtx(attacker), [target]), 403);
 		});
 
-		// §8 — `manage_instance_users` runs the user-admin surface, so it must be
-		// able to see who holds `instance_admin`: without that read the page cannot
-		// render its locks, and `/admin/users` fails for the exact role it serves.
-		// The two adapters disagreed here (local admitted the role, Supabase did
-		// not), which surfaced as "User store unavailable" on Supabase only. Read
-		// access is not authority — the `set` case below is what keeps them apart.
+		// `manage_instance_users` runs the user-admin surface, so it must see who holds
+		// `instance_admin`, or that page can't render its locks. Read access is not
+		// authority: the `set` case below keeps the two apart.
 		it('manage_instance_users can batch-read platform permissions', async () => {
 			const { store, seedUser } = await createStore();
 			const admin = await seedUser();
@@ -314,8 +298,7 @@ export function runPlatformPermissionStoreConformance(
 			const userAdmin = await seedUser();
 			await store.set(adminCtx(admin), admin, ['instance_admin']);
 
-			// Single and batch reads must agree; when they didn't, the delete/disable
-			// routes threw 500 where they meant to return 403.
+			// Single and batch reads must agree.
 			expect(await store.getFor(userAdminCtx(userAdmin), admin)).toContain('instance_admin');
 		});
 
@@ -323,9 +306,29 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const target = await seedUser();
 			const userAdmin = await seedUser();
-			await expect(
-				store.set(userAdminCtx(userAdmin), target, ['instance_admin'])
-			).rejects.toThrow();
+			await expectDenied(store.set(userAdminCtx(userAdmin), target, ['instance_admin']), 403);
 		});
+
+		if (refusesEscalation) {
+			it('a plain user cannot grant themselves instance_admin', async () => {
+				const { store, seedUser } = await createStore();
+				const admin = await seedUser();
+				const user = await seedUser();
+				await store.set(adminCtx(admin), admin, ['instance_admin']);
+
+				await expectStatus(store.set(selfCtx(user), user, ['instance_admin']), 403);
+				expect(await store.getFor(adminCtx(admin), user)).not.toContain('instance_admin');
+			});
+
+			it('a share-link context can neither read nor set permissions', async () => {
+				const { store, seedUser } = await createStore();
+				const user = await seedUser();
+				const share = makeShareCtx();
+
+				await expectStatus(store.set(share, user, ['instance_admin']), 403);
+				await expectStatus(store.getFor(share, user), 403);
+				await expectStatus(store.getForBatch(share, [user]), 403);
+			});
+		}
 	});
 }

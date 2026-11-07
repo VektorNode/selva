@@ -7,7 +7,14 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
+import {
+	NoopLogger,
+	ProviderError,
+	clampPageLimit,
+	decodeOffsetCursor,
+	encodeOffsetCursor,
+	type ILogger
+} from '@selvajs/platform';
 import { createAllowlistStore } from './users.js';
 import type { AllowlistStore, AllowlistEntry } from './users.js';
 
@@ -332,13 +339,13 @@ export class HeaderAuthProvider implements IAuthProvider {
 
 	async listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null> {
 		const all = await this.users.listUsers();
-		const limit = Math.min(Math.max(1, opts?.limit ?? 25), 200);
-		const offset = opts?.cursor ? parseInt(opts.cursor, 10) || 0 : 0;
+		const limit = clampPageLimit(opts?.limit);
+		const offset = decodeOffsetCursor(opts?.cursor);
 		const slice = all.slice(offset, offset + limit).map(toAuthUser);
 		const nextOffset = offset + slice.length;
 		return {
 			items: slice,
-			nextCursor: nextOffset < all.length ? String(nextOffset) : undefined
+			nextCursor: nextOffset < all.length ? encodeOffsetCursor(nextOffset) : undefined
 		};
 	}
 

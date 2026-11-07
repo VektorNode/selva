@@ -21,8 +21,7 @@ export interface IInviteStore {
 
 	listByOrg(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<Invite>>;
 
-	/** No-op if already accepted. */
-	/** True if this call accepted the invite, false if it was already accepted or is gone. */
+	/** True if this call accepted the invite; false if it was already accepted, has expired or is gone. */
 	markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean>;
 
 	/** No-op if already consumed or missing. */

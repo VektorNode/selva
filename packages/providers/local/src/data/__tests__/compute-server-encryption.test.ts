@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { SYSTEM_CONTEXT, type PlatformComputeServer } from '@selvajs/platform';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
-import { encryptSecret } from '../secretCrypto.js';
+import { encryptSecret } from '@selvajs/platform/computeServer';
 
 const TEST_SECRET_KEY = Buffer.alloc(32, 0x42);
 const OTHER_KEY = Buffer.alloc(32, 0x99);
@@ -83,7 +83,7 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 
 		const onDisk = await fs.readFile(configPath, 'utf-8');
 		expect(onDisk).not.toContain(plaintext);
-		expect(onDisk).toContain('enc:v2:');
+		expect(onDisk).toContain('enc:v3:');
 	});
 
 	it('refuses to store ciphertext as a key', async () => {
@@ -119,16 +119,67 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('value');
 	});
 
-	it('still reads a key encrypted before ids were bound', async () => {
-		const legacy = encryptSecret('old-value', TEST_SECRET_KEY);
+	it('does not decrypt a key once the server URL is edited on disk', async () => {
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ apiKey: 'value' })],
+			'a1'
+		);
+		const disk = JSON.parse(await fs.readFile(configPath, 'utf-8'));
+		disk.servers[0].serverUrl = 'https://attacker.example';
+		await fs.writeFile(configPath, JSON.stringify(disk));
+
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBeUndefined();
+		expect((await store.verifySecrets()).failures[0]).toMatchObject({ reason: 'key_mismatch' });
+	});
+
+	it('re-seals the key for the new URL when a save moves the server', async () => {
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ apiKey: 'value' })],
+			'a1'
+		);
+		await store.savePlatformServers(
+			SYSTEM_CONTEXT,
+			[makePlatformServer({ serverUrl: 'https://moved.example', apiKey: 'value' })],
+			'a1'
+		);
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('value');
+
+		const disk = JSON.parse(await fs.readFile(configPath, 'utf-8'));
+		disk.servers[0].serverUrl = 'http://localhost:5000';
+		await fs.writeFile(configPath, JSON.stringify(disk));
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBeUndefined();
+	});
+
+	it('reads keys sealed in legacy envelopes, counts them, and re-seals them bound', async () => {
 		await fs.writeFile(
 			configPath,
-			JSON.stringify({ servers: [{ ...makePlatformServer(), apiKey: legacy }] })
+			JSON.stringify({
+				servers: [
+					{ ...makePlatformServer(), apiKey: encryptSecret('v1-value', TEST_SECRET_KEY) },
+					{
+						...makePlatformServer({ id: 'a2' }),
+						apiKey: encryptSecret('v2-value', TEST_SECRET_KEY, 'a2')
+					}
+				]
+			})
 		);
 		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
 
-		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('old-value');
-		expect((await store.verifySecrets()).ok).toBe(true);
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('v1-value');
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a2')).toBe('v2-value');
+		const before = await store.verifySecrets();
+		expect(before.ok).toBe(true);
+		expect(before.legacyEnvelopes).toBe(2);
+
+		expect(await store.reencryptSecrets()).toBe(2);
+		expect(await store.verifySecrets()).toEqual({ ok: true, failures: [], plaintextFound: false });
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).toBe('v1-value');
+		expect(await store.getServerApiKey(SYSTEM_CONTEXT, 'a2')).toBe('v2-value');
+		expect(await store.reencryptSecrets()).toBe(0);
 	});
 
 	it('getConfig with the wrong key returns the server with apiKey omitted (does not throw)', async () => {

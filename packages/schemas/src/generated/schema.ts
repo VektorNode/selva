@@ -348,11 +348,11 @@ export interface LayoutItemBase {
 }
 export interface InputSource {
 	/**
-	 * Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = looked up on the server from your data when the definition solves; never shown in the form.
+	 * Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = reserved for a server-side lookup that no host performs yet: the input solves with its default, a solve that posts a value for it is refused, and it is never shown in the form.
 	 */
 	kind: 'user' | 'client' | 'server';
 	/**
-	 * The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Keys need not be unique: the same producer/fetch may fill several inputs. Ignored for kind='user'.
+	 * The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT a resolver would fetch (e.g. 'capture.geometry'). Keys need not be unique: the same producer/fetch may fill several inputs. Ignored for kind='user'.
 	 */
 	key?: string;
 	/**

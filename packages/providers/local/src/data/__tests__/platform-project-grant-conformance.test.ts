@@ -19,6 +19,8 @@ describe('LocalPlatformProjectGrantStore', () => {
 	runPlatformProjectGrantStoreConformance({
 		name: 'LocalPlatformProjectGrantStore',
 		createStore: () =>
-			new LocalPlatformProjectGrantStore(path.join(tempDir, 'platform-project-grants.json'))
+			new LocalPlatformProjectGrantStore(path.join(tempDir, 'platform-project-grants.json')),
+		strictDenials: true,
+		userCtx: true
 	});
 });

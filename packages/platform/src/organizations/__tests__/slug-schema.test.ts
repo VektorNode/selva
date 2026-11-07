@@ -19,13 +19,6 @@ describe('SlugSchema', () => {
 		}
 	});
 
-	it('reserves the multi-org namespace prefix `o` even though the length gate already blocks it', () => {
-		// `o` is 1 char, so `min(3)` rejects it regardless — but it stays in the
-		// reserved set so intent survives any future relaxation of the length rule.
-		expect(RESERVED_SLUGS).toContain('o');
-		expect(SlugSchema.safeParse('o').success).toBe(false);
-	});
-
 	it('still enforces the format rules (length, charset)', () => {
 		expect(SlugSchema.safeParse('ab').success).toBe(false); // too short
 		expect(SlugSchema.safeParse('-lead').success).toBe(false); // leading hyphen
@@ -44,6 +37,7 @@ describe('slugify', () => {
 	it('lowercases, trims, and hyphenates non-alphanumeric runs', () => {
 		expect(slugify('  Acme Studio!! ')).toBe('acme-studio');
 		expect(slugify('Foo___Bar / Baz')).toBe('foo-bar-baz');
+		expect(SlugSchema.safeParse(slugify('Acme Studio')).success).toBe(true);
 	});
 
 	it('strips leading and trailing hyphens', () => {
@@ -51,8 +45,11 @@ describe('slugify', () => {
 		expect(slugify('!leading and trailing.')).toBe('leading-and-trailing');
 	});
 
-	it('caps output at 63 characters', () => {
+	it('caps output at 63 characters and never ends in a hyphen after the cut', () => {
 		expect(slugify('a'.repeat(100))).toHaveLength(63);
+		const slug = slugify(`${'a'.repeat(62)} b`);
+		expect(slug).toBe('a'.repeat(62));
+		expect(SlugSchema.safeParse(slug).success).toBe(true);
 	});
 
 	it('yields an empty string when nothing survives (caller must still validate)', () => {
@@ -61,21 +58,15 @@ describe('slugify', () => {
 		expect(SlugSchema.safeParse(slugify('!!!')).success).toBe(false);
 	});
 
-	it('produces slugs that SlugSchema accepts for ordinary names', () => {
-		expect(SlugSchema.safeParse(slugify('Acme Studio')).success).toBe(true);
-	});
-});
-
-describe('slugify', () => {
-	it('never ends in a hyphen after cutting to length', () => {
-		const slug = slugify(`${'a'.repeat(62)} b`);
-		expect(slug).toBe('a'.repeat(62));
-		expect(SlugSchema.safeParse(slug).success).toBe(true);
-	});
-
 	it('folds accents instead of turning them into hyphens', () => {
 		expect(slugify('Müller GmbH')).toBe('muller-gmbh');
 		expect(slugify('Crème Brûlée')).toBe('creme-brulee');
+	});
+
+	it('spells out letters that carry no separate accent', () => {
+		expect(slugify('Straße')).toBe('strasse');
+		expect(slugify('STRAẞE')).toBe('strasse');
+		expect(slugify('Møller Łódź')).toBe('moller-lodz');
 	});
 
 	it('gives up on a name with no latin letters or digits', () => {
@@ -97,11 +88,16 @@ describe('orgSlugFromName', () => {
 		expect(orgSlugFromName('日本')).toBe('default');
 		expect(orgSlugFromName('ab')).toBe('default');
 	});
+
+	it('refuses a fallback that is not a slug', () => {
+		expect(() => orgSlugFromName('Acme', 'admin')).toThrow(/fallback/);
+		expect(() => orgSlugFromName('日本', 'Not A Slug')).toThrow(/fallback/);
+	});
 });
 
 describe('name schemas', () => {
-	it('refuses a name of only whitespace', () => {
-		expect(CreateOrgSchema.safeParse({ name: '   ', slug: 'acme' }).success).toBe(false);
+	it.each(['   ', '\u200b', ' \u200b\u200d\u2060 '])('refuses the invisible name %j', (name) => {
+		expect(CreateOrgSchema.safeParse({ name, slug: 'acme' }).success).toBe(false);
 	});
 
 	it('trims a real name', () => {

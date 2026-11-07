@@ -18,19 +18,16 @@ import {
 	parseBody,
 	parseDefinitionListOptions,
 	parseParam,
+	PublishVersionBodySchema,
 	readForm,
 	requireCaller,
 	requireUpload,
-	throwZodError
+	throwZodError,
+	UpdateDefinitionBodySchema
 } from '../api/index.js';
 import type { ApiHandler } from '../api/index.js';
 import { toDefinitionListItem, toSourceDocumentId, type DefinitionStatus } from '@selvajs/platform';
-import {
-	CreateDefinitionInputSchema,
-	GuidSchema,
-	PublishVersionInputSchema,
-	UpdateMetadataInputSchema
-} from '@selvajs/platform/definitions';
+import { CreateDefinitionInputSchema, GuidSchema } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../access/index.js';
 import { COVER_IMAGE_CONTENT_TYPES, GH_EXTENSIONS } from '@selvajs/platform';
@@ -257,7 +254,7 @@ export const deleteDefinition: ApiHandler = async (req) => {
 export const updateDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx, record } = await requireEditableDefinition(req, guid);
-	const patch = await parseBody(req.request, UpdateMetadataInputSchema);
+	const patch = await parseBody(req.request, UpdateDefinitionBodySchema);
 	// Moving needs the same rights on the destination as uploading there, and a
 	// key scoped to the source project must not carry the definition out of it.
 	if (patch.projectId && patch.projectId !== record.projectId) {
@@ -297,7 +294,7 @@ export const getDefinitionSchema: ApiHandler = async (req) => {
  */
 export const publishDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { versionId } = await parseBody(req.request, PublishVersionInputSchema, { missingAs: {} });
+	const { versionId } = await parseBody(req.request, PublishVersionBodySchema, { missingAs: {} });
 
 	const { ctx } = await requireEditableDefinition(req, guid);
 	return { body: { version: await definitionService(req.deps).publish(ctx, guid, versionId) } };

@@ -13,11 +13,10 @@
  * build time.
  */
 
-import { GuidSchema } from '@selvajs/platform';
+import { GuidSchema, trimTrailing } from '@selvajs/platform';
 import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
 import { apiError, ApiErrorCode } from '../api/errors.js';
-import { trimTrailing } from './trim.js';
 
 /**
  * A stored `serverUrl` is fetched server-side on every status probe, every

@@ -18,6 +18,8 @@ describe('LocalStorageProvider', () => {
 
 	runStorageProviderConformance({
 		name: 'LocalStorageProvider',
-		createStorage: () => new LocalStorageProvider(tempDir)
+		createStorage: () => new LocalStorageProvider(tempDir),
+		segmentPrefix: true,
+		strictDenials: true
 	});
 });

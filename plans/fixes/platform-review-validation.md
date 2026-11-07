@@ -11,12 +11,12 @@ hand. Test cuts were checked by reading the cut case and the named survivor side
 behaviour claims ran against a fresh `tsc` build of the package with Node. The independent reviews
 saw none of the audit, wrote repro scripts against the same build and the built local provider, and
 each of their findings was rerun by a second reader. A separate pass checked the audit's
-recommendations against each other.
+recommendations against each other. The Supabase adapter ran against a local Supabase CLI stack:
+its own suite (37 files, 422 tests, all green; CI's `supabase` job in `test.yml` runs the same),
+then 14 probes for the gaps below ([Supabase adapter](#supabase-adapter)).
 
 **Not verified.**
 
-- The Supabase adapter. Its conformance tests skip without `.env.test`; nothing here ran against
-  Postgres, RLS or the Supabase auth service.
 - The external consumer. It was checked by its import list only, not built against a changed
   package.
 - Browser bundles. No claim about the root barrel in a browser build was run in one.
@@ -346,6 +346,71 @@ recommendations against each other.
   passes one); `slugify('straße')` gives `stra-e`; `CreateOrgSchema` accepts a name of only
   U+200B. `reproduced`.
 
+### Supabase adapter
+
+Each probe ran against `packages/providers/supabase` on a local stack, one file at a time, on a
+wiped database.
+
+New findings:
+
+- **S1 (Medium). Platform projects do not exist on Supabase, and nothing says so.**
+  `SupabaseDataProvider.ts:33-34,99` wires a stub grant store whose reads, `create` and `delete`
+  throw `ProviderError(501)`; the `projects_visibility_check` constraint allows only
+  public/org/private. Platform's `ProjectVisibilitySchema`, `IPlatformProjectGrantStore`, the admin
+  docs (`docs/self-hosting/deployment/admin.md:67`) and the `ENABLE_PLATFORM_PROJECTS` flag all
+  advertise the feature with no provider caveat, and no boot check refuses the flag on Supabase.
+  This is also why Supabase does not run the grant suite: 9 of its 12 cases fail with 501.
+  `reproduced`. Fix: refuse the flag at boot on a provider without grants (or say so in the admin
+  and provider docs), and note it on the interface.
+- **S2 (Medium). `SupabaseDefinitionStore.delete` records deletions that did not happen.** It runs
+  the soft-delete `update` and emits `definition.deleted` without checking that a row changed
+  (`SupabaseDefinitionStore.ts:201-217`). A non-member's delete changed nothing and still emitted
+  the event; so would a second delete of the same definition. Local returns early when the record
+  is gone (`LocalDefinitionStore.ts:262-265`), and Supabase's own `deleteByProject` already emits
+  per affected row. No kit case pins it. `reproduced`. Fix: `select('guid')` on the update and
+  emit only for a returned row; add an eventSink case "deleting a missing definition emits
+  nothing".
+- **S3 (Low). `limit: 0` returns 100 audit rows**, not 1 as `events/audit.ts:41-42` promises.
+  The upper clamp (200) and the `(occurredAt, id)` keyset paging hold, including 260 rows on three
+  identical timestamps. `reproduced`.
+- **S4 (Low). A share link keeps counting solves after its definition is deleted.**
+  `getByTokenHash` returns null, but `getById` and `listByDefinition` still return the link and
+  `tryIncrementSolveCount` returns 1. The solve path resolves by token hash first, so no in-repo
+  route reaches the counter. `reproduced`.
+- **S5 (Low). The permission store trusts the ctx, not the token.** With a plain user's session
+  token and a ctx claiming `['instance_admin']`, `set(self, ['instance_admin'])` succeeded. This is
+  the store's documented design (`SupabasePlatformPermissionStore.ts:18-19`: `user_profiles` RLS is
+  too coarse, so the `assertCan*` guards are the boundary) and the ctx is built server-side, but it
+  is the one store where a mis-built ctx escalates. The definition and project stores follow the
+  token and ignore the ctx flag. `reproduced`.
+
+Confirmed against Supabase (gaps in the kit, not bugs in the adapter):
+
+- `getConfig({ scopeToOrgId })` hides the other org's server, URL and default, and equals
+  `scopeConfigToOrg(getConfig(), org)`.
+- `listPublic` returns only public-project definitions (drafts included, archived only on
+  request); private and org-visibility ones never appear.
+- `deletePrefix('a/b')` leaves `a/bc/y.txt`.
+- Invites: `revoke` of an accepted invite is a no-op; `revoke` of a pending one hard-deletes it;
+  `markAccepted` on an expired invite returns true (L6).
+- Share links: `getById` returns revoked and expired links; an unknown id on `revoke` is a 404; a
+  non-member's revoke is a 404 (RLS hides the row) and changes nothing.
+- API tokens: a second revoke 50 ms later keeps the first `revokedAt` and emits nothing;
+  `revokeAllForUser` leaves already-revoked tokens out.
+- Every `SolveFailureKind` on both channels persists; there is no CHECK constraint (the migration
+  comment lists seven kinds and omits `shed`).
+- Permission store: a plain user's self-grant is a 403 (M8 holds for Supabase); a share ctx gets
+  403 from `set`, `getFor` and `getForBatch`.
+- README rule 2 holds for Supabase's definition and project stores: a non-member's `get` returns
+  null, `update` and `updateProject` are 404s and change nothing (except S2's event).
+- Disabled users: a pre-disable session verifies for up to 60 s (`revalidateMs`), then fails;
+  `tokenVerification: 'strict'` fails at once. This matches `disableUser`'s doc (L1).
+- `listUsers({ limit: 5000 })` sends `perPage: 5000` unclamped; `0` makes GoTrue answer 500 and
+  `-1` "Bad Pagination Parameters".
+- An `enc:v1:` row under the current key: `verifySecrets` reports ok and does not flag it,
+  `reencryptSecrets` leaves it v1; only a save rewrites it as v2 (M4).
+- `recordRun` keeps exactly `MAX_RECENT_RUNS` (20), newest first.
+
 ## 4. Decisions that still need a human
 
 - **Where request bodies live.** Recommend the minor now (server re-exports the three schemas and
@@ -355,14 +420,19 @@ recommendations against each other.
   the kind at the major with a migrator; otherwise wire it.
 - **README rules 1 and 2 ("adapters MUST filter by ctx", "stores stay safe if the caller skipped
   the rules").** Local's definition, org, project and share-link stores do neither; the server
-  guards do. Recommend rewriting both rules to say which adapters enforce in the store and pointing
-  at the existing `ctxIsolation` option, before any kit tightening.
+  guards do. Supabase's do, through RLS on the session token, except the permission store, which
+  trusts the ctx (S5). Recommend rewriting both rules to say which adapters enforce in the store and
+  pointing at the existing `ctxIsolation` option, before any kit tightening.
+- **Platform projects on Supabase.** Recommend refusing `ENABLE_PLATFORM_PROJECTS` at boot when
+  the provider's grant store is the stub, and saying so in the admin docs, rather than
+  implementing grants now.
 - **Kit tightening in a minor.** Recommend: outsider ctx fix as a patch (ctxIsolation is opt-in),
   every other stricter case behind a named option, defaults flipped at the major.
 - **SVG uploads.** Recommend refusing SVG filters and sniffing bytes before sharp (H1, H2), not a
   worker: cheaper, and covers H2 too.
 - **Page-limit defaults.** Recommend one default (`DEFAULT_PAGE_LIMIT`) everywhere and keep 200
-  only where it was deliberate (admin orgs); clamp Supabase `listUsers` now.
+  only where it was deliberate (admin orgs); clamp Supabase `listUsers` now (it forwards 5000 to
+  GoTrue, and 0 makes GoTrue fail).
 - **`public-api.test.ts` reintroduction guard.** Recommend keeping only the root-barrel crypto
   case: re-adding an export is a reviewed edit.
 
@@ -637,4 +707,31 @@ for (let i = 0; i < 5; i++)
 		name: `re-stamp #${i}`,
 		createStore: () => new Bad(fs.mkdtempSync(path.join(os.tmpdir(), 'tok-')))
 	});
+```
+
+S2, Supabase records a delete that changed nothing (vitest, run against a local stack; imports
+the provider's `src/data/__tests__/test-helpers.ts`):
+
+```ts
+const env = readEnv()!;
+const owner = await seedUser(env, ''),
+	plain = await seedPlainUser(env, '');
+const orgId = await seedOrg(owner.userId); // insert into selva.orgs + org_members
+const proj = await seedProject(orgId, owner.userId, 'private');
+const def = await seedDef(proj.id, owner.userId);
+const events: string[] = [];
+const defs = new SupabaseDefinitionStore(env.bundle, {
+	emit: async (e) => void events.push(e.type)
+});
+const ctx = {
+	userId: plain.userId,
+	platformPermissions: [],
+	orgPermissions: [],
+	adapterContext: { sessionToken: plain.sessionToken }
+};
+await defs.delete(ctx, def.guid);
+const row = (
+	await env.adminClient.from('definitions').select('deleted_at').eq('guid', def.guid).single()
+).data;
+console.log('deleted_at', row?.deleted_at, '| events', events); // null | ['definition.deleted']
 ```

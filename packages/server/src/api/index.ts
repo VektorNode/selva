@@ -69,6 +69,9 @@ export {
 export { parseListOptions, parseDefinitionListOptions } from './pagination.js';
 export {
 	SolveBodySchema,
+	UpdateDefinitionBodySchema,
+	PublishVersionBodySchema,
+	CreateShareLinkBodySchema,
 	CreateProjectBodySchema,
 	UpdateProjectBodySchema,
 	AddProjectMemberBodySchema,

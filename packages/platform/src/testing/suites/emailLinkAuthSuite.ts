@@ -39,21 +39,18 @@ export function runEmailLinkAuthConformance(opts: EmailLinkAuthConformanceOption
 			expect(await adapter.verifyMagicLink('')).toBeNull();
 		});
 
-		it('verifyMagicLink returns null for a URL without a token', async () => {
+		it.each([
+			['without a token', 'https://example.com/callback'],
+			[
+				'with a garbage token_hash',
+				'https://example.com/auth/email/callback?token_hash=NOT-A-REAL-TOKEN&type=magiclink'
+			],
+			[
+				'with an unrecognized verification type',
+				'https://example.com/auth/email/callback?token_hash=abc&type=not-a-valid-type'
+			]
+		])('verifyMagicLink returns null for a URL %s', async (_label, url) => {
 			const { adapter } = await createAdapter();
-			expect(await adapter.verifyMagicLink('https://example.com/callback')).toBeNull();
-		});
-
-		it('verifyMagicLink returns null for a URL with garbage token_hash', async () => {
-			const { adapter } = await createAdapter();
-			const url =
-				'https://example.com/auth/email/callback?token_hash=NOT-A-REAL-TOKEN&type=magiclink';
-			expect(await adapter.verifyMagicLink(url)).toBeNull();
-		});
-
-		it('verifyMagicLink returns null for an unrecognized verification type', async () => {
-			const { adapter } = await createAdapter();
-			const url = 'https://example.com/auth/email/callback?token_hash=abc&type=not-a-valid-type';
 			expect(await adapter.verifyMagicLink(url)).toBeNull();
 		});
 

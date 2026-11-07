@@ -8,20 +8,20 @@ This README is the contract. Read it before writing an adapter.
 
 ## Interfaces at a glance
 
-| Interface                    | Purpose                                                                           | Scoped by `RequestContext`?                                          |
-| ---------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `IAuthProvider`              | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability. | No — the auth provider produces the identity that fills the context. |
-| `IPlatformPermissionStore`   | Per-user platform permissions; owns the sole-`instance_admin` invariant.          | Yes — every method.                                                  |
-| `IUserProfileStore`          | Per-user profile (display name, starred definitions, recent runs).                | Yes — adapters scope by `ctx.userId`.                                |
-| `IOrgStore`                  | Orgs and org memberships.                                                         | Yes — every method.                                                  |
-| `IProjectStore`              | Projects and project memberships.                                                 | Yes — every method.                                                  |
-| `IPlatformProjectGrantStore` | Instance-admin-managed grants onto `platform`-visibility projects.                | Yes — every method.                                                  |
-| `IDefinitionStore`           | Definition metadata records + version history.                                    | Yes — every method.                                                  |
-| `IShareLinkStore`            | Per-definition anonymous-access tokens.                                           | Yes — every method.                                                  |
-| `IInviteStore`               | Pending org-membership invitations.                                               | Yes — every method.                                                  |
-| `IComputeServerStore`        | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
-| `IApiTokenStore`             | API tokens and their revocation.                                                  | Yes — every method.                                                  |
-| `IStorageProvider`           | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
+| Interface                    | Purpose                                                                                                                                                                                               | Who scopes by `ctx`                                                     |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `IAuthProvider`              | Verify tokens, manage users, issue sessions. Optional `passwordAuth?` capability.                                                                                                                     | Nobody: the auth provider produces the identity that fills the context. |
+| `IPlatformPermissionStore`   | Per-user platform permissions; owns the sole-`instance_admin` invariant.                                                                                                                              | The store, through the `assertCan*` guards, in every bundled adapter.   |
+| `IUserProfileStore`          | Per-user profile (display name, starred definitions, recent runs).                                                                                                                                    | The store, by `ctx.userId`, through `assertCanAccessProfile`.           |
+| `IOrgStore`                  | Orgs and org memberships.                                                                                                                                                                             | Depends on the adapter: see rule 1.                                     |
+| `IProjectStore`              | Projects and project memberships.                                                                                                                                                                     | Depends on the adapter: see rule 1.                                     |
+| `IPlatformProjectGrantStore` | Instance-admin-managed grants onto `platform`-visibility projects. The Supabase adapter doesn't implement it (its grant store throws 501), so `ENABLE_PLATFORM_PROJECTS` has nothing behind it there. | Depends on the adapter: see rule 1.                                     |
+| `IDefinitionStore`           | Definition metadata records + version history.                                                                                                                                                        | Depends on the adapter: see rule 1.                                     |
+| `IShareLinkStore`            | Per-definition anonymous-access tokens.                                                                                                                                                               | Depends on the adapter: see rule 1.                                     |
+| `IInviteStore`               | Pending org-membership invitations.                                                                                                                                                                   | Depends on the adapter: see rule 1.                                     |
+| `IComputeServerStore`        | Global + per-org compute-server config.                                                                                                                                                               | Nobody: not tenant-scoped. Org-facing reads pass `scopeToOrgId`.        |
+| `IApiTokenStore`             | API tokens and their revocation.                                                                                                                                                                      | Depends on the adapter: see rule 1.                                     |
+| `IStorageProvider`           | Path-based blob storage. Authorization is the caller's responsibility.                                                                                                                                | Nobody: callers pass already-authorized paths.                          |
 
 `IDataProvider` composes every store, plus optional `auditQuery` / `events` hooks, an optional `verifySchemaVersion` handshake (for adapters whose schema migrates out-of-band), and the `ensureUser` / `onUserDeleted` lifecycle methods. An adapter typically implements one class per store and aggregates them.
 
@@ -31,8 +31,8 @@ This README is the contract. Read it before writing an adapter.
 
 `RequestContext` carries the caller's identity and active scope. Built once per HTTP request in `hooks.server.ts` from the authenticated session.
 
-1. **The query is the security boundary.** Adapters MUST filter reads and writes by `ctx`. An unauthorized caller gets an empty page, `null`, or a `ProviderError` — never someone else's data.
-2. **Never trust a caller's pre-flight check.** The predicates in [`access/rules.ts`](src/access/rules.ts) gate the UI and the route layer. A mutating store method must remain safe even if the caller skipped them.
+1. **Know where your adapter enforces scoping.** The Supabase adapter enforces it in the store: RLS runs every query as the user the session token names, so an unauthorized caller gets an empty page, `null` or a `ProviderError`. Its permission and user-profile stores are the exception: they read with the service role and trust `ctx`, through the `assertCan*` guards. The local adapter enforces `ctx` only in its permission and user-profile stores, with the same guards. Its other stores (definitions, orgs, projects, share links, invites, API tokens, grants) ignore `ctx` for scoping and rely on the access guards in [`@selvajs/server`](../server/src/access/guards.ts) running before the call. Both designs are valid. An adapter that scopes in the store should pass `ctxIsolation` to the conformance suites that take it.
+2. **A store that scopes by `ctx` doesn't trust the caller's pre-flight check.** The predicates in [`access/rules.ts`](src/access/rules.ts) gate the UI and the route layer. In such a store, a mutating method stays safe even if the caller skipped them. A store that leaves scoping to the server guards is only as safe as its callers: each one must run those guards first.
 3. **Extend `RequestContext`, not method signatures.** Add a field to the interface for new dimensions (e.g. `tenantId`); don't thread it through every call.
 4. **`SYSTEM_CONTEXT` is for trusted server code only.** Bootstrap, scheduled janitors, migrations, test setup. Never derive it from a user session.
 
@@ -73,13 +73,13 @@ import type {
 
 export class MyDefinitionStore implements IDefinitionStore {
 	async list(ctx: RequestContext, opts?: DefinitionListOptions): Promise<Page<DefinitionRecord>> {
-		// Filter by ctx.actingOrgId; exclude status='pending' unless opts.includePending.
+		// Scope by ctx if this store enforces access (rule 1); exclude status='pending' unless opts.includePending.
 	}
 	// ... etc
 }
 ```
 
-The Selva app normally picks bundled providers from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`. For an adapter that isn't bundled, export a `defineConfig({ auth, data, storage, … })` result from a `.js` file and point `SELVA_CONFIG_PATH` at it — see [config.ts](src/config.ts) for the full `SelvaConfig` shape (tenancy, flags, branding, event/metric sinks, binding resolver).
+The Selva app normally picks bundled providers from `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`. For an adapter that isn't bundled, export a `defineConfig({ auth, data, storage, … })` result from a `.js` file and point `SELVA_CONFIG_PATH` at it — see [selva-config.ts](src/selva-config.ts) for the full `SelvaConfig` shape (tenancy, flags, branding, event/metric sinks, binding resolver).
 
 ---
 
@@ -97,7 +97,9 @@ runDefinitionStoreConformance({
 });
 ```
 
-A suite exists per store, plus auth, email-link auth, storage, event sink and solve-metric sink. `runAuthProviderConformance` wraps `runAuthCoreConformance` and `runPasswordAuthConformance`, so a provider without passwords can run the core alone or pass `passwordless`. New cases go behind an option, so an upgrade doesn't turn a third-party adapter red. The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, `ProviderError` shapes, and the races a store exists to prevent, such as the share-link solve cap. They don't cover performance.
+A suite exists per store, plus auth, OAuth, email-link auth, storage, audit query, event sink and solve-metric sink. `runAuthProviderConformance` wraps `runAuthCoreConformance` and `runPasswordAuthConformance`, so a provider without passwords can run the core alone or pass `passwordless`. The suites cover `pending` filtering, `includePending` opt-in, `ProviderError` shapes, and the races a store exists to prevent, such as the share-link solve cap. They don't cover performance.
+
+New and stricter cases sit behind options that default off, so an upgrade doesn't turn a third-party adapter red. Each suite's options type documents its own: `ctxIsolation` for scoping in the store, `strictDenials` for exact `ProviderError` statuses, `nonAdminCtx` for a default `ctx` without `instance_admin`, and per-suite cases such as `auditStamps` or `publicListing`. Turn on every option your adapter passes.
 
 `sharp` is an optional peer dependency. An adapter that calls `transcodeImageIfNeeded` has to install it.
 
@@ -120,4 +122,4 @@ Identity and credentials belong to whichever `IAuthProvider` is configured — f
 - No runtime dependencies on databases, ORMs, auth SDKs, or HTTP frameworks.
 - No concrete adapters — they live in their own packages.
 - No service orchestration. Multi-step workflows composing data + storage live in `@selvajs/server`.
-- No HTTP-boundary concerns. Zod request schemas and route gating belong in the app's handlers.
+- No HTTP-boundary concerns such as route gating. New request-body schemas belong with the handlers in `@selvajs/server`.

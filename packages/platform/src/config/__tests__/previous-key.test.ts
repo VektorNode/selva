@@ -33,14 +33,38 @@ describe('previousKey', () => {
 		expect(p).toEqual({ state: 'no-deadline', key: 'old' });
 	});
 
-	it('an unreadable deadline counts as passed: fail closed', () => {
+	it.each([
+		['2026-11-13', 10],
+		['2026-11-13T13:00:00.000+01:00', 10]
+	])('reads an ISO date or timestamp: %s', (expires, daysLeft) => {
 		const p = previousKey(
-			{ SELVA_HMAC_KEY_PREVIOUS: 'old', SELVA_HMAC_KEY_PREVIOUS_EXPIRES: 'next tuesday' },
+			{ SELVA_HMAC_KEY_PREVIOUS: 'old', SELVA_HMAC_KEY_PREVIOUS_EXPIRES: expires },
 			'SELVA_HMAC_KEY',
 			NOW
 		);
-		expect(p.state).toBe('expired');
-		expect(p.key).toBeUndefined();
+		expect(p).toMatchObject({ state: 'active', daysLeft });
+	});
+
+	it.each(['next tuesday', '12.1.2027', '2026-11-31', 'Dec 1 2026', '2099-12-01'])(
+		'an unreadable or implausible deadline counts as passed: %s',
+		(expires) => {
+			const p = previousKey(
+				{ SELVA_HMAC_KEY_PREVIOUS: 'old', SELVA_HMAC_KEY_PREVIOUS_EXPIRES: expires },
+				'SELVA_HMAC_KEY',
+				NOW
+			);
+			expect(p.state).toBe('expired');
+			expect(p.key).toBeUndefined();
+		}
+	);
+
+	it('a deadline extended by hand within a few rotations is accepted', () => {
+		const p = previousKey(
+			{ SELVA_HMAC_KEY_PREVIOUS: 'old', SELVA_HMAC_KEY_PREVIOUS_EXPIRES: '2027-01-02' },
+			'SELVA_HMAC_KEY',
+			NOW
+		);
+		expect(p.state).toBe('active');
 	});
 
 	it('no previous key', () => {

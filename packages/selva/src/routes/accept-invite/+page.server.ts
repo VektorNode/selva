@@ -150,6 +150,23 @@ export const actions = {
 		}
 
 		try {
+			// Claim before granting: an invite revoked while the account was being
+			// created fails the claim, and must land no permission or membership.
+			const claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			if (!claimed) {
+				locals.log.info('Invite was revoked or used before it could be claimed', {
+					component: 'accept-invite',
+					inviteId: invite.id,
+					userId: user.id
+				});
+				return fail(410, {
+					error:
+						mode === 'join'
+							? 'This invite was revoked or already used. Ask your admin for a new one.'
+							: 'Your account was created, but this invite was revoked or already used, so it did not add you to the organization. Ask your admin for a new invite.'
+				});
+			}
+
 			// Authority the inviting admin chose at mint time. The mint route already
 			// verified they held `instance_admin` — re-checking here is impossible,
 			// as the only party present now is the invitee.
@@ -183,15 +200,6 @@ export const actions = {
 					updatedAt: joinedAt,
 					updatedBy: invite.invitedBy,
 					deletedAt: null
-				});
-			}
-			const claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
-			if (!claimed) {
-				// A double submit: membership upserts, so the outcome is the same either way.
-				locals.log.info('Invite was already accepted', {
-					component: 'accept-invite',
-					inviteId: invite.id,
-					userId: user.id
 				});
 			}
 		} catch (err) {

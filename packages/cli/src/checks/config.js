@@ -365,7 +365,7 @@ export function checkKeyRotation(env, now = Date.now()) {
 		if (state === 'expired') {
 			return [
 				yellow(
-					`${previous} passed its deadline (${expires}) and is no longer accepted. ` +
+					`${previous} is no longer accepted: its deadline (${expires}) has passed, is not an ISO date or is too far out. ` +
 						`Remove it: npx selva keys rotate ${target} --finish`
 				)
 			];

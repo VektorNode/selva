@@ -9,6 +9,8 @@ description: 'Auth, Postgres, and Storage on Supabase, with identity living in t
 
 `@selvajs/supabase-provider`: Auth + Postgres + Storage in one. Reach for it in production, with more than one app instance, and for deployments serving several tenants: the database itself enforces who can see which rows, so one tenant's query cannot return another's data even if the app asks for it. Postgres calls this row-level security, or RLS.
 
+Platform projects are not available on this provider: provider setup fails when `ENABLE_PLATFORM_PROJECTS` is on.
+
 ## Setting up a hosted project
 
 Applying the migrations (step 3) is manual, and the step that catches people out. The CLI scaffolds the deployment and writes your credentials to `.env`; it never creates tables and doesn't start the app. An app pointed at an empty database connects fine, then fails its health check, because it compares the database's migration head against the version it ships with and refuses to serve on a mismatch.

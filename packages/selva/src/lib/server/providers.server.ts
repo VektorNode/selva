@@ -23,6 +23,7 @@ import { OrgAssetService } from '@selvajs/server/organizations';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { SmtpNotificationProvider } from '@selvajs/server/notifications';
 import { ConsoleLogger, createLogger, renderThrown } from '@selvajs/server/logging';
+import { computeDebugMode } from '#lib/server/config/settings.js';
 
 // Provider wiring lives in `@selvajs/server/providers` (`createSelvaProviders`):
 // env-driven selection over the registry below, an external `selva.config.js`
@@ -236,12 +237,7 @@ function parseLogLevel(raw: string | undefined): LogLevel {
 	// An operator who set SELVA_FLAG_COMPUTE_DEBUG asked for debug output in so
 	// many words — honor it without also requiring LOG_LEVEL=debug, since the
 	// flag would otherwise silently do nothing in production.
-	if (
-		['true', '1', 'yes', 'on', 'verbose'].includes(
-			(env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase()
-		)
-	)
-		return 'debug';
+	if (computeDebugMode(env) !== 'off') return 'debug';
 	return env.NODE_ENV === 'development' ? 'debug' : 'info';
 }
 

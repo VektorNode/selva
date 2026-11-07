@@ -2,8 +2,7 @@ import type { OrgRole, OrgPermission, OrgAssetKind } from './schemas.js';
 
 /**
  * Public URLs of an org's branding assets, keyed by kind; a kind is absent
- * when unset. Kept as one map so a new asset kind never touches the
- * `Organization` shape, the migration, or the row mappers.
+ * when unset. One map, so a new asset kind leaves the `Organization` shape alone.
  */
 export type OrgAssets = Partial<Record<OrgAssetKind, string>>;
 

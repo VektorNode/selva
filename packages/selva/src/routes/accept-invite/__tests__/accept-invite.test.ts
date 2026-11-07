@@ -402,6 +402,28 @@ describe('accept-invite grants platform permissions', () => {
 		expect(perms).toContain('instance_admin');
 	});
 
+	it('grants nothing when the invite is revoked while the account is being created', async () => {
+		tp = await freshProviders();
+		const token = await mintCarrying(tp, ['instance_admin']);
+		const invites = tp.config.data.invites;
+		const invite = await invites.getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
+		const passwordAuth = tp.config.auth.passwordAuth!;
+		const createUser = passwordAuth.createUserWithPassword.bind(passwordAuth);
+		vi.spyOn(passwordAuth, 'createUserWithPassword').mockImplementation(async (email, pw) => {
+			const user = await createUser(email, pw);
+			await invites.revoke(SYSTEM_CONTEXT, invite!.id);
+			return user;
+		});
+
+		const result = await submit(token, { password: PASSWORD, confirm: PASSWORD });
+		expect(result.status).toBe(410);
+		expect(result.error).toMatch(/revoked or already used/i);
+
+		const invited = await tp.authUsers.findByEmail(INVITEE);
+		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, invited!.id)).toEqual([]);
+		expect(await tp.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, invited!.id)).toBeNull();
+	});
+
 	it('leaves an ordinary invitee with no platform permissions', async () => {
 		tp = await freshProviders();
 		const token = await mintCarrying(tp, ['manage_definitions']);

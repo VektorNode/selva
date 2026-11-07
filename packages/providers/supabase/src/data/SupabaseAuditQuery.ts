@@ -6,10 +6,8 @@ import type {
 	IAuditQuery,
 	RequestContext
 } from '@selvajs/platform';
+import { clampPageLimit } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
-
-const MAX_LIMIT = 200;
-const DEFAULT_LIMIT = 100;
 
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -26,7 +24,7 @@ export class SupabaseAuditQuery implements IAuditQuery {
 	constructor(private readonly clients: ClientBundle) {}
 
 	async list(_ctx: RequestContext, filters: AuditQueryFilters): Promise<AuditQueryResult> {
-		const limit = clampLimit(filters.limit);
+		const limit = clampPageLimit(filters.limit);
 
 		let q = this.clients.serviceClient
 			.from('audit_events')
@@ -88,10 +86,4 @@ export class SupabaseAuditQuery implements IAuditQuery {
 			nextCursor: hasMore && last ? { occurredAt: last.occurred_at, id: last.id } : null
 		};
 	}
-}
-
-function clampLimit(requested: number | undefined): number {
-	if (!requested || requested <= 0) return DEFAULT_LIMIT;
-	if (requested > MAX_LIMIT) return MAX_LIMIT;
-	return Math.max(1, Math.floor(requested));
 }

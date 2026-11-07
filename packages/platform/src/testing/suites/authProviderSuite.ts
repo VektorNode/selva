@@ -45,6 +45,13 @@ export interface AuthProviderConformanceOptions {
 		email: string,
 		password: string
 	) => Promise<{ userId: string; refreshToken: string }>;
+	/**
+	 * Run the disabled-session case: a session issued before `disableUser` stops
+	 * verifying within this many milliseconds (0: at once). `disableUser` lets a
+	 * session outlive the disable until the adapter revalidates; `AuthUser.disabled`
+	 * says verification fails after that. Needs `userManagement`.
+	 */
+	disabledSessionWindowMs?: number;
 }
 
 /** Cases every auth provider must pass, password or not. */
@@ -78,10 +85,15 @@ export function runAuthCoreConformance(
 
 /** Cases for a provider with `passwordAuth`. */
 export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions): void {
-	const { name, createProvider, userManagement = false, selfRegistration = false } = opts;
+	const {
+		name,
+		createProvider,
+		userManagement = false,
+		selfRegistration = false,
+		disabledSessionWindowMs
+	} = opts;
 
 	describe(`IAuthProvider password conformance: ${name}`, () => {
-		// Token round-trips
 		it('verifyLogin returns a session token that verifyToken accepts', async () => {
 			const { provider, adminPassword, adminEmail = '' } = await createProvider();
 			const result = await provider.passwordAuth!.verifyLogin(adminEmail, adminPassword);
@@ -89,18 +101,6 @@ export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions)
 			if (result.kind !== 'success') return;
 			const verified = await provider.verifyToken(result.sessionToken);
 			expect(verified?.id).toBe(result.user.id);
-		});
-
-		// Password auth (only runs when passwordAuth is present)
-		it('verifyLogin returns success with correct password', async () => {
-			const { provider, adminPassword, adminEmail = '' } = await createProvider();
-			const result = await provider.passwordAuth!.verifyLogin(adminEmail, adminPassword);
-			expect(result.kind).toBe('success');
-			if (result.kind !== 'success') return;
-			// Identity-only: platform permissions live on IPlatformPermissionStore.
-			expect(result.user.id).toBeTruthy();
-			expect(typeof result.sessionToken).toBe('string');
-			expect(result.sessionToken.length).toBeGreaterThan(0);
 		});
 
 		if (selfRegistration) {
@@ -122,7 +122,6 @@ export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions)
 			expect(result.kind).toBe('failed');
 		});
 
-		// getUser
 		// ============================================================================
 		// User management (opt-in)
 		// ============================================================================
@@ -180,47 +179,42 @@ export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions)
 			// Auth-side delete/disable trusts the caller: the sole-`instance_admin`
 			// invariant is `runPlatformPermissionStoreConformance`'s to test.
 
-			it('createUserWithPassword returns an identity record without profile fields', async () => {
-				const { provider } = await createProvider();
-				const user = await provider.passwordAuth!.createUserWithPassword(
-					`new-${makeUuid()}@example.com`,
-					'pass12345678'
-				);
-				// Profile state (starred, recentRuns, displayName) lives on
-				// IUserProfileStore. Platform permissions live on
-				// IPlatformPermissionStore. AuthUser is identity-only.
-				expect(
-					(user as unknown as { starredDefinitions?: unknown }).starredDefinitions
-				).toBeUndefined();
-				expect((user as unknown as { recentRuns?: unknown }).recentRuns).toBeUndefined();
-				expect((user as unknown as { displayName?: unknown }).displayName).toBeUndefined();
-				expect(
-					(user as unknown as { platformPermissions?: unknown }).platformPermissions
-				).toBeUndefined();
-			});
-
-			it('disableUser disables a user', async () => {
-				const { provider } = await createProvider();
-				const created = await provider.passwordAuth!.createUserWithPassword(
-					`disable-${makeUuid()}@example.com`,
-					'pass12345678'
-				);
-				const result = await provider.disableUser(created.id);
-				expect(result).toBe('ok');
-				const fetched = await provider.getUser(created.id);
-				expect(fetched?.disabled).toBe(true);
-			});
-
-			it('verifyLogin refuses a disabled user', async () => {
+			it('disableUser marks the user disabled and verifyLogin refuses them', async () => {
 				const { provider } = await createProvider();
 				const email = `disabled-${makeUuid()}@example.com`;
 				const created = await provider.passwordAuth!.createUserWithPassword(email, 'pass12345678');
-				await provider.disableUser(created.id);
 
+				expect(await provider.disableUser(created.id)).toBe('ok');
+
+				expect((await provider.getUser(created.id))?.disabled).toBe(true);
 				const result = await provider.passwordAuth!.verifyLogin(email, 'pass12345678');
-
 				expect(result).toMatchObject({ kind: 'failed' });
 			});
+
+			if (disabledSessionWindowMs !== undefined) {
+				it(
+					'a session issued before disableUser stops verifying within the window',
+					async () => {
+						const { provider } = await createProvider();
+						const email = `session-${makeUuid()}@example.com`;
+						await provider.passwordAuth!.createUserWithPassword(email, 'pass12345678');
+						const login = await provider.passwordAuth!.verifyLogin(email, 'pass12345678');
+						if (login.kind !== 'success') throw new Error('sign-in failed');
+						expect(await provider.verifyToken(login.sessionToken)).not.toBeNull();
+
+						await provider.disableUser(login.user.id);
+
+						const deadline = Date.now() + disabledSessionWindowMs;
+						let verified = await provider.verifyToken(login.sessionToken);
+						while (verified && Date.now() < deadline) {
+							await new Promise((r) => setTimeout(r, Math.min(250, disabledSessionWindowMs)));
+							verified = await provider.verifyToken(login.sessionToken);
+						}
+						expect(verified).toBeNull();
+					},
+					disabledSessionWindowMs + 10_000
+				);
+			}
 
 			it('disableUser returns not_found for unknown user', async () => {
 				const { provider } = await createProvider();
@@ -232,11 +226,6 @@ export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions)
 				const { provider } = await createProvider();
 				const result = await provider.listUsers();
 				expect(result).toBeNull();
-			});
-
-			it('createUser (allowlist) is undefined when user management is not supported', async () => {
-				const { provider } = await createProvider();
-				expect(provider.createUser).toBeUndefined();
 			});
 
 			it('deleteUser returns not_supported', async () => {

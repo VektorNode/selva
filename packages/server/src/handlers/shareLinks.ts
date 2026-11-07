@@ -16,6 +16,7 @@ import {
 	apiError,
 	ApiErrorCode,
 	CreatedShareLinkResponseSchema,
+	CreateShareLinkBodySchema,
 	noContent,
 	parseBody,
 	parseListOptions,
@@ -26,11 +27,7 @@ import {
 	ShareLinkResponseSchema
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
-import {
-	CreateShareLinkInputSchema,
-	DEFAULT_SHARE_LINK_MAX_SOLVES,
-	DEFAULT_SHARE_LINK_TTL_DAYS
-} from '@selvajs/platform';
+import { DEFAULT_SHARE_LINK_MAX_SOLVES, DEFAULT_SHARE_LINK_TTL_DAYS } from '@selvajs/platform';
 import type { ShareLink } from '@selvajs/platform';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../access/index.js';
@@ -69,7 +66,7 @@ export const createShareLink: ApiHandler = async (req) => {
 	const { user } = requireCaller(req);
 	const { ctx } = await requireEditableDefinition(req, guid);
 
-	const input = await parseBody(req.request, CreateShareLinkInputSchema, { missingAs: {} });
+	const input = await parseBody(req.request, CreateShareLinkBodySchema, { missingAs: {} });
 
 	const codec = tokenCodec(req.deps, 'shareLinks');
 	const raw = codec.mintRawToken();

@@ -14,14 +14,15 @@ import {
 	type ILogger
 } from '@selvajs/platform';
 import { NoopLogger, ProviderError } from '@selvajs/platform';
-import { previousKey } from '@selvajs/platform/config';
-import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 import {
-	decodeSecretKey,
 	decryptWithKeys,
 	encryptSecret,
-	isEncryptedSecret
-} from './secretCrypto.js';
+	isEncryptedSecret,
+	isLegacyEnvelope,
+	readAtRestKeys,
+	type SecretBinding
+} from '@selvajs/platform/computeServer';
+import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 
 // Re-exported from `@selvajs/platform` (`computeServer/secrets`) — kept here so
 // the local provider's public surface (index.ts) stays backward-compatible.
@@ -34,8 +35,8 @@ export type {
 /**
  * On-disk shape of compute.config.json: all servers (platform + org-private)
  * in one array, the global `defaultServerId`, and the per-org `orgDefaults`
- * map. `apiKey` is always stored as an `enc:v1:<…>` envelope (AES-256-GCM);
- * the store decrypts on read so callers see plaintext.
+ * map. `apiKey` is always stored as an `enc:` envelope (AES-256-GCM) bound to
+ * the server's id and URL; the store decrypts on read so callers see plaintext.
  */
 interface OnDiskShape {
 	servers: ComputeServerConfig[];
@@ -59,11 +60,7 @@ function assertIdsFree(
 	}
 }
 
-/** SELVA_AT_REST_KEY_PREVIOUS, while within its deadline. */
-function previousAtRestKey(env: Record<string, string | undefined>): Buffer | undefined {
-	const key = previousKey(env, 'SELVA_AT_REST_KEY').key;
-	return key ? decodeSecretKey(key) : undefined;
-}
+const bindingOf = (s: ComputeServerConfig): SecretBinding => ({ id: s.id, url: s.serverUrl });
 
 /**
  * Reads/writes compute.config.json, re-read on every call so edits take
@@ -77,17 +74,12 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		logger?: ILogger
 	): LocalComputeServerStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
-		if (!env.SELVA_AT_REST_KEY) {
-			throw new Error(
-				'Missing required env var: SELVA_AT_REST_KEY (32-byte hex or base64). ' +
-					"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
-			);
-		}
+		const keys = readAtRestKeys(env);
 		return new LocalComputeServerStore(
 			path.join(env.DATA_PATH, 'compute.config.json'),
-			decodeSecretKey(env.SELVA_AT_REST_KEY),
+			keys.current,
 			logger,
-			previousAtRestKey(env)
+			keys.previous
 		);
 	}
 
@@ -136,7 +128,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				);
 			}
 			try {
-				return { ...s, apiKey: decryptWithKeys(s.apiKey, this.keys, s.id).plaintext };
+				return { ...s, apiKey: decryptWithKeys(s.apiKey, this.keys, bindingOf(s)).plaintext };
 			} catch (cause) {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -166,6 +158,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
 		let onPreviousKey = 0;
+		let legacyEnvelopes = 0;
 
 		for (const s of all.servers) {
 			if (!s.apiKey) continue;
@@ -178,8 +171,9 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				});
 				continue;
 			}
+			if (isLegacyEnvelope(s.apiKey)) legacyEnvelopes += 1;
 			try {
-				if (decryptWithKeys(s.apiKey, this.keys, s.id).keyIndex > 0) onPreviousKey += 1;
+				if (decryptWithKeys(s.apiKey, this.keys, bindingOf(s)).keyIndex > 0) onPreviousKey += 1;
 			} catch (cause) {
 				failures.push({
 					serverId: s.id,
@@ -194,27 +188,27 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			ok: failures.length === 0,
 			failures,
 			plaintextFound,
-			...(this.keys.length > 1 ? { onPreviousKey } : {})
+			...(this.keys.length > 1 ? { onPreviousKey } : {}),
+			...(legacyEnvelopes > 0 ? { legacyEnvelopes } : {})
 		};
 	}
 
 	/**
-	 * Re-seal every row that only the previous key opens, under the current one,
-	 * so the previous key can be dropped. Under the file lock, so it can't
-	 * interleave with an admin save. Returns how many rows it re-sealed.
+	 * Re-seal every row that only the previous key opens, or that sits in a legacy
+	 * envelope, under the current key and the row's binding. Under the file lock,
+	 * so it can't interleave with an admin save. Returns how many rows it re-sealed.
 	 */
 	async reencryptSecrets(): Promise<number> {
-		if (this.keys.length < 2) return 0;
 		return withFileLock(this.configFilePath, async () => {
 			const all = await this.readAll();
 			let changed = 0;
 			const servers = all.servers.map((s) => {
 				if (!s.apiKey || !isEncryptedSecret(s.apiKey)) return s;
 				try {
-					const { plaintext, keyIndex } = decryptWithKeys(s.apiKey, this.keys, s.id);
-					if (keyIndex === 0) return s;
+					const { plaintext, keyIndex } = decryptWithKeys(s.apiKey, this.keys, bindingOf(s));
+					if (keyIndex === 0 && !isLegacyEnvelope(s.apiKey)) return s;
 					changed += 1;
-					return { ...s, apiKey: encryptSecret(plaintext, this.secretKey, s.id) };
+					return { ...s, apiKey: encryptSecret(plaintext, this.secretKey, bindingOf(s)) };
 				} catch {
 					return s;
 				}
@@ -227,7 +221,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
 		return servers.map((s) => {
 			if (!s.apiKey) return s;
-			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, s.id) };
+			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, bindingOf(s)) };
 		});
 	}
 

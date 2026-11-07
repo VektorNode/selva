@@ -25,6 +25,18 @@ export const RESERVED_SLUGS: readonly string[] = [
 
 const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
 
+// Latin letters NFKD leaves whole, so stripping marks can't fold them.
+const LATIN_FOLDS: Record<string, string> = {
+	ß: 'ss',
+	æ: 'ae',
+	œ: 'oe',
+	ø: 'o',
+	ł: 'l',
+	đ: 'd',
+	þ: 'th'
+};
+const LATIN_FOLD_CHARS = new RegExp(`[${Object.keys(LATIN_FOLDS).join('')}]`, 'g');
+
 /**
  * Coerces an arbitrary name into a slug candidate. Does not guarantee a valid
  * slug — an all-symbols name yields `''`, and reserved words pass through
@@ -36,13 +48,20 @@ export function slugify(name: string): string {
 		.replace(/\p{M}/gu, '')
 		.trim()
 		.toLowerCase()
+		.replace(LATIN_FOLD_CHARS, (c) => LATIN_FOLDS[c] ?? c)
 		.replace(/[^a-z0-9]+/g, '-')
 		.slice(0, 63)
 		.replace(/^-+|-+$/g, '');
 }
 
-/** A slug for an org named without a slug of its own. Always passes `SlugSchema`. */
+/**
+ * A slug for an org named without a slug of its own. Always passes `SlugSchema`;
+ * throws if `fallback` doesn't.
+ */
 export function orgSlugFromName(name: string, fallback = 'default'): string {
+	if (!SlugSchema.safeParse(fallback).success) {
+		throw new Error(`Invalid fallback slug: ${JSON.stringify(fallback)}`);
+	}
 	const slug = slugify(name);
 	if (slug.length < 3) return fallback;
 	return RESERVED_SLUG_SET.has(slug) ? `${slug}-org` : slug;
@@ -99,7 +118,13 @@ export const DEFAULT_ORG_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> 
 };
 
 export const CreateOrgSchema = z.object({
-	name: z.string().trim().min(1, 'Organization name is required').max(128),
+	name: z
+		.string()
+		.trim()
+		.min(1, 'Organization name is required')
+		.max(128)
+		// `trim()` leaves zero-width characters (format class), which render as nothing.
+		.refine((s) => /[^\s\p{Cf}]/u.test(s), 'Organization name is required'),
 	slug: SlugSchema
 });
 

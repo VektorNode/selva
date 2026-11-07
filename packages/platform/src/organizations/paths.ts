@@ -1,6 +1,11 @@
 import { assertSafeKey } from '../storage/safeKey.js';
 import type { OrgAssetKind } from './schemas.js';
 
+function prefix(id: string): string {
+	assertSafeKey(id, 'orgId');
+	return `orgs/${id}/`;
+}
+
 /**
  * Every branding asset is stored as `.webp` (uploads go through the shared
  * transcoder), so the path per kind is fixed and a re-upload overwrites in
@@ -11,13 +16,6 @@ import type { OrgAssetKind } from './schemas.js';
  * `classifyAssetPath` / `ASSET_CLASSES` decide visibility from these prefixes.
  */
 export const orgPaths = {
-	asset: (id: string, kind: OrgAssetKind) => {
-		assertSafeKey(id, 'orgId');
-		assertSafeKey(kind, 'assetKind');
-		return `orgs/${id}/branding/${kind}.webp`;
-	},
-	prefix: (id: string) => {
-		assertSafeKey(id, 'orgId');
-		return `orgs/${id}/`;
-	}
+	asset: (id: string, kind: OrgAssetKind) => `${prefix(id)}branding/${kind}.webp`,
+	prefix
 } as const;

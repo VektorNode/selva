@@ -22,8 +22,8 @@ export interface ErrorContext {
 }
 
 /**
- * Sink for unexpected server errors. Called from `handleError` and the
- * process-level `unhandledRejection`/`uncaughtException` hooks.
+ * Sink for unexpected server errors, including unhandled rejections and uncaught
+ * exceptions.
  *
  * MUST NOT throw — reporting is best-effort and sits on the error path, where a
  * second failure would mask the first. Implementations catch and log their own
@@ -39,9 +39,8 @@ export interface IErrorReporter {
 }
 
 /**
- * Default `IErrorReporter` — discards every report. Used when no error-tracking
- * backend is configured (e.g. `SENTRY_DSN` unset), so call sites can report
- * unconditionally. Swap in a real reporter to ship errors off-box.
+ * Default `IErrorReporter` — discards every report, so call sites can report
+ * unconditionally when no error-tracking backend is configured.
  */
 export class NoopErrorReporter implements IErrorReporter {
 	capture(_error: unknown, _context?: ErrorContext): void {}

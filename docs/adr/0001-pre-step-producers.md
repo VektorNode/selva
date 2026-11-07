@@ -2,7 +2,7 @@
 
 > **Status: shipped as `InputSource`, not as a producer registry.** An input can declare that
 > something other than the person fills it. Selva owns the declaration and the value hand-off; the
-> host decides which producer app or server lookup sits behind a `key`. The proposed
+> host decides which producer app sits behind a `key`. No server lookup is wired. The proposed
 > `@selvajs/producers` package (registry, producer contract, config UI) was never built.
 
 ## Context
@@ -19,8 +19,8 @@ Every input layout item may carry `source`, an `InputSource` in
 [ui-schema.json](../../packages/schemas/ui-schema.json):
 
 - `kind`: `user` (default; the person fills it), `client` (a browser app fills it before the solve)
-  or `server` (resolved on the server at solve time through the host's `IBindingResolver`; never
-  shown in the form).
+  or `server` (meant for a server-side lookup, which nothing performs: it solves with its schema
+  default, and a solve that posts a value for it is refused; never shown in the form).
 - `key`: an opaque address the host interprets per `kind`. For `client` it names the producer app,
   for `server` what to fetch. It is an open string, so adding a producer needs no schema change.
   Keys need not be unique.

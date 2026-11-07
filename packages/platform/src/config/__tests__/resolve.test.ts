@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { composeManifest, defineSetting, legacyValue, resolveConfig } from '../index.js';
+import {
+	composeManifest,
+	defineSetting,
+	legacyValue,
+	resolveConfig,
+	type EnvRecord
+} from '../index.js';
 
 const manifest = composeManifest([
 	defineSetting({
@@ -117,6 +123,31 @@ describe('resolveConfig', () => {
 		expect(result.keys.COMPUTE_SOLVE_CACHE_MB.alias).toBe('COMPUTE_RESPONSE_CACHE_MB');
 	});
 
+	it('a blank value counts as unset, under the new name or an old one', () => {
+		const result = resolveConfig(manifest, {
+			SELVA_HMAC_KEY: '   ',
+			SIGN_IN_MAX_AGE_DAYS: ' ',
+			COMPUTE_SOLVE_CACHE_MB: '  ',
+			COMPUTE_RESPONSE_CACHE_MB: '64'
+		});
+		expect(result.errors.map((e) => [e.key, e.problem])).toEqual([
+			['SELVA_HMAC_KEY', 'is required']
+		]);
+		expect(result.keys.SIGN_IN_MAX_AGE_DAYS).toMatchObject({ source: 'default', value: 0 });
+		expect(result.keys.COMPUTE_SOLVE_CACHE_MB).toMatchObject({ source: 'alias', value: 64 });
+	});
+
+	it('a whole number is digits with an optional sign, nothing else', () => {
+		const read = (raw: string) =>
+			resolveConfig(manifest, { SELVA_HMAC_KEY: KEY, SIGN_IN_MAX_AGE_DAYS: raw }).keys
+				.SIGN_IN_MAX_AGE_DAYS;
+		for (const raw of ['0x10', '0b11', '1e3', '7.0', '99999999999999999999']) {
+			expect(read(raw).status, raw).toBe('error');
+		}
+		expect(read('+7').value).toBe(7);
+		expect(Object.is(read('-0').value, 0)).toBe(true);
+	});
+
 	it('reports undeclared keys under watched prefixes with the nearest declared name', () => {
 		const result = resolveConfig(
 			manifest,
@@ -156,6 +187,102 @@ describe('resolveConfig', () => {
 			description: 'x'
 		});
 		expect(() => composeManifest([manifest, [dup]])).toThrow(/SELVA_TENANCY/);
+	});
+});
+
+describe('url, list, int and string rules', () => {
+	const types = composeManifest([
+		defineSetting({
+			key: 'ORIGIN',
+			type: 'url',
+			origin: true,
+			onInvalid: 'fail',
+			class: 'bootstrap',
+			description: 'Public URL.'
+		}),
+		defineSetting({
+			key: 'SUPABASE_URL',
+			type: 'url',
+			onInvalid: 'fail',
+			class: 'bootstrap',
+			description: 'Supabase project URL.'
+		}),
+		defineSetting({
+			key: 'MCP_ALLOWED_ORIGINS',
+			type: 'list',
+			default: [],
+			onInvalid: 'fail',
+			class: 'setting',
+			description: 'Extra MCP origins.'
+		}),
+		defineSetting({
+			key: 'COMPUTE_RATE_LIMIT_MAX',
+			type: 'int',
+			min: 1,
+			max: 10_000,
+			default: 120,
+			onInvalid: 'default',
+			class: 'tunable',
+			description: 'Solves per minute.'
+		}),
+		defineSetting({
+			key: 'SMTP_PASS',
+			type: 'string',
+			minLength: 8,
+			onInvalid: 'fail',
+			class: 'secret',
+			description: 'SMTP password.'
+		})
+	]);
+	const resolve = (env: EnvRecord) => resolveConfig(types, env).keys;
+
+	it('a url drops trailing slashes and keeps its path', () => {
+		const keys = resolve({
+			ORIGIN: 'https://selva.example.com/',
+			SUPABASE_URL: 'http://127.0.0.1:54421/rest/'
+		});
+		expect(keys.ORIGIN.value).toBe('https://selva.example.com');
+		expect(keys.SUPABASE_URL.value).toBe('http://127.0.0.1:54421/rest');
+	});
+
+	it.each([
+		'localhost:3000',
+		'selva.example.com:443',
+		'javascript:alert(1)',
+		'ftp://selva.example.com'
+	])('a url must be http or https: %s', (raw) => {
+		expect(resolve({ SUPABASE_URL: raw }).SUPABASE_URL.status).toBe('error');
+	});
+
+	it.each([
+		'https://selva.example.com/app',
+		'https://selva.example.com?next=/',
+		'https://admin:pw@selva.example.com'
+	])('an origin refuses a path, query or credentials: %s', (raw) => {
+		expect(resolve({ ORIGIN: raw }).ORIGIN.status).toBe('error');
+		expect(resolve({ SUPABASE_URL: raw }).SUPABASE_URL.status).toBe('ok');
+	});
+
+	it('a list splits on commas and drops blanks', () => {
+		expect(
+			resolve({ MCP_ALLOWED_ORIGINS: ' https://a.example , ,https://b.example ' })
+				.MCP_ALLOWED_ORIGINS.value
+		).toEqual(['https://a.example', 'https://b.example']);
+	});
+
+	it('an int above its max falls back to the default', () => {
+		expect(resolve({ COMPUTE_RATE_LIMIT_MAX: '10001' }).COMPUTE_RATE_LIMIT_MAX).toMatchObject({
+			status: 'invalid',
+			value: 120,
+			problem: 'must be ≤ 10000'
+		});
+	});
+
+	it('a string shorter than its minLength is refused', () => {
+		expect(resolve({ SMTP_PASS: 'short' }).SMTP_PASS).toMatchObject({
+			status: 'error',
+			problem: 'must be at least 8 characters'
+		});
 	});
 });
 

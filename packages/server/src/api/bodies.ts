@@ -18,10 +18,12 @@ import {
 	OrgRoleSchema,
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
-	ALL_ORG_PERMISSIONS,
 	ApiScopeStringSchema,
 	API_TOKEN_LIFETIME_DAYS,
-	type OrgPermission
+	CreateShareLinkInputSchema,
+	DefinitionChannelSchema,
+	PublishVersionInputSchema,
+	UpdateMetadataInputSchema
 } from '@selvajs/platform';
 
 // ============================================================================
@@ -32,11 +34,15 @@ export const SolveBodySchema = z.object({
 	/** Ignored: the solve reads the inputs from the version's stored schema. */
 	inputs: z.array(z.unknown()).optional().meta({ deprecated: true }),
 	values: z.record(z.string(), z.unknown()).default({}),
-	channel: z.enum(['live', 'draft']).default('live'),
+	channel: DefinitionChannelSchema.default('live'),
 	versionId: z.string().optional(),
 	/** Must name this same definition, or the route 400s instead of solving a different one. */
 	definitionUrl: z.string().optional()
 });
+
+export const UpdateDefinitionBodySchema = UpdateMetadataInputSchema;
+export const PublishVersionBodySchema = PublishVersionInputSchema;
+export const CreateShareLinkBodySchema = CreateShareLinkInputSchema;
 
 // ============================================================================
 // Projects
@@ -100,9 +106,7 @@ export const OrgComputePatchBodySchema = z.object({
 export const UpdateOrgMemberBodySchema = z
 	.object({
 		role: OrgRoleSchema.optional(),
-		permissions: z
-			.array(z.enum(ALL_ORG_PERMISSIONS as readonly [OrgPermission, ...OrgPermission[]]))
-			.optional()
+		permissions: z.array(OrgPermissionSchema).optional()
 	})
 	.refine((b) => b.role !== undefined || b.permissions !== undefined, {
 		message: 'Provide at least one of role, permissions'

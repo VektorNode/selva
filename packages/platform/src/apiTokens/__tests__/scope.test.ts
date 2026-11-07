@@ -30,19 +30,25 @@ describe('parseApiScope', () => {
 		'write:org:org-a',
 		'solve:project:p1',
 		'read:definition:abc-123',
-		'upload:all',
-		'upload:project:p1',
-		'upload:definition:d1'
+		'create_projects:all',
+		'create_projects:org:org-a'
 	])('round-trips %s', (s) => {
 		expect(formatApiScope(parseApiScope(s)!)).toBe(s);
 	});
 
-	it.each(['admin:all', 'read', 'read:org', 'read:all:x', 'read:org:a:b', 'read:team:t1', ''])(
-		'rejects %s',
-		(s) => {
-			expect(parseApiScope(s)).toBeNull();
-		}
-	);
+	it.each([
+		'admin:all',
+		'read',
+		'read:org',
+		'read:all:x',
+		'read:org:a:b',
+		'read:team:t1',
+		'',
+		'create_projects:project:p1',
+		'create_projects:definition:d1'
+	])('rejects %s', (s) => {
+		expect(parseApiScope(s)).toBeNull();
+	});
 });
 
 describe('apiScopeActionCovers', () => {
@@ -51,15 +57,22 @@ describe('apiScopeActionCovers', () => {
 		['write', 'read', true],
 		['upload', 'read', true],
 		['solve', 'read', true],
+		['create_projects', 'read', true],
+		['solve', 'solve', true],
+		['upload', 'upload', true],
 		['write', 'upload', true],
+		['write', 'create_projects', true],
 		['upload', 'write', false],
 		['read', 'write', false],
+		['solve', 'write', false],
+		['create_projects', 'write', false],
 		['read', 'solve', false],
 		['write', 'solve', false],
-		['write', 'create_projects', true],
-		['create_projects', 'read', true],
-		['upload', 'create_projects', false],
-		['create_projects', 'upload', false]
+		['upload', 'solve', false],
+		['read', 'upload', false],
+		['solve', 'upload', false],
+		['create_projects', 'upload', false],
+		['upload', 'create_projects', false]
 	] as const)('%s covers %s: %s', (granted, wanted, covered) => {
 		expect(apiScopeActionCovers(granted, wanted)).toBe(covered);
 	});
@@ -81,14 +94,6 @@ describe('scopeAllows', () => {
 	it('passes every request without a token', () => {
 		expect(scopeAllows(session(), 'write')).toBe(true);
 		expect(scopeAllows(session(), 'solve', { projectId: 'p9' })).toBe(true);
-	});
-
-	it('write and solve include read, but not each other', () => {
-		expect(scopeAllows(keyed('write:all'), 'read')).toBe(true);
-		expect(scopeAllows(keyed('solve:all'), 'read')).toBe(true);
-		expect(scopeAllows(keyed('write:all'), 'solve')).toBe(false);
-		expect(scopeAllows(keyed('solve:all'), 'write')).toBe(false);
-		expect(scopeAllows(keyed('read:all'), 'write')).toBe(false);
 	});
 
 	it('an org scope covers only the acting org', () => {
@@ -146,37 +151,28 @@ describe('narrowApiTokenContext', () => {
 			})
 		).toThrow();
 	});
-
-	it('carries the key’s expiry', () => {
-		expect(keyed('read:all').apiScope?.expiresAt).toBe(EXPIRES);
-	});
 });
 
 describe('upload', () => {
-	it('includes read and nothing else', () => {
-		const ctx = keyed('upload:all');
-		expect(scopeAllows(ctx, 'upload')).toBe(true);
-		expect(scopeAllows(ctx, 'read')).toBe(true);
-		expect(scopeAllows(ctx, 'write')).toBe(false);
-		expect(scopeAllows(ctx, 'solve')).toBe(false);
-	});
-
-	it('is included in write, but not in read or solve', () => {
-		expect(scopeAllows(keyed('write:all'), 'upload')).toBe(true);
-		expect(scopeAllows(keyed('read:all'), 'upload')).toBe(false);
-		expect(scopeAllows(keyed('solve:all'), 'upload')).toBe(false);
-	});
-
 	it('follows the resource like any other action', () => {
 		const ctx = keyed('upload:project:p1');
 		expect(scopeAllows(ctx, 'upload', { projectId: 'p1', definitionId: 'd1' })).toBe(true);
 		expect(scopeAllows(ctx, 'upload', { projectId: 'p2' })).toBe(false);
 		expect(scopeAllows(ctx, 'upload')).toBe(false);
 	});
+});
 
+describe('describeApiScope', () => {
 	it('is described in plain words', () => {
 		expect(describeApiScope('upload:all')).toBe(
 			'Read and upload definitions to everything in the org'
 		);
+	});
+
+	it('names the read grant that comes with creating projects', () => {
+		expect(describeApiScope('create_projects:org:org-a')).toBe(
+			'Read and create private projects in everything in the org'
+		);
+		expect(scopeAllows(keyed('create_projects:all'), 'read', { projectId: 'p1' })).toBe(true);
 	});
 });

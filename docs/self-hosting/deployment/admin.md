@@ -68,6 +68,8 @@ Paged, read-only log with actor and target names. Filter by event type, actor an
 
 Create cross-org projects and manage their grants. Rules: [Project scope](../concepts/permissions.md#project-scope).
 
+The Supabase provider has no platform projects. Leave `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS` off there: with it on, provider setup fails with an error naming the flag, and no page loads.
+
 ## Next
 
 [Security & Limits](./security-and-limits.md) · [Providers](../providers/overview.md)

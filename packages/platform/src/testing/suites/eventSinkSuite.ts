@@ -1,16 +1,8 @@
 /**
- * Adapter conformance suite for the event-sink contract (Permissions spec §9).
- *
- * Verifies that each provider's stores emit the expected `DomainEvent` shape
- * after the corresponding mutation succeeds, and that emit happens AFTER the
- * write (so a failed write does not emit). Both reference providers run the
- * same suite — drift between Local and Supabase emission shape gets caught
- * immediately.
- *
- * Local stays on `NoopEventSink`; Supabase wires `SupabaseEventSink` so events
- * persist to `public.audit_events`. The suite guarantees the seam exists and
- * the shape is consistent so future webhook / audit / analytics consumers can
- * plug in by swapping the sink.
+ * Adapter conformance suite for the event-sink contract: a provider's stores
+ * emit the expected `DomainEvent` after a mutation succeeds, and a failed write
+ * emits nothing. The provider is handed a `RecordingEventSink`, so every adapter
+ * is held to the same event shapes.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -26,8 +18,8 @@ import type {
 	ShareLink,
 	RequestContext
 } from '../../index.js';
-import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '../../index.js';
-import { makeUuid } from './helpers.js';
+import { ALL_PLATFORM_PERMISSIONS, SYSTEM_CONTEXT } from '../../index.js';
+import { makeCtx, makeExpectDenied, makeUuid } from './helpers.js';
 
 /** Records every event for assertion. Resets per test via `clear()`. */
 export class RecordingEventSink implements IEventSink {
@@ -71,10 +63,29 @@ export interface EventSinkConformanceOptions {
 	 * Supabase tables, etc.). Called once at the end of each test.
 	 */
 	cleanup?: () => Promise<void> | void;
+	/** Denials assert the `ProviderError` status (409 for a duplicate id), not just a rejection. */
+	strictDenials?: boolean;
+	/** A delete that changes nothing (a missing or already-deleted definition) emits nothing. */
+	silentNoops?: boolean;
+	/**
+	 * The adapter's own sink, with its backend broken so writes fail. When present, a
+	 * case proves `emit` still resolves: a throw would surface as a failed write after
+	 * the mutation committed.
+	 */
+	createFailingSink?: () => Promise<IEventSink> | IEventSink;
 }
 
 export function runEventSinkConformance(opts: EventSinkConformanceOptions): void {
-	const { name, createProvider, createActorId, cleanup } = opts;
+	const {
+		name,
+		createProvider,
+		createActorId,
+		cleanup,
+		strictDenials = false,
+		silentNoops = false,
+		createFailingSink
+	} = opts;
+	const expectDenied = makeExpectDenied(strictDenials);
 
 	describe(`IEventSink conformance: ${name}`, () => {
 		let sink: RecordingEventSink;
@@ -87,12 +98,10 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 			provider = await createProvider(sink);
 			const seeded = await createActorId();
 			actorId = seeded.userId;
-			ctx = {
-				userId: actorId,
+			ctx = makeCtx(actorId, {
 				platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-				orgPermissions: [...ALL_ORG_PERMISSIONS],
-				adapterContext: seeded.sessionToken ? { sessionToken: seeded.sessionToken } : undefined
-			};
+				sessionToken: seeded.sessionToken
+			});
 		});
 
 		// Clean up after each test if the adapter supplies a hook. Always
@@ -242,11 +251,45 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 			await provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId }));
 			sink.clear();
 			// Duplicate-id create must throw and must not emit.
-			await expect(
-				provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId }))
-			).rejects.toThrow();
+			await expectDenied(
+				provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId })),
+				409
+			);
 			expect(sink.ofType('org.created')).toHaveLength(0);
 		});
+
+		if (silentNoops) {
+			it('deleting a missing or already-deleted definition emits nothing', async () => {
+				const orgId = makeUuid();
+				const projectId = makeUuid();
+				const definitionId = makeUuid();
+				await provider.orgs.createOrg(ctx, makeOrg({ id: orgId, ownerId: actorId }));
+				await provider.projects.createProject(
+					ctx,
+					makeProject({ id: projectId, orgId, ownerId: actorId })
+				);
+				await provider.definitions.create(
+					ctx,
+					makeDefinition({ guid: definitionId, projectId, ownerId: actorId })
+				);
+				await provider.definitions.delete(ctx, definitionId);
+				sink.clear();
+
+				await provider.definitions.delete(ctx, definitionId);
+				await provider.definitions.delete(ctx, makeUuid());
+
+				expect(sink.ofType('definition.deleted')).toHaveLength(0);
+			});
+		}
+
+		if (createFailingSink) {
+			it('emit resolves when the sink’s backend fails', async () => {
+				const failing = await createFailingSink();
+				await expect(
+					failing.emit({ type: 'org.created', orgId: makeUuid(), actorId })
+				).resolves.toBeUndefined();
+			});
+		}
 
 		it('stamps tokenId on an event from an API-token request', async () => {
 			const tokenId = makeUuid();
@@ -260,14 +303,8 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 		});
 
 		it('system-context mutations emit with actorId="system"', async () => {
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
-				orgPermissions: [...ALL_ORG_PERMISSIONS],
-				system: true
-			};
 			const orgId = makeUuid();
-			await provider.orgs.createOrg(sysCtx, makeOrg({ id: orgId, ownerId: actorId }));
+			await provider.orgs.createOrg(SYSTEM_CONTEXT, makeOrg({ id: orgId, ownerId: actorId }));
 
 			const created = sink.ofType('org.created');
 			expect(created).toHaveLength(1);

@@ -47,7 +47,7 @@ export interface SolveMetric {
 	 * loading, auth, schema work, and result serialization. 0 if never started.
 	 */
 	durationMs: number;
-	/** Whether the solve completed and returned a result. */
+	/** Must equal `failureKind === 'ok'`; readers should prefer `failureKind`. */
 	ok: boolean;
 	/** Why the solve did not return a result; `'ok'` when it did. */
 	failureKind: SolveFailureKind;

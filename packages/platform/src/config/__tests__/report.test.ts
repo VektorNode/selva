@@ -99,12 +99,10 @@ describe('buildConfigReport', () => {
 		]);
 	});
 
-	it('the same key gives the same fingerprint, a different key a different one', () => {
+	it('a different key gives a different fingerprint', () => {
 		const a = buildConfigReport(manifest, { SELVA_HMAC_KEY: HMAC }).rows[0].display;
-		const b = buildConfigReport(manifest, { SELVA_HMAC_KEY: HMAC }).rows[0].display;
-		const c = buildConfigReport(manifest, { SELVA_HMAC_KEY: HMAC + 'x' }).rows[0].display;
-		expect(a).toBe(b);
-		expect(a).not.toBe(c);
+		const b = buildConfigReport(manifest, { SELVA_HMAC_KEY: HMAC + 'x' }).rows[0].display;
+		expect(a).not.toBe(b);
 	});
 });
 
@@ -123,11 +121,16 @@ describe('config snapshots', () => {
 		const before = takeSnapshot(manifest, env, 'salt-1');
 		const after = takeSnapshot(
 			manifest,
-			{ ...env, SMTP_PASS: 'other', ORIGIN: 'https://b.example.com', COMPUTE_SOLVE_CACHE_MB: '64' },
+			{
+				...env,
+				SELVA_HMAC_KEY: HMAC + 'x',
+				ORIGIN: 'https://b.example.com',
+				COMPUTE_SOLVE_CACHE_MB: '64'
+			},
 			before.salt
 		);
 		expect(diffSnapshots(before, after)).toEqual([
-			{ key: 'SMTP_PASS', change: 'changed' },
+			{ key: 'SELVA_HMAC_KEY', change: 'changed' },
 			{
 				key: 'ORIGIN',
 				change: 'changed',
@@ -138,8 +141,27 @@ describe('config snapshots', () => {
 		]);
 	});
 
-	it('an unchanged env diffs empty', () => {
-		const a = takeSnapshot(manifest, env, 's');
-		expect(diffSnapshots(a, takeSnapshot(manifest, env, a.salt))).toEqual([]);
+	it('a key unset since the last boot is removed, with its old value unless secret', () => {
+		const before = takeSnapshot(manifest, { ...env, COMPUTE_SOLVE_CACHE_MB: '64' }, 'salt-1');
+		const { SMTP_PASS: _, ...rest } = env;
+		expect(diffSnapshots(before, takeSnapshot(manifest, rest, before.salt))).toEqual([
+			{ key: 'SMTP_PASS', change: 'removed' },
+			{ key: 'COMPUTE_SOLVE_CACHE_MB', change: 'removed', from: '64' }
+		]);
 	});
+
+	it('a secret that is not a generated key leaves nothing to guess it back from', () => {
+		const a = takeSnapshot(manifest, env, 'salt-1');
+		const b = takeSnapshot(manifest, { ...env, SMTP_PASS: 'Summer2026!' }, 'salt-1');
+		expect(a.values.SMTP_PASS).toBe(b.values.SMTP_PASS);
+	});
+
+	// What the boot and the CLI do with whatever the previous file holds.
+	it.each([{}, null, 'x', { version: 1, salt: 5 }, { version: 1, salt: 's', values: {} }])(
+		'a malformed previous snapshot counts as none: %j',
+		(previous) => {
+			const after = takeSnapshot(manifest, env, (previous as { salt?: string } | null)?.salt);
+			expect(diffSnapshots(previous, after)).toEqual([]);
+		}
+	);
 });

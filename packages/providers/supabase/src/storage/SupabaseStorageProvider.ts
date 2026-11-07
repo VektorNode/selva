@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient } from '@supabase/supabase-js';
 import { transcodeImageIfNeeded, classifyAssetPath } from '@selvajs/platform/storage';
 import type { IStorageProvider } from '@selvajs/platform/storage';
-import { trimTrailing } from '../trim.js';
+import { ProviderError, trimTrailing } from '@selvajs/platform';
 
 /**
  * Storage backend for Selva on Supabase Storage. Routes each path to one of
@@ -110,7 +110,10 @@ export class SupabaseStorageProvider implements IStorageProvider {
 
 	async deletePrefix(prefix: string): Promise<void> {
 		if (trimTrailing(prefix, '/') === '') {
-			throw new Error(`Refusing to delete the whole store: prefix ${JSON.stringify(prefix)}`);
+			throw new ProviderError(
+				`Refusing to delete the whole store: prefix ${JSON.stringify(prefix)}`,
+				400
+			);
 		}
 		// A definition's GUID prefix may have files in either bucket.
 		await Promise.all([

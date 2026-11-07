@@ -1,5 +1,5 @@
 import type { RequestContext } from '../context.js';
-import { ProviderError } from '../errors.js';
+import { ProviderError } from '../errors/index.js';
 import { parseApiScope, type ApiScope, type ApiScopeAction, type ApiToken } from './types.js';
 
 /** The rows a request touches, when the route knows them. */

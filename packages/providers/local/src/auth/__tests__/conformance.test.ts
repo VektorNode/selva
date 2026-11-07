@@ -37,6 +37,7 @@ describe('LocalAuthProvider — auth-users.json mode', () => {
 		},
 		userManagement: true,
 		selfRegistration: true,
-		signInContract: true
+		signInContract: true,
+		disabledSessionWindowMs: 0
 	});
 });

@@ -1,72 +1,36 @@
 import type { AuthUser, LoginResult, UserManagementResult } from './types.js';
 import type { ListOptions, Page } from '../pagination.js';
 
-/**
- * Optional password-based authentication surface. Implemented by providers
- * that own credentials (Local, Supabase Auth). OIDC-only providers leave
- * `IAuthProvider.passwordAuth` undefined.
- */
+/** Password sign-in, for providers that own credentials. */
 export interface IPasswordAuth {
-	/**
-	 * Verify credentials. Returns a discriminated union — callers must
-	 * `switch (result.kind)`, never treat truthiness as authenticated.
-	 */
+	/** Callers must `switch (result.kind)`: a failed result is an object too. */
 	verifyLogin(email: string, password: string): Promise<LoginResult>;
 
-	/**
-	 * Admin-initiated user creation. Grant platform permissions separately
-	 * via `IPlatformPermissionStore.set`.
-	 */
+	/** Grants no platform permissions: set those with `IPlatformPermissionStore.set`. */
 	createUserWithPassword(email: string, password: string): Promise<AuthUser>;
 
-	/** Self-service registration. Return null when self-registration is disabled. */
+	/** Null when self-registration is off. */
 	registerUser?(email: string, password: string): Promise<AuthUser | null>;
 }
 
 /**
- * Optional OAuth surface. Implemented by providers that broker OAuth flows
- * (Supabase Auth, future Eterna/Auth0/etc.); local credential-only providers
- * leave `IAuthProvider.oauth` undefined.
- *
- * Standard authorization-code flow:
- *
- *   1. Browser hits `/auth/{provider}/start?provider=google` → server calls
- *      `getOAuthAuthorizationUrl` and 303s to the result.
- *   2. IdP redirects back to `/auth/{provider}/callback?code=...` → server
- *      calls `exchangeOAuthCode` to mint the session pair.
- *
- * Keeping the session alive afterwards is `ISessionRefresh`'s job.
- *
- * Each method returns `null` rather than throwing on irrecoverable
- * credential failures, so the route layer can pick the right HTTP shape
- * (401 for refresh, login redirect for callback).
+ * OAuth authorization-code flow, for providers that broker one. A code that can never work
+ * returns `null` rather than throwing, so the caller can tell "sign in again" from a fault.
  */
 export interface IOAuthAuth {
-	/**
-	 * OAuth providers this adapter is configured to broker, as lowercased
-	 * identifiers ("google", "github", …). Empty array when none are wired.
-	 *
-	 * Route/UI code calls this instead of reading provider-specific env vars
-	 * directly, keeping provider config out of `selva`.
-	 */
+	/** Configured providers as lowercase ids ("google", "github"); empty when none. */
 	listProviders(): readonly string[];
 
 	/**
-	 * Build the IdP authorization URL to redirect the browser to. `redirectTo`
-	 * must be the route that handles the `?code=...` exchange. Provider-name
-	 * validation is the caller's job — an unconfigured provider may surface
-	 * as an upstream error.
+	 * The IdP URL to send the browser to. `redirectTo` is the route that exchanges the
+	 * returned `?code=`. The caller validates `provider`: an unconfigured one may fail upstream.
 	 */
 	getOAuthAuthorizationUrl(
 		provider: 'google' | 'github' | 'azure' | 'gitlab',
 		redirectTo: string
 	): Promise<string>;
 
-	/**
-	 * Exchange an authorization code for a session: the resolved identity plus
-	 * an access/refresh token pair, or `null` if the code is invalid, expired,
-	 * or already redeemed. Callers must treat null as "send back to /login".
-	 */
+	/** The identity and session pair for a code; `null` if it is invalid, expired or redeemed. */
 	exchangeOAuthCode(code: string): Promise<{
 		user: AuthUser;
 		sessionToken: string;
@@ -75,21 +39,14 @@ export interface IOAuthAuth {
 }
 
 /**
- * Optional session-lifecycle surface: refresh an expiring session, revoke one
- * server-side. Deliberately not part of `IOAuthAuth` — refresh and revoke are
- * properties of a *session*, regardless of how it was minted. A deployment
- * that brokers no OAuth still needs to revoke on logout.
- *
- * Undefined for providers that can't invalidate a session server-side (the
- * local HMAC provider mints stateless tokens — nothing to revoke). Callers
- * must treat absence as "cookie deletion is all we can do".
+ * Refreshing and revoking a session, whatever minted it. Absent on providers whose tokens
+ * can't be revoked server-side: deleting the cookie is then all a caller can do.
  */
 export interface ISessionRefresh {
 	/**
-	 * Swap a refresh token for a fresh access/refresh pair. Returns null on
-	 * irrecoverable failure (revoked, expired, signed by a different secret,
-	 * or the user has since been disabled); the session-refresh middleware
-	 * treats null as "force re-login" by clearing the refresh cookie.
+	 * A fresh pair for a refresh token, or `null` when it will never work again (revoked,
+	 * expired, signed by another secret, or the user disabled). Callers treat null as
+	 * "sign in again".
 	 */
 	refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
@@ -97,52 +54,25 @@ export interface ISessionRefresh {
 	} | null>;
 
 	/**
-	 * Invalidate a session server-side so its token stops being accepted
-	 * before it would naturally expire. Called on logout.
+	 * Stops `token` being accepted before it expires. `token` is the access token; an
+	 * adapter that revokes by refresh token accepts either.
 	 *
-	 * `token` is the session's access token (what the driving layer holds in
-	 * its session cookie). Adapters that revoke by refresh token accept
-	 * either — the contract is "the credential the caller has".
-	 *
-	 * Best-effort and idempotent: revoking an already-revoked, expired, or
-	 * unknown token returns `true`, since the desired end state (that token
-	 * grants nothing) holds either way. Returns `false` only when the provider
-	 * couldn't carry out the revocation and the token may still be live —
-	 * callers should still clear the cookie but may log the failure. Never
-	 * throws: a failed revoke must not block logout.
+	 * Idempotent: an already revoked, expired or unknown token returns `true`, since it
+	 * grants nothing either way. `false` means the revoke failed and the token may still
+	 * work. Never throws: a failed revoke must not block sign-out.
 	 */
 	revokeSession(token: string): Promise<boolean>;
 }
 
 /**
- * Optional passwordless email surface — "type your email, click the link in
- * your inbox, you're in." Implemented by providers that broker email delivery
- * and token verification (Supabase Auth, future Eterna ID, …). Adapters that
- * can't send mail or don't model this flow leave `IAuthProvider.emailLink`
- * undefined.
- *
- * Two phases, mirroring OAuth's start/callback split:
- *
- *   1. User submits an email → server calls `sendMagicLink(email,
- *      callbackUrl)`. The adapter delivers a link to that callback URL with
- *      whatever verification token shape it uses (Supabase: `?token_hash=…
- *      &type=magiclink`).
- *   2. User clicks the link, browser hits the callback route → server calls
- *      `verifyMagicLink(rawTokenFromUrl)` to mint a session.
- *
- * The route layer never inspects the token — it just forwards the raw URL
- * string. Adapter-specific token shapes stay inside the adapter.
+ * Passwordless sign-in through a link sent by email. The caller forwards the URL the user
+ * landed on without reading it; the token's shape is the adapter's business.
  */
 export interface IEmailLinkAuth {
 	/**
-	 * Send a magic-link email. `callbackUrl` is the absolute URL the adapter
-	 * embeds in the link — must point at the route that handles
-	 * `verifyMagicLink`.
-	 *
-	 * Returns `{ ok: false, reason }` for adapter-classified failures (rate
-	 * limit, signup disabled, invalid email) so the route can render a
-	 * user-friendly message without exposing provider internals. Network or
-	 * unknown errors still throw.
+	 * Sends a link to `callbackUrl`, the absolute URL of the route that calls
+	 * `verifyMagicLink`. Returns `{ ok: false, reason }` for failures the user can act on;
+	 * throws for network and unknown errors.
 	 */
 	sendMagicLink(
 		email: string,
@@ -152,14 +82,9 @@ export interface IEmailLinkAuth {
 	>;
 
 	/**
-	 * Verify the token the IdP sent the user. `rawCallbackUrl` is the full URL
-	 * the user landed on (or an opaque adapter-specific token string —
-	 * adapters document which); the adapter pulls whatever fields it needs.
-	 *
-	 * Returns `null` for invalid, expired, or already-redeemed tokens —
-	 * callers must treat null as "send back to /login". `refreshToken` is
-	 * present only for adapters that issue refresh tokens for email-link
-	 * sessions (Supabase does); omit otherwise.
+	 * The identity and session for the URL the user landed on (or an adapter-specific token
+	 * string); `null` if the token is invalid, expired or redeemed. `refreshToken` comes only
+	 * from adapters that issue one for these sessions.
 	 */
 	verifyMagicLink(rawCallbackUrl: string): Promise<{
 		user: AuthUser;
@@ -169,52 +94,37 @@ export interface IEmailLinkAuth {
 }
 
 /**
- * Optional forward-proxy authentication surface. Implemented by providers
- * that derive identity from signals injected by a trusted upstream reverse
- * proxy (HTTP headers, mTLS, etc.) — e.g. Caddy `forward_auth`, oauth2-proxy,
- * Authelia, Pomerium, Traefik forward-auth.
+ * Identity from signals a trusted reverse proxy injects (headers, mTLS): Caddy
+ * `forward_auth`, oauth2-proxy, Authelia and the like.
  *
  * TRUST BOUNDARY — READ BEFORE IMPLEMENTING
  *
- * The signals this surface consumes are NOT verified cryptographically by
- * Selva. They're trusted only because the deployment runs the app behind a
- * proxy that:
+ * Selva does not verify these signals. They are safe only behind a proxy that:
  *
  *   1. Authenticates the user against an upstream IdP, AND
- *   2. Strips any client-supplied copies of the trusted headers from
- *      inbound requests before adding its own, AND
- *   3. Is the only network path that can reach the app process (bind to
- *      127.0.0.1, firewall the app port, or use a private socket).
+ *   2. Strips any client-supplied copies of the trusted headers before adding its own, AND
+ *   3. Is the only network path to the app (loopback bind, firewalled port, private socket).
  *
- * If any condition fails, an attacker can spoof the headers and become
- * anyone. Each implementer of this interface MUST ship a README stating the
- * exact proxy configuration required — the platform layer can't verify this;
- * it's the provider's contract with its operator.
+ * If any condition fails, anyone can spoof the headers and become anyone. Every
+ * implementation MUST ship a README stating the exact proxy configuration: the platform
+ * can't check it.
  *
- * `identifyFromHeaders` is called from `hooks.server.ts` on every authed
- * request whose session cookie is missing or invalid. It must be cheap — a
- * header read plus at most one indexed lookup, no network calls, no
- * unbounded disk scans.
+ * `identifyFromHeaders` runs on every request without a valid session, so it must be cheap:
+ * a header read and at most one indexed lookup, no network calls.
  */
 export interface IProxyAuth {
 	/**
-	 * Identify the caller from trusted upstream-proxy signals on the incoming
-	 * request. Returns `null` for "not identified" (header missing, UPN not
-	 * allowlisted, account disabled) — must not throw for absent headers,
-	 * since that's the normal anonymous case.
+	 * The caller, or `null` when not identified (header missing, not allowlisted, disabled).
+	 * Must not throw for absent headers: that is the normal anonymous case.
 	 *
-	 * On first identification of a previously-allowlisted user, the
-	 * implementation may materialize stored fields (display name, email) from
-	 * the same headers. Auto-creating arbitrary users from headers is
-	 * forbidden: the allowlist is the security boundary.
+	 * May fill stored fields (display name, email) from the headers for an allowlisted user,
+	 * but never creates one: the allowlist is the security boundary.
 	 */
 	identifyFromHeaders(headers: Headers): Promise<AuthUser | null>;
 
 	/**
-	 * True iff none of the identity headers this provider trusts arrived on
-	 * the request. The hook layer uses this on `/login` misses to tell
-	 * "proxy never reached us" apart from "proxy is here but didn't recognise
-	 * the user", without leaking the trusted header names to end users.
+	 * True when none of the trusted identity headers arrived. Tells "the proxy never reached
+	 * us" from "the proxy didn't recognise the user" without naming the headers to users.
 	 */
 	hasNoIdentityHeaders(headers: Headers): boolean;
 
@@ -241,97 +151,61 @@ export interface IDelegatedSession {
 	status(): Promise<DelegatedSessionStatus>;
 
 	/**
-	 * A session token acting as `userId` inside `orgId`, valid for `ttlSeconds`
-	 * (default 60 s). It carries no instance-admin rights, whatever the user holds: those
-	 * never ride on a bearer key. Throws if `status` isn't ok.
+	 * A session token acting as `userId` inside `orgId`, for a lifetime the adapter sets. It
+	 * carries no instance-admin rights, whatever the user holds: those never ride on a bearer
+	 * key. Throws if `status` isn't ok.
 	 */
 	mint(userId: string, opts: { orgId: string }): Promise<string>;
 }
 
 /**
- * Authentication provider — identity verification only. Profile state lives
- * in `IUserProfileStore`, platform permissions in `IPlatformPermissionStore`,
- * password ops in optional `passwordAuth`, OAuth in optional `oauth`.
- *
- * Methods here don't take a `RequestContext` — the provider produces the
- * identity used to build the context, not the other way around.
+ * Identity only: profile state lives in `IUserProfileStore`, platform permissions in
+ * `IPlatformPermissionStore`. Methods take no `RequestContext`: the provider produces the
+ * identity a context is built from.
  */
 export interface IAuthProvider {
-	/** Display name shown in admin UI (e.g. "Local", "Microsoft Entra ID"). */
+	/** Shown in the admin UI ("Local", "Microsoft Entra ID"). */
 	readonly name: string;
 
-	/** Present for credential-owning providers; undefined for OIDC-only. */
 	readonly passwordAuth?: IPasswordAuth;
 
-	/** Present for providers that broker OAuth flows; undefined otherwise. */
 	readonly oauth?: IOAuthAuth;
 
-	/**
-	 * Present for providers that can refresh or revoke a session server-side.
-	 * Undefined for providers minting stateless tokens with nothing to revoke.
-	 * Independent of `oauth` — a password-only deployment still has sessions.
-	 */
 	readonly sessionRefresh?: ISessionRefresh;
 
-	/**
-	 * Present for providers that send sign-in links over email (Supabase Auth,
-	 * future Eterna ID). Undefined otherwise.
-	 */
 	readonly emailLink?: IEmailLinkAuth;
 
-	/**
-	 * Present for providers that derive identity from a trusted upstream
-	 * proxy (forward-auth headers, mTLS, etc.). Undefined for credential or
-	 * OIDC-broker providers. See `IProxyAuth` for the trust contract.
-	 *
-	 * When set, the platform treats sign-out as the proxy/IdP's job and skips
-	 * the logout button — Selva has no session to destroy.
-	 */
+	/** When set, signing out is the proxy's job and Selva offers no sign-out. */
 	readonly proxyAuth?: IProxyAuth;
 
-	/**
-	 * Present for providers whose data stores scope by a user session (row
-	 * security). API token requests use it to act as the token's owner.
-	 */
+	/** For providers whose stores scope by a user session: API-token requests act as the owner. */
 	readonly delegatedSession?: IDelegatedSession;
 
-	/** Verify a token (session cookie, JWT, ID token, etc.); null if invalid or expired. */
+	/** The user for a session token, JWT or ID token; null if invalid or expired. */
 	verifyToken(token: string): Promise<AuthUser | null>;
 
 	getUser(id: string): Promise<AuthUser | null>;
 
-	/** Returns null if the provider does not support user management. */
+	/** Null when the provider can't list users. */
 	listUsers(opts?: ListOptions): Promise<Page<AuthUser> | null>;
 
-	/**
-	 * Allowlist a user without a password (OAuth providers). Callers grant
-	 * permissions via `IPlatformPermissionStore.set`.
-	 */
+	/** Allowlists a user with no password (OAuth). Grants no platform permissions. */
 	createUser?(email: string): Promise<AuthUser>;
 
 	/**
-	 * Delete a user identity. Callers must consult
-	 * `IPlatformPermissionStore.countInstanceAdminsExcluding(id)` first and
-	 * surface `'last_admin'` themselves — the sole-`instance_admin` invariant
-	 * isn't enforced here.
+	 * Does not enforce the last-`instance_admin` rule: callers check
+	 * `IPlatformPermissionStore.countInstanceAdminsExcluding(id)` first and return
+	 * `'last_admin'` themselves.
 	 */
 	deleteUser(id: string): Promise<UserManagementResult>;
 
 	/**
-	 * Disable a user, preserving identity (preferred over deletion). Same
-	 * invariant rules as `deleteUser`.
-	 *
-	 * Existing sessions aren't guaranteed to stop working the instant this
-	 * returns — adapters that verify tokens locally may keep accepting an
-	 * already-issued access token until their next revalidation (the Supabase
-	 * adapter bounds this by `revalidateMs`, default 60s). Callers needing
-	 * immediate cutoff should also revoke via `sessionRefresh.revokeSession`.
+	 * Keeps the identity; prefer it to deletion. Callers enforce the last-admin rule as for
+	 * `deleteUser`. A session issued before the call may keep working until the adapter next
+	 * revalidates it; also call `sessionRefresh.revokeSession` for an immediate cutoff.
 	 */
 	disableUser(id: string): Promise<UserManagementResult>;
 
-	/**
-	 * Stamp `lastLoginAt`. Best-effort — failure must not block auth. Adapters
-	 * may debounce (e.g. skip if the existing timestamp is under 60s old).
-	 */
+	/** Stamps `lastLoginAt`. Best-effort: a failure must not block sign-in. May debounce. */
 	touchLastLogin?(id: string): Promise<void>;
 }

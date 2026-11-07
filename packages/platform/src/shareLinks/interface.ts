@@ -37,13 +37,14 @@ export interface IShareLinkStore {
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;
 	/**
 	 * Soft-delete (set `revokedAt`). Idempotent: emits once, and a repeat is a no-op.
-	 * Throws `ProviderError` when the caller may not revoke it.
+	 * Throws `ProviderError` 404 for an unknown id, and when the caller may not revoke it.
 	 */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 	/**
 	 * Atomic check-and-increment; must be a single statement, since
-	 * read-then-write races under load. Returns the new `solveCount`, or
-	 * null when the cap was reached. `null` maxSolves means uncapped.
+	 * read-then-write races under load. Returns the new `solveCount`, or null
+	 * when the cap was reached or `getByTokenHash` would hide the link.
+	 * `null` maxSolves means uncapped.
 	 */
 	tryIncrementSolveCount(ctx: RequestContext, id: string): Promise<number | null>;
 }

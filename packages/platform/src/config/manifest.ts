@@ -65,6 +65,11 @@ export interface KeySetting extends SettingBase<string> {
 }
 export interface UrlSetting extends SettingBase<string> {
 	type: 'url';
+	/**
+	 * Scheme, host and port only. A path, query or credentials is refused: an
+	 * origin comparison, such as the CSRF check, drops or fails on them.
+	 */
+	origin?: boolean;
 }
 export interface IntSetting extends SettingBase<number> {
 	type: 'int';

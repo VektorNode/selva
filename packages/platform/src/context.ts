@@ -2,7 +2,7 @@ import type { PlatformPermission } from './permissions/types.js';
 import { ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
 import type { OrgPermission } from './organizations/schemas.js';
 import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
-import { ProviderError } from './errors.js';
+import { ProviderError } from './errors/index.js';
 import type { ApiScope } from './apiTokens/types.js';
 
 /**
@@ -52,15 +52,16 @@ export const SYSTEM_CONTEXT: RequestContext = {
 };
 
 /**
- * Does not cross-check `ctx.actingOrgId` — the caller must build a context scoped
- * to the org it's acting on. An org permission against a context without
- * `actingOrgId` returns false unless `instance_admin` or `system`.
+ * A share-link context holds nothing, whatever it carries; `system` and `instance_admin`
+ * hold everything. An org permission is read from `ctx.orgPermissions` without looking at
+ * `actingOrgId`, so build the context for the org you act on.
  */
 export function hasPermission(
 	ctx: RequestContext,
 	permission: PlatformPermission | OrgPermission
 ): boolean {
-	if (ctx.system && !isShareContext(ctx)) return true;
+	if (isShareContext(ctx)) return false;
+	if (ctx.system) return true;
 	if (ctx.platformPermissions.includes('instance_admin')) return true;
 	if (isPlatformPermission(permission)) {
 		return ctx.platformPermissions.includes(permission);
@@ -86,49 +87,6 @@ export function assertNotShareContext(ctx: RequestContext, what: string): void {
 	if (isShareContext(ctx)) {
 		throw new ProviderError(`Forbidden: a share link cannot ${what}`, 403);
 	}
-}
-
-// For provider authors: `IPlatformPermissionStore` adapters whose backing store is
-// too coarse to enforce this themselves. Reading one row and reading many agree, and
-// read access is not authority: `set` stays `instance_admin`-only.
-
-/** May `ctx` read `userId`'s platform permissions? Throws `ProviderError(403)` if not. */
-export function assertCanReadPermissions(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
-}
-
-/** May `ctx` read several users' platform permissions? Throws `ProviderError(403)` if not. */
-export function assertCanReadPermissionsBatch(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
-}
-
-/** May `ctx` change platform permissions? Throws `ProviderError(403)` if not. */
-export function assertCanManagePermissions(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'manage permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: instance admin required', 403);
-}
-
-/**
- * For provider authors: may `ctx` read or change `userId`'s profile? Throws
- * `ProviderError(403)` if not.
- */
-export function assertCanAccessProfile(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'access user profiles');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: cannot access another user’s profile', 403);
 }
 
 const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);

@@ -74,12 +74,12 @@ afterEach(async () => {
 	tp = null;
 });
 
-async function solveWith(body: Record<string, unknown>) {
+async function solveWith(body: Record<string, unknown>, stored: UISchema = schema) {
 	tp = await freshProviders();
 	const { alice, alicesPrivate } = await seedAcme(tp);
 	const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 	const locals = await actAs(tp, alice.id);
-	await tp.config.data.definitions.setVersionSchema(locals.ctx, def.version.id, schema);
+	await tp.config.data.definitions.setVersionSchema(locals.ctx, def.version.id, stored);
 
 	const res = await call(POST, { locals, params: { guid: def.record.guid }, body });
 	return { res, sent: solve.mock.calls[0]?.[0] };
@@ -108,5 +108,34 @@ describe('POST /api/v1/definitions/{guid}/solve — inputs', () => {
 		const { sent } = await solveWith({ values: {} });
 
 		expect(sent.inputs[0]).toMatchObject({ id: 'width', default: 10 });
+	});
+});
+
+// No resolver fills a `server` input: an author marks one to keep it out of the caller's hands.
+describe('POST /api/v1/definitions/{guid}/solve — server-sourced inputs', () => {
+	const withServerInput = {
+		...schema,
+		inputs: [...schema.inputs, { id: 'job', nickname: 'Job', paramType: 'Text', default: 'j1' }],
+		layout: {
+			type: 'flat',
+			groups: [
+				{
+					items: [{ type: 'input', widgetType: 'text', paramId: 'job', source: { kind: 'server' } }]
+				}
+			]
+		}
+	} as unknown as UISchema;
+
+	it('refuses a request that posts a value for one, before solving', async () => {
+		const { res } = await solveWith({ values: { width: 5, job: 'FORGED' } }, withServerInput);
+
+		expect(res.status).toBe(400);
+		expect(solve).not.toHaveBeenCalled();
+	});
+
+	it('solves without one, marked so the engine keeps the schema default', async () => {
+		const { sent } = await solveWith({ values: { width: 5 } }, withServerInput);
+
+		expect(sent.inputs[1]).toMatchObject({ id: 'job', serverSourced: true, default: 'j1' });
 	});
 });

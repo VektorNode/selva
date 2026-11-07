@@ -11,18 +11,14 @@ export function validateProjectFlags(merged: {
 	visibility: ProjectVisibility;
 	autoJoinOnUpload?: boolean;
 }): { path: string; message: string }[] {
-	const issues: { path: string; message: string }[] = [];
-	if (merged.autoJoinOnUpload && merged.visibility !== 'public') {
-		issues.push({
-			path: 'autoJoinOnUpload',
-			message: 'autoJoinOnUpload requires visibility=public'
-		});
+	if (!merged.autoJoinOnUpload) return [];
+	if (merged.visibility === 'platform') {
+		return [
+			{ path: 'autoJoinOnUpload', message: 'autoJoinOnUpload is not allowed on platform projects' }
+		];
 	}
-	if (merged.visibility === 'platform' && merged.autoJoinOnUpload) {
-		issues.push({
-			path: 'autoJoinOnUpload',
-			message: 'autoJoinOnUpload is not allowed on platform projects'
-		});
+	if (merged.visibility !== 'public') {
+		return [{ path: 'autoJoinOnUpload', message: 'autoJoinOnUpload requires visibility=public' }];
 	}
-	return issues;
+	return [];
 }

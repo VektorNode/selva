@@ -583,6 +583,60 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                description:
+                  anyOf:
+                    - type: string
+                      maxLength: 2000
+                    - type: "null"
+                coverImage:
+                  anyOf:
+                    - type: string
+                      maxLength: 2048
+                    - type: "null"
+                category:
+                  anyOf:
+                    - type: string
+                      maxLength: 128
+                    - type: "null"
+                tags:
+                  anyOf:
+                    - maxItems: 20
+                      type: array
+                      items:
+                        type: string
+                        maxLength: 64
+                    - type: "null"
+                projectId:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                computeServerId:
+                  anyOf:
+                    - type: string
+                      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    - type: "null"
+                solveCacheLimit:
+                  anyOf:
+                    - type: integer
+                      minimum: 0
+                      maximum: 100000
+                    - type: "null"
+                status:
+                  type: string
+                  enum:
+                    - draft
+                    - published
+                    - archived
       responses:
         "204":
           description: Success. No content.
@@ -1171,6 +1225,17 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              default: {}
+              type: object
+              properties:
+                versionId:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
       responses:
         "200":
           description: Success.
@@ -1367,6 +1432,37 @@ paths:
           schema:
             type: string
         - $ref: "#/components/parameters/idempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                channel:
+                  default: live
+                  type: string
+                  enum:
+                    - live
+                    - draft
+                name:
+                  type: string
+                  maxLength: 128
+                allowSolve:
+                  default: true
+                  type: boolean
+                maxSolves:
+                  anyOf:
+                    - type: integer
+                      minimum: 1
+                      maximum: 9007199254740991
+                    - type: "null"
+                expiresAt:
+                  anyOf:
+                    - type: string
+                      format: date-time
+                      pattern: "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    - type: "null"
       responses:
         "201":
           description: Success.

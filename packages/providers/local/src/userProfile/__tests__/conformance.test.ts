@@ -38,6 +38,9 @@ describe('LocalUserProfileProvider', () => {
 					return user;
 				}
 			};
-		}
+		},
+		strictDenials: true,
+		selfAccess: true,
+		recentRunsCap: true
 	});
 });

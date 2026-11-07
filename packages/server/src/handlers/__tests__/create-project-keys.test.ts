@@ -100,13 +100,13 @@ describe('a create_projects key', () => {
 		}
 	});
 
-	it('is refused when scoped to one project', async () => {
+	it('cannot be minted scoped to one project', async () => {
 		const w = await world();
-		const locals = await asKey(w, w.alice.id, w.acme.id, [
+		const res = await mint(await actAs(w.h, w.alice.id), w.acme.id, [
 			'upload:all',
 			`create_projects:project:${w.acmeOrg.id}`
 		]);
-		expect((await create(locals, { name: 'Scoped' })).status).toBe(403);
+		expect(res.status).toBe(400);
 	});
 
 	it('still needs the owner to be allowed to create projects', async () => {

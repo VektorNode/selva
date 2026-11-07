@@ -89,6 +89,7 @@ export class LocalInviteStore implements IInviteStore {
 			const file = await this.load();
 			const target = file.invites.find((i) => i.id === id);
 			if (!target || target.acceptedAt) return null;
+			if (Date.parse(target.expiresAt) <= Date.now()) return null;
 			target.acceptedAt = new Date().toISOString();
 			target.acceptedByUserId = userId;
 			await this.save(file);

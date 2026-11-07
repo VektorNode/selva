@@ -143,7 +143,8 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {
 		// Atomic check-and-increment in one RPC call: returns null if the link is
-		// missing/revoked/expired/capped, so concurrent solves can't overshoot max_solves.
+		// missing/revoked/expired/capped or its definition is soft-deleted, so
+		// concurrent solves can't overshoot max_solves.
 		const { data, error } = await this.clients.serviceClient.rpc(
 			'try_increment_share_link_solve_count',
 			{ link_id: id }

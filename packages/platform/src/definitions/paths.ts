@@ -1,20 +1,19 @@
 import { assertSafeKey } from '../storage/safeKey.js';
 import type { DefinitionFileExt } from './types.js';
 
+function prefix(guid: string): string {
+	assertSafeKey(guid, 'guid');
+	return `definitions/${guid}/`;
+}
+
 export const definitionPaths = {
 	version: (guid: string, versionNumber: number, ext: DefinitionFileExt) => {
-		assertSafeKey(guid, 'guid');
+		const dir = prefix(guid);
 		if (!Number.isInteger(versionNumber) || versionNumber < 1) {
 			throw new Error(`Unsafe versionNumber: ${versionNumber}`);
 		}
-		return `definitions/${guid}/versions/v${versionNumber}.${ext}`;
+		return `${dir}versions/v${versionNumber}.${ext}`;
 	},
-	image: (guid: string) => {
-		assertSafeKey(guid, 'guid');
-		return `definitions/${guid}/cover.webp`;
-	},
-	prefix: (guid: string) => {
-		assertSafeKey(guid, 'guid');
-		return `definitions/${guid}/`;
-	}
+	image: (guid: string) => `${prefix(guid)}cover.webp`,
+	prefix
 } as const;

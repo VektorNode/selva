@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { RequestContext } from '@selvajs/platform';
+import { DEFAULT_PAGE_LIMIT, type RequestContext } from '@selvajs/platform';
 import { SupabaseAuditQuery } from '../SupabaseAuditQuery.js';
 import type { ClientBundle } from '../client.js';
 
@@ -22,8 +22,9 @@ function bundle() {
 
 describe('SupabaseAuditQuery limit', () => {
 	it.each([
-		[undefined, 101],
-		[0, 101],
+		[undefined, DEFAULT_PAGE_LIMIT + 1],
+		[0, 2],
+		[-1, 2],
 		[0.5, 2],
 		[1000, 201],
 		[10.9, 11]

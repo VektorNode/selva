@@ -73,12 +73,14 @@ export class SupabaseInviteStore implements IInviteStore {
 
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
 		// `.is('accepted_at', null)` makes this the claim: a second call matches nothing.
+		const now = new Date().toISOString();
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
-			.update({ accepted_at: new Date().toISOString(), accepted_by_user_id: userId })
+			.update({ accepted_at: now, accepted_by_user_id: userId })
 			.eq('id', id)
 			.is('accepted_at', null)
+			.gt('expires_at', now)
 			.select('org_id');
 		if (error) throw mapPostgrestError(error);
 		const row = data?.[0];

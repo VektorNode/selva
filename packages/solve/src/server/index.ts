@@ -24,7 +24,7 @@ export {
 } from './solve-engine.js';
 
 export type { SolveEngineOutcome } from './solve-pipeline.js';
-export { solveInputsFromSchema } from './transform-input.js';
+export { solveInputsFromSchema, postedServerSourcedIds } from './transform-input.js';
 
 export {
 	acceptsGzip,

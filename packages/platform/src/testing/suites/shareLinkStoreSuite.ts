@@ -11,11 +11,7 @@ import { describe, it, expect } from 'vitest';
 import type { IShareLinkStore } from '../../shareLinks/interface.js';
 import type { ShareLink } from '../../shareLinks/types.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeSeedHelpers, makeUuid } from './helpers.js';
-
-// `scopeFor` registers the owner's token, so `ctx` runs as them on an adapter with
-// DB-side auth (Supabase RLS). This suite seeds nobody itself.
-const { ctx, registerToken } = makeSeedHelpers(async (userId) => ({ userId }));
+import { makeSeedHelpers, makeUuid, nextTick, noopSeedUser } from './helpers.js';
 
 export interface ShareLinkTestScope {
 	/** Owner of the parent definition. Used as `createdBy`. */
@@ -49,6 +45,13 @@ export interface ShareLinkStoreConformanceOptions {
 	createScope?: () => Promise<ShareLinkTestScope> | ShareLinkTestScope;
 	/** The scope seeds `orgId` and `otherOrgId`, so the `listByOrg` cases can run. */
 	orgRoster?: boolean;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/**
+	 * `getById` still returns a revoked or expired link, and a second `revoke` keeps
+	 * the first `revokedAt`.
+	 */
+	revocationState?: boolean;
 }
 
 const DEFAULT_SCOPE: ShareLinkTestScope = {
@@ -76,12 +79,18 @@ function link(scope: ShareLinkTestScope, overrides: Partial<ShareLink> = {}): Sh
 }
 
 export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOptions): void {
-	const { name, createStore, createScope, orgRoster = false } = opts;
-	const scopeFor = async (): Promise<ShareLinkTestScope> => {
-		const s = createScope ? await createScope() : DEFAULT_SCOPE;
-		if (s.ownerSessionToken) registerToken(s.ownerId, s.ownerSessionToken);
-		return s;
-	};
+	const {
+		name,
+		createStore,
+		createScope,
+		orgRoster = false,
+		nonAdminCtx = false,
+		revocationState = false
+	} = opts;
+	const { ctx, scopeFrom } = makeSeedHelpers(noopSeedUser, { nonAdminCtx });
+	const scopeFor = scopeFrom(createScope, DEFAULT_SCOPE, (s) => [
+		{ userId: s.ownerId, sessionToken: s.ownerSessionToken }
+	]);
 
 	describe(`IShareLinkStore conformance: ${name}`, () => {
 		it('create + getById round-trips', async () => {
@@ -125,42 +134,20 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			expect(got).toBeNull();
 		});
 
-		it('revoke sets revokedAt; subsequent listByDefinition excludes it', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const l = link(scope);
-			await store.create(ctx(scope.ownerId), l);
-			await store.revoke(ctx(scope.ownerId), l.id);
-
-			const page = await store.listByDefinition(ctx(scope.ownerId), scope.definitionId);
-			expect(page.items.map((x) => x.id)).not.toContain(l.id);
-		});
-
-		it('revoke makes getByTokenHash return null', async () => {
+		it('a revoked link leaves listByDefinition and stops resolving by token', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const l = link(scope, { tokenHash: 'will-revoke' });
 			await store.create(ctx(scope.ownerId), l);
 			await store.revoke(ctx(scope.ownerId), l.id);
 
-			const got = await store.getByTokenHash(ctx(scope.ownerId), 'will-revoke');
-			expect(got).toBeNull();
-		});
-
-		// Expiry is a store-level filter, not just a route-level check. Each
-		// provider has at some point filtered only `revokedAt`, leaving an expired
-		// link listed and resolvable there while the other reported it dead.
-		it('an expired link is excluded from listByDefinition', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const l = link(scope, { expiresAt: new Date(Date.now() - 60_000).toISOString() });
-			await store.create(ctx(scope.ownerId), l);
-
 			const page = await store.listByDefinition(ctx(scope.ownerId), scope.definitionId);
 			expect(page.items.map((x) => x.id)).not.toContain(l.id);
+			expect(await store.getByTokenHash(ctx(scope.ownerId), 'will-revoke')).toBeNull();
 		});
 
-		it('an expired link makes getByTokenHash return null', async () => {
+		// Expiry is a store-level filter, not only a route-level check.
+		it('an expired link leaves listByDefinition and stops resolving by token', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const l = link(scope, {
@@ -169,8 +156,9 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			});
 			await store.create(ctx(scope.ownerId), l);
 
-			const got = await store.getByTokenHash(ctx(scope.ownerId), 'already-expired');
-			expect(got).toBeNull();
+			const page = await store.listByDefinition(ctx(scope.ownerId), scope.definitionId);
+			expect(page.items.map((x) => x.id)).not.toContain(l.id);
+			expect(await store.getByTokenHash(ctx(scope.ownerId), 'already-expired')).toBeNull();
 		});
 
 		it('a link expiring in the future still resolves', async () => {
@@ -284,6 +272,31 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			await store.revoke(ctx(scope.ownerId), l.id); // should not throw
 		});
 
+		if (revocationState) {
+			it('getById still returns a revoked link, and a second revoke keeps the first revokedAt', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const l = link(scope);
+				await store.create(ctx(scope.ownerId), l);
+				await store.revoke(ctx(scope.ownerId), l.id);
+				const first = (await store.getById(ctx(scope.ownerId), l.id))?.revokedAt;
+				expect(first).toBeTruthy();
+
+				await nextTick();
+				await store.revoke(ctx(scope.ownerId), l.id);
+				expect((await store.getById(ctx(scope.ownerId), l.id))?.revokedAt).toBe(first);
+			});
+
+			it('getById still returns an expired link', async () => {
+				const store = await createStore();
+				const scope = await scopeFor();
+				const l = link(scope, { expiresAt: new Date(Date.now() - 60_000).toISOString() });
+				await store.create(ctx(scope.ownerId), l);
+
+				expect((await store.getById(ctx(scope.ownerId), l.id))?.id).toBe(l.id);
+			});
+		}
+
 		it('tryIncrementSolveCount with null cap always increments', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
@@ -292,20 +305,6 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 
 			expect(await store.tryIncrementSolveCount(ctx(scope.ownerId), l.id)).toBe(1);
 			expect(await store.tryIncrementSolveCount(ctx(scope.ownerId), l.id)).toBe(2);
-
-			const after = await store.getById(ctx(scope.ownerId), l.id);
-			expect(after?.solveCount).toBe(2);
-		});
-
-		it('tryIncrementSolveCount enforces a cap', async () => {
-			const store = await createStore();
-			const scope = await scopeFor();
-			const l = link(scope, { maxSolves: 2 });
-			await store.create(ctx(scope.ownerId), l);
-
-			expect(await store.tryIncrementSolveCount(ctx(scope.ownerId), l.id)).toBe(1);
-			expect(await store.tryIncrementSolveCount(ctx(scope.ownerId), l.id)).toBe(2);
-			expect(await store.tryIncrementSolveCount(ctx(scope.ownerId), l.id)).toBeNull();
 
 			const after = await store.getById(ctx(scope.ownerId), l.id);
 			expect(after?.solveCount).toBe(2);

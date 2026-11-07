@@ -6,6 +6,7 @@ import { requireInstanceAdmin } from '#lib/server/access.server.js';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { apiRoute, created, parseBody } from '#lib/server/api/http.js';
 import {
+	clampPageLimit,
 	CreateOrgSchema,
 	MAX_PAGE_LIMIT,
 	ProviderError,
@@ -21,8 +22,9 @@ import {
 export const GET: RequestHandler = apiRoute('Failed to list orgs', async ({ locals, url }) => {
 	requireInstanceAdmin(locals);
 
-	const rawLimit = Number(url.searchParams.get('limit') ?? 200);
-	const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), MAX_PAGE_LIMIT) : 200;
+	// Unset is deliberately a full page, not `DEFAULT_PAGE_LIMIT`.
+	const raw = url.searchParams.get('limit');
+	const limit = clampPageLimit(raw === null ? MAX_PAGE_LIMIT : Number(raw));
 	const cursor = url.searchParams.get('cursor') ?? undefined;
 
 	const page = await getOrganizationProvider().listOrgs(locals.ctx!, { limit, cursor });

@@ -9,25 +9,29 @@ import {
 	ensureSolvedStep,
 	inputsChangedSince,
 	needsAcknowledgement,
+	pickInputValues,
 	type SolveSessionState
 } from '../session/solve-session-core.js';
 import type { UISchema } from '@selvajs/schemas';
 
 // Minimal schema factory. `inputs`/`outputs` are the flat lists a host reads; `layout` is what
-// getExternalInputs walks for client-sourced inputs.
+// the session walks for client- and server-sourced inputs.
 function schema(partial: {
 	inputs?: { id: string; paramType: string; default?: unknown }[];
 	outputs?: { id: string }[];
 	clientInputs?: string[];
+	serverInputs?: string[];
 	instanceSolve?: boolean;
 }): UISchema {
 	const clientSet = new Set(partial.clientInputs ?? []);
+	const serverSet = new Set(partial.serverInputs ?? []);
 	const items = (partial.inputs ?? []).map((i) => ({
 		type: 'input',
 		id: i.id,
 		paramId: i.id,
 		displayName: i.id,
-		...(clientSet.has(i.id) ? { source: { kind: 'client' } } : {})
+		...(clientSet.has(i.id) ? { source: { kind: 'client' } } : {}),
+		...(serverSet.has(i.id) ? { source: { kind: 'server', key: 'job.geometry' } } : {})
 	}));
 	return {
 		id: 'test-schema',
@@ -141,6 +145,24 @@ describe('applyLoadedValues', () => {
 		const s = state();
 		expect(applyLoadedValues(s, { a: 1 }, false)).toBe(false);
 		expect(s.hasPendingChanges).toBe(true);
+	});
+});
+
+describe('pickInputValues', () => {
+	// The server refuses a solve that sets a server-sourced input, so sending its seeded default
+	// would fail every solve of the schema.
+	it('sends inputs only, and no server-sourced input even once edited', () => {
+		const s = schema({
+			inputs: [
+				{ id: 'a', paramType: 'number', default: 1 },
+				{ id: 'srv', paramType: 'text', default: 'seeded' }
+			],
+			outputs: [{ id: 'out' }],
+			serverInputs: ['srv']
+		});
+		const values = buildInitialValues(s, 'scope', () => undefined);
+		values.srv = 'edited';
+		expect(pickInputValues(s, values)).toEqual({ a: 1 });
 	});
 });
 

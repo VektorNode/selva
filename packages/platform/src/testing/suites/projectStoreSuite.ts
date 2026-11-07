@@ -1,9 +1,16 @@
-// Conformance suite for IProjectStore: CRUD, membership, access checks across adapters.
+// Conformance suite for IProjectStore: CRUD, membership, reactivation and (opt-in) ctx scoping.
 
 import { describe, it, expect } from 'vitest';
 import type { IProjectStore } from '../../projects/interface.js';
 import type { Project, ProjectMember } from '../../index.js';
-import { makeSeedHelpers, makeUuid, noopSeedUser, type SeedUserFn } from './helpers.js';
+import {
+	makeExpectDenied,
+	makeSeedHelpers,
+	makeUuid,
+	noopSeedUser,
+	randomSlug,
+	type SeedUserFn
+} from './helpers.js';
 
 export interface ProjectStoreConformanceOptions {
 	/** Name to show in test output (e.g. "local-provider"). */
@@ -34,8 +41,18 @@ export interface ProjectStoreConformanceOptions {
 	 * instance admins, who see everything by design.
 	 */
 	seedOutsider?: SeedUserFn;
-	/** If true, run ctx-isolation tests (adapters with row-level security). */
+	/**
+	 * The adapter scopes reads by `ctx` in the store (Supabase RLS), so a user outside
+	 * the project sees nothing. An adapter that leaves scoping to the server guards
+	 * (local) skips these cases.
+	 */
 	ctxIsolation?: boolean;
+	/** Denials assert the `ProviderError` status (409 for a taken name), not just a rejection. */
+	strictDenials?: boolean;
+	/** The default `ctx` holds no platform permissions, so no case passes on an `instance_admin` bypass. */
+	nonAdminCtx?: boolean;
+	/** `createProject` keeps the `createdBy` of a creator who isn't the owner. */
+	auditStamps?: boolean;
 }
 
 function project(orgId: string, ownerId: string, overrides: Partial<Project> = {}): Project {
@@ -44,7 +61,7 @@ function project(orgId: string, ownerId: string, overrides: Partial<Project> = {
 		id: overrides.id ?? makeUuid(),
 		orgId,
 		name: overrides.name ?? 'Test Project',
-		slug: overrides.slug ?? `test-${Math.random().toString(36).slice(2, 8)}`,
+		slug: overrides.slug ?? randomSlug(),
 		visibility: overrides.visibility ?? 'private',
 		ownerId: overrides.ownerId ?? ownerId,
 		createdBy: overrides.createdBy ?? ownerId,
@@ -76,13 +93,18 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		createStore: rawCreateStore,
 		seedUser = noopSeedUser,
 		seedOutsider = seedUser,
-		ctxIsolation = false
+		ctxIsolation = false,
+		strictDenials = false,
+		nonAdminCtx = false,
+		auditStamps = false
 	} = opts;
-	const { seed, ctx, registerToken } = makeSeedHelpers(seedUser);
+	const { seed, ctx, remember } = makeSeedHelpers(seedUser, { nonAdminCtx });
 	const outsider = makeSeedHelpers(seedOutsider);
+	const outsiderPerms = { platformPermissions: [], orgPermissions: [] };
+	const expectDenied = makeExpectDenied(strictDenials);
 	const createStore = async () => {
 		const result = await rawCreateStore();
-		if (result.ownerSessionToken) registerToken(result.ownerId, result.ownerSessionToken);
+		remember({ userId: result.ownerId, sessionToken: result.ownerSessionToken });
 		return result;
 	};
 
@@ -139,9 +161,10 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		it('createProject rejects duplicate name in the same org (case-insensitive)', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			await store.createProject(ctx(ownerId), project(orgId, ownerId, { name: 'Shared' }));
-			await expect(
-				store.createProject(ctx(ownerId), project(orgId, ownerId, { name: 'shared' }))
-			).rejects.toThrow();
+			await expectDenied(
+				store.createProject(ctx(ownerId), project(orgId, ownerId, { name: 'shared' })),
+				409
+			);
 		});
 
 		it('updateProject rejects renaming to a name already used in the same org', async () => {
@@ -150,16 +173,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			const b = project(orgId, ownerId, { name: 'Beta' });
 			await store.createProject(ctx(ownerId), a);
 			await store.createProject(ctx(ownerId), b);
-			await expect(store.updateProject(ctx(ownerId), b.id, { name: 'ALPHA' })).rejects.toThrow();
-		});
-
-		it('deleteProject removes the project', async () => {
-			const { store, orgId, ownerId } = await createStore();
-			const p = project(orgId, ownerId);
-			await store.createProject(ctx(ownerId), p);
-			await store.deleteProject(ctx(ownerId), p.id);
-			const got = await store.getProject(ctx(ownerId), p.id);
-			expect(got).toBeNull();
+			await expectDenied(store.updateProject(ctx(ownerId), b.id, { name: 'ALPHA' }), 409);
 		});
 
 		it('listProjects returns all projects with pagination', async () => {
@@ -241,17 +255,6 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			expect(got?.role).toBe('editor');
 		});
 
-		it('removeProjectMember deletes the member', async () => {
-			const { store, orgId, ownerId } = await createStore();
-			const p = project(orgId, ownerId);
-			await store.createProject(ctx(ownerId), p);
-			const u2 = await seed();
-			await store.addProjectMember(ctx(ownerId), member(p.id, u2, 'editor'));
-			await store.removeProjectMember(ctx(ownerId), p.id, u2);
-			const got = await store.getProjectMember(ctx(ownerId), p.id, u2);
-			expect(got).toBeNull();
-		});
-
 		it('listProjectMembers returns members with pagination', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			const p = project(orgId, ownerId);
@@ -268,13 +271,16 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		// Audit fields + soft delete
 		// ============================================================================
 
-		it('createProject populates createdBy and updatedBy', async () => {
+		it('createProject stores createdBy and updatedBy, and no deletedAt', async () => {
 			const { store, orgId, ownerId } = await createStore();
-			const p = project(orgId, ownerId);
-			await store.createProject(ctx(ownerId), p);
+			// Under auditStamps someone other than the owner creates it, so a store that
+			// copies ownerId into createdBy fails.
+			const creator = auditStamps ? await seed() : ownerId;
+			const p = project(orgId, ownerId, { createdBy: creator, updatedBy: creator });
+			await store.createProject(ctx(creator), p);
 			const got = await store.getProject(ctx(ownerId), p.id);
-			expect(got?.createdBy).toBe(ownerId);
-			expect(got?.updatedBy).toBe(ownerId);
+			expect(got?.createdBy).toBe(creator);
+			expect(got?.updatedBy).toBe(creator);
 			expect(got?.deletedAt ?? null).toBeNull();
 		});
 
@@ -283,8 +289,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			const p = project(orgId, ownerId);
 			await store.createProject(ctx(ownerId), p);
 			const editor = await seed();
-			// Give the editor membership so the adapter's auth check (if any) permits
-			// the update. Conformance runs with permissive ctx defaults in practice.
+			// Membership, so an adapter that checks the editor's rights lets the update through.
 			await store.addProjectMember(ctx(ownerId), member(p.id, editor, 'editor'));
 			await store.updateProject(ctx(editor), p.id, { name: 'Renamed' });
 			const got = await store.getProject(ctx(ownerId), p.id);
@@ -363,15 +368,12 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			expect(m?.role).toBe('owner');
 		});
 
-		it('createProject after delete+reactivate on the same slug works', async () => {
-			// This covers the bootstrap re-seed scenario: delete project, then createProject
-			// with the same slug succeeds after reactivating the tombstone.
+		it('reactivateProject survives a second delete and reactivate cycle', async () => {
 			const { store, orgId, ownerId } = await createStore();
 			const p = project(orgId, ownerId, { slug: 'reseed-slug' });
 			await store.createProject(ctx(ownerId), p);
 			await store.deleteProject(ctx(ownerId), p.id);
 			await store.reactivateProject(ctx(ownerId), orgId, 'reseed-slug');
-			// Now it's live; a second delete + fresh createProject should work.
 			await store.deleteProject(ctx(ownerId), p.id);
 			await store.reactivateProject(ctx(ownerId), orgId, 'reseed-slug');
 			expect(await store.getProjectBySlug(ctx(ownerId), orgId, 'reseed-slug')).not.toBeNull();
@@ -381,23 +383,14 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 		// Project flags (autoJoinOnUpload)
 		// ============================================================================
 
-		it('create + get round-trips autoJoinOnUpload', async () => {
+		it('create + get round-trips autoJoinOnUpload, true and false', async () => {
 			const { store, orgId, ownerId } = await createStore();
-			const p = project(orgId, ownerId, {
-				visibility: 'public',
-				autoJoinOnUpload: true
-			});
-			await store.createProject(ctx(ownerId), p);
-			const got = await store.getProject(ctx(ownerId), p.id);
-			expect(got?.autoJoinOnUpload).toBe(true);
-		});
-
-		it('flag defaults to false on a project created without it set', async () => {
-			const { store, orgId, ownerId } = await createStore();
-			const p = project(orgId, ownerId);
-			await store.createProject(ctx(ownerId), p);
-			const got = await store.getProject(ctx(ownerId), p.id);
-			expect(got?.autoJoinOnUpload).toBe(false);
+			const on = project(orgId, ownerId, { visibility: 'public', autoJoinOnUpload: true });
+			const off = project(orgId, ownerId, { name: 'Flag Off', autoJoinOnUpload: false });
+			await store.createProject(ctx(ownerId), on);
+			await store.createProject(ctx(ownerId), off);
+			expect((await store.getProject(ctx(ownerId), on.id))?.autoJoinOnUpload).toBe(true);
+			expect((await store.getProject(ctx(ownerId), off.id))?.autoJoinOnUpload).toBe(false);
 		});
 
 		if (ctxIsolation) {
@@ -408,7 +401,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 				const pA = project(orgId, userA);
 				await store.createProject(ctx(userA), pA);
 
-				const page = await store.listProjects(outsider.ctx(userB), orgId);
+				const page = await store.listProjects(outsider.ctx(userB, outsiderPerms), orgId);
 				expect(page.items.map((p) => p.id)).not.toContain(pA.id);
 			});
 
@@ -419,7 +412,7 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 				const pA = project(orgId, userA);
 				await store.createProject(ctx(userA), pA);
 
-				const got = await store.getProject(outsider.ctx(userB), pA.id);
+				const got = await store.getProject(outsider.ctx(userB, outsiderPerms), pA.id);
 				expect(got).toBeNull();
 			});
 		}

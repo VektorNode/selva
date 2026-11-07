@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ProviderError } from '../errors.js';
+import { ProviderError } from '../provider-error.js';
 
 describe('ProviderError across installed copies', () => {
 	it('is recognised from a second copy of the module', async () => {
 		vi.resetModules();
-		const other = await import('../errors.js');
+		const other = await import('../provider-error.js');
 		expect(other.ProviderError).not.toBe(ProviderError);
 
 		const err = new other.ProviderError('nope', 403);

@@ -19,15 +19,12 @@ import {
 } from '@selvajs/schemas';
 import type { RhinoModule } from 'rhino3dm';
 import { z } from 'zod';
+import { GuidSchema, type DefinitionListItem } from '@selvajs/platform';
 
-interface DefinitionItem {
-	guid: string;
-	displayName: string;
-	description?: string;
-	status: string;
-	projectId: string;
-	liveVersionId: string | null;
-}
+type DefinitionItem = Pick<
+	DefinitionListItem,
+	'guid' | 'displayName' | 'description' | 'status' | 'projectId' | 'liveVersionId'
+>;
 
 interface DefinitionRecord {
 	displayName: string;
@@ -63,7 +60,6 @@ interface SolveResponse {
 // Definitions by guid or by name
 // ============================================================================
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Enough for any library a person names definitions in by hand; past it, use a guid.
 const NAME_LOOKUP_PAGES = 5;
 
@@ -76,7 +72,8 @@ async function resolveDefinition(
 	definition: string,
 	signal: AbortSignal
 ): Promise<string> {
-	if (UUID.test(definition)) return definition;
+	const guid = GuidSchema.safeParse(definition);
+	if (guid.success) return guid.data;
 	const wanted = definition.trim().toLowerCase();
 	const matches: DefinitionItem[] = [];
 	let cursor: string | undefined;
