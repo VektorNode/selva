@@ -169,7 +169,17 @@ jobs:
 
       - name: Start Supabase
         working-directory: packages/providers/supabase
-        run: pnpm exec supabase start -x studio,logflare,vector,imgproxy,edge-runtime,postgres-meta,mailpit
+        # The stack's 544xx ports sit inside the runner's ephemeral range, so an
+        # image-pull connection can occasionally hold 54422 ("address already in
+        # use"). A second attempt picks different ephemeral ports.
+        run: |
+          for attempt in 1 2 3; do
+            pnpm exec supabase start -x studio,logflare,vector,imgproxy,edge-runtime,postgres-meta,mailpit && exit 0
+            echo "supabase start failed (attempt $attempt)"
+            pnpm exec supabase stop --no-backup || true
+            sleep 5
+          done
+          exit 1
 
       - name: Write .env.test
         working-directory: packages/providers/supabase
