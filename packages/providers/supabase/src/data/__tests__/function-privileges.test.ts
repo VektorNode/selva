@@ -45,6 +45,7 @@ const EXECUTE_GRANTS = {
 	'selva.shares_org_with(uuid)': ANYONE,
 	'selva.migration_head()': SERVER,
 	'selva.redact_audit_event_email(text)': SERVER,
+	'selva.refuse_disabled_caller()': ANYONE,
 	'selva.save_org_compute_servers(uuid,jsonb,boolean,uuid)': SIGNED_IN,
 	'selva.save_platform_compute_servers(jsonb,jsonb,uuid)': SIGNED_IN,
 	'selva.reserve_next_version_number(uuid)': SIGNED_IN,

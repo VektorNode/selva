@@ -18,7 +18,7 @@ import type { ClientBundle } from '../data/client.js';
  * `user_profiles` is too coarse for cross-user reads, so `assertCanManagePermissions` /
  * `assertCanReadPermissions` enforce the auth boundary here instead.
  *
- * `user_profiles.disabled` mirrors `auth.users.user_metadata.disabled` via
+ * `user_profiles.disabled` mirrors the user's ban and `app_metadata.disabled` via
  * the `sync_auth_user_disabled` trigger, so admin-count queries can exclude
  * disabled admins with a single indexed query instead of cross-referencing
  * the auth admin API per candidate.

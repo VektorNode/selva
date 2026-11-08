@@ -41,6 +41,7 @@ const refreshSession = createSessionRefresher(() => providers.auth.sessionRefres
 import { getBootHealth } from '#lib/server/bootHealth.server.js';
 import { checkConfigAtBoot } from '#lib/server/config/boot.server.js';
 import { env } from '#lib/server/env.js';
+import { deniesFraming } from '#lib/server/framing.js';
 import { publicUrl } from '#lib/server/origin.js';
 import { closeAllSolveEventStreams } from '#lib/server/solveEvents/sse.server.js';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '#lib/server/selfUpdate.server.js';
@@ -528,15 +529,7 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 // see `applySecurityHeaders` there. Cache-control stays here: it encodes this
 // app's asset layout.
 //
-// Frame headers are the one route-dependent piece. App routes must stay
-// framable (embedding is what Selva-engine apps are for), but the operator
-// surfaces below hold an authenticated admin session, where a framable page is
-// a UI-redress attack.
-const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login', '/oauth'];
-
-function deniesFraming(pathname: string): boolean {
-	return FRAME_DENIED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
+// Frame headers are the one route-dependent piece (`deniesFraming`).
 
 function applyResponseHeaders(response: Response, pathname: string, requestId: string): Response {
 	applySecurityHeaders(response, {

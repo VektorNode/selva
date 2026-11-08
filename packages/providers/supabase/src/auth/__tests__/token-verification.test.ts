@@ -105,7 +105,7 @@ describe('SupabaseAuthProvider — hybrid token verification', () => {
 			serviceRoleKey: SERVICE
 		});
 		const stub = stubAnonAuth(provider);
-		stub.getClaims.mockResolvedValue(okClaims({ user_metadata: { disabled: true } }));
+		stub.getClaims.mockResolvedValue(okClaims({ app_metadata: { disabled: true } }));
 
 		const result = await provider.verifyToken('tok');
 		expect(result).toBeNull();
@@ -193,5 +193,24 @@ describe('SupabaseAuthProvider — strict token verification', () => {
 		await provider.verifyToken('tok');
 		expect(stub.getUser).toHaveBeenCalledTimes(2);
 		expect(stub.getClaims).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['banned', { banned_until: new Date(Date.now() + 86_400_000).toISOString() }, true],
+		['flagged in app_metadata', { app_metadata: { disabled: true } }, true],
+		['flagged only in its own user_metadata', { user_metadata: { disabled: true } }, false]
+	])('treats a user %s as disabled: %s', async (_, fields, disabled) => {
+		const provider = new SupabaseAuthProvider({
+			supabaseUrl: URL,
+			anonKey: ANON,
+			serviceRoleKey: SERVICE,
+			tokenVerification: 'strict'
+		});
+		const stub = stubAnonAuth(provider);
+		const user = { ...okUser().data.user, ...fields };
+		stub.getUser.mockResolvedValue({ data: { user }, error: null });
+
+		const result = await provider.verifyToken('tok');
+		expect(result === null).toBe(disabled);
 	});
 });

@@ -31,7 +31,9 @@ const SUPABASE_STUBS = `
 	create table auth.users (
 		id uuid primary key default gen_random_uuid(),
 		email text,
-		raw_user_meta_data jsonb not null default '{}'
+		raw_user_meta_data jsonb not null default '{}',
+		raw_app_meta_data jsonb not null default '{}',
+		banned_until timestamptz
 	);
 	create function auth.jwt() returns jsonb language sql stable as $$
 		select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb;

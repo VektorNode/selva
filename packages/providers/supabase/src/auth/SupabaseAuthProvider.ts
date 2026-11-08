@@ -197,7 +197,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 
 		const claims = await this.getClaimsOrNull(token);
 		if (!claims) return null;
-		if ((claims.user_metadata as { disabled?: boolean } | undefined)?.disabled === true) {
+		if ((claims.app_metadata as { disabled?: boolean } | undefined)?.disabled === true) {
 			return null;
 		}
 
@@ -224,7 +224,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	private async verifyViaGetUser(token: string): Promise<AuthUser | null> {
 		const { data, error } = await this.anon.auth.getUser(token);
 		if (error || !data.user) return null;
-		if (data.user.user_metadata?.disabled === true) return null;
+		if (isDisabled(data.user)) return null;
 		return this.hydrate(data.user);
 	}
 
@@ -306,14 +306,11 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	async disableUser(id: string): Promise<UserManagementResult> {
 		const { data: existing, error: fetchError } = await this.admin.auth.admin.getUserById(id);
 		if (fetchError || !existing.user) return 'not_found';
-		// GoTrue's user_metadata update merges shallowly — preserve existing
-		// fields by spreading them in.
-		const mergedMetadata = {
-			...(existing.user.user_metadata ?? {}),
-			disabled: true
-		};
+		// The ban makes GoTrue refuse sign-in and refresh; the flag goes to app_metadata, which
+		// only the service role writes (a user rewrites their own user_metadata at will).
 		const { error } = await this.admin.auth.admin.updateUserById(id, {
-			user_metadata: mergedMetadata
+			ban_duration: BAN_FOREVER,
+			app_metadata: { ...(existing.user.app_metadata ?? {}), disabled: true }
 		});
 		if (error) {
 			const e = error as unknown as { status?: number; message?: string };
@@ -358,7 +355,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	): Promise<{ user: AuthUser; sessionToken: string } | null> {
 		const { data, error } = await this.anon.auth.signInWithPassword({ email, password });
 		if (error || !data.user || !data.session) return null;
-		if (data.user.user_metadata?.disabled === true) return null;
+		if (isDisabled(data.user)) return null;
 		return { user: this.hydrate(data.user), sessionToken: data.session.access_token };
 	}
 
@@ -369,7 +366,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			email: user.email ?? undefined,
 			createdAt: user.created_at ?? undefined,
 			lastLoginAt: user.last_sign_in_at ?? undefined,
-			disabled: user.user_metadata?.disabled === true,
+			disabled: isDisabled(user),
 			metadata: user.user_metadata
 		};
 	}
@@ -461,13 +458,21 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 	} | null> {
 		const { data, error } = await this.anon.auth.exchangeCodeForSession(code);
 		if (error || !data.user || !data.session) return null;
-		if (data.user.user_metadata?.disabled === true) return null;
+		if (isDisabled(data.user)) return null;
 		return {
 			user: this.hydrate(data.user),
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
 		};
 	}
+}
+
+const BAN_FOREVER = '876000h';
+
+/** Disabled by an admin: flagged in app_metadata or banned. Never `user_metadata`, which the user writes. */
+function isDisabled(user: Pick<User, 'app_metadata' | 'banned_until'>): boolean {
+	if (user.app_metadata?.disabled === true) return true;
+	return user.banned_until ? Date.parse(user.banned_until) > Date.now() : false;
 }
 
 /**
@@ -493,7 +498,7 @@ class SupabaseSessionRefresh implements ISessionRefresh {
 		// could mint fresh access tokens forever — verifyToken's revalidateMs
 		// bound never gets a chance to apply. GoTrue returns the user alongside
 		// the session, so the check is free.
-		if (data.user?.user_metadata?.disabled === true) return null;
+		if (data.user !== null && isDisabled(data.user)) return null;
 		return {
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
@@ -583,7 +588,7 @@ class SupabaseEmailLinkAuth implements IEmailLinkAuth {
 			type
 		});
 		if (error || !data.user || !data.session) return null;
-		if (data.user.user_metadata?.disabled === true) return null;
+		if (isDisabled(data.user)) return null;
 		return {
 			user: this.hydrate(data.user),
 			sessionToken: data.session.access_token,
