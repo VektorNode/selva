@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.20.1-beta.4
+
+### Patch Changes
+
+- 049fa4c: The admin, setup, login and OAuth pages refuse framing for a percent-encoded path too. The check matched the raw URL while SvelteKit routes on the decoded one, so `/%61dmin/...` rendered the admin pages without `X-Frame-Options`.
+
 ## 4.20.1-beta.3
 
 ### Patch Changes
