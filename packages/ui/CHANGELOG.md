@@ -1,5 +1,12 @@
 # @selvajs/ui
 
+## 7.0.3-beta.2
+
+### Patch Changes
+
+- Updated dependencies [853051a]
+  - @selvajs/compute@5.1.0-beta.0
+
 ## 7.0.3-beta.1
 
 ### Patch Changes
