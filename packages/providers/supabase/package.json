@@ -94,7 +94,7 @@
 		"@electric-sql/pglite": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
-		"supabase": "^2.122.0",
+		"supabase": "^3.0.0",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}
