@@ -10,20 +10,31 @@
 
 	let { data, form }: Props = $props();
 
+	// Everything `write:all` reaches with a key. Org members, sending invites and
+	// Compute servers are session-only, so they aren't listed.
+	const CHANGES =
+		'create, edit and delete projects and definitions, upload versions and make them live, share definitions by link, manage project members, revoke invites and change the organization’s branding';
+
 	const ACCESS_TEXT = {
 		read: 'Read: browse definitions and their inputs',
 		solve: 'Read and run solves: spends your compute budget',
+		write: `Read and change: ${CHANGES}.`,
+		write_and_solve: `Read, run solves and change: ${CHANGES}. Solves spend your compute budget.`,
 		upload:
 			'Upload definitions: create definitions and new versions where you can, and make a version live. It can’t delete or share anything.',
 		uploadAndCreate:
 			'Upload definitions: create private projects, definitions and new versions where you can, and make a version live. It can’t delete or share anything.'
 	} as const;
 
-	// The widest level is preselected; each level lists only the orgs it may be granted in.
+	// The widest level that can't delete is preselected, so one click on Allow
+	// never grants `write`. Each level lists only the orgs it may be granted in.
 	let picked = $state<string | undefined>();
-	const level = $derived(
-		data.ok ? (data.levels.find((l) => l.access === picked) ?? data.levels.at(-1)) : undefined
-	);
+	const level = $derived.by(() => {
+		if (!data.ok) return undefined;
+		const preselected = data.levels.filter((l) => !l.changes).at(-1) ?? data.levels[0];
+		return data.levels.find((l) => l.access === picked) ?? preselected;
+	});
+
 	let pickedOrgId = $state<string | undefined>();
 	const orgId = $derived(
 		level?.orgs.some((o) => o.id === pickedOrgId) ? pickedOrgId : level?.orgId

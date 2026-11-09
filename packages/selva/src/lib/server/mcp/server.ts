@@ -1,8 +1,8 @@
 import { createMcpServer, refuseEarly, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
 import { ApiScopeActionSchema, apiScopeActionCovers, parseApiScope } from '@selvajs/platform';
 import { env } from '#lib/server/env.js';
-import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
-import { oauthConfigured } from '#lib/server/oauth/server.js';
+import { resourceMetadataUrl } from '@selvajs/server/oauth';
+import { oauthServer } from '#lib/server/oauth/server.js';
 import { buildOpenApiDocument } from '#lib/server/api/v1/openapi.js';
 import { getLogger } from '#lib/server/providers.server.js';
 import { INSTRUCTIONS, selvaTools } from './tools';
@@ -37,8 +37,9 @@ function trustedOrigins(): Set<string> {
 
 // Only when OAuth can run: a challenge pointing at a 503 sends clients nowhere.
 function challengeFor(origin: string) {
-	return oauthConfigured()
-		? { resourceMetadataUrl: resourceMetadataUrl(origin), scopes: [...REGISTERED_CLIENT_SCOPES] }
+	const oauth = oauthServer(origin);
+	return oauth
+		? { resourceMetadataUrl: resourceMetadataUrl(origin), scopes: [...oauth.registeredScopes] }
 		: undefined;
 }
 

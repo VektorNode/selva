@@ -27,7 +27,13 @@ import { createApiTokenResolutionCache, resolveApiToken } from '../../http/index
 import { createApiToken, listApiTokens, revokeApiToken, revokeOwnApiToken } from '../apiTokens.js';
 import { listProjects } from '../projects.js';
 import { getDefinition, listDefinitions } from '../definitions.js';
-import { consentOrgs, mintConsentToken, revokeUnredeemedConsentToken } from '../oauthConsent.js';
+import {
+	consentOffer,
+	consentOrgs,
+	mintConsentToken,
+	revokeUnredeemedConsentToken,
+	type ConsentOffer
+} from '../oauthConsent.js';
 
 const codec = createApiTokenCodec('k'.repeat(32));
 
@@ -545,6 +551,37 @@ describe('consent in the acting org', () => {
 			);
 			expect(res.status).toBe(403);
 		}
+	});
+});
+
+describe('consent levels on a host that lets registered clients write', () => {
+	const offered = async (w: World) => {
+		const res = await run(await actAs(w.h, w.dana.id), (req) =>
+			consentOffer(req, ['read', 'solve', 'write'])
+		);
+		return (res.json as ConsentOffer | null)?.levels.map((l) => l.choice.access) ?? [];
+	};
+
+	it('offers write with and without solve to a holder of manage_api_tokens', async () => {
+		const w = await world();
+		await grantPlatformPermissions(w.h, w.dana.id, ['manage_api_tokens']);
+		expect(await offered(w)).toEqual(['read', 'solve', 'write', 'write_and_solve']);
+	});
+
+	it('offers a designer only read by default: write needs manage_api_tokens', async () => {
+		expect(await offered(await world())).toEqual(['read']);
+	});
+
+	it('offers write without solve under a policy that allows one but not the other', async () => {
+		const w = await world();
+		w.h.deps = {
+			...w.h.deps,
+			tokens: {
+				...w.h.deps!.tokens,
+				mayHoldApiTokens: (_ctx, scopes) => scopes.every((s) => s.action !== 'solve')
+			}
+		};
+		expect(await offered(w)).toEqual(['read', 'write']);
 	});
 });
 

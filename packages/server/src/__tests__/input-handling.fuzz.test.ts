@@ -234,8 +234,15 @@ describe('request bodies', () => {
 	});
 });
 
-describe('OAuth authorize requests', () => {
-	const oauth = createOAuthServer({ origin: ORIGIN, secret: 's'.repeat(32) });
+describe.each([
+	{ host: 'the default', registeredClientScopes: undefined },
+	{ host: 'a write-enabled', registeredClientScopes: ['read', 'solve', 'write'] as const }
+])('OAuth authorize requests on $host server', ({ registeredClientScopes }) => {
+	const oauth = createOAuthServer({
+		origin: ORIGIN,
+		secret: 's'.repeat(32),
+		registeredClientScopes
+	});
 	const registered = oauth.register({
 		client_name: 'Fuzz',
 		redirect_uris: ['https://client.test/cb']
@@ -259,7 +266,16 @@ describe('OAuth authorize requests', () => {
 					]),
 					code_challenge: param(['E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM']),
 					code_challenge_method: param(['S256', 'plain']),
-					scope: param(['read', 'solve', 'upload', 'read solve upload', 'foo']),
+					scope: param([
+						'read',
+						'solve',
+						'write',
+						'upload',
+						'read solve upload',
+						'read solve write',
+						'write upload create_projects',
+						'foo'
+					]),
 					state: param(['st']),
 					resource: param([`${ORIGIN}/mcp`, 'https://other.test/mcp'])
 				}),
@@ -283,6 +299,11 @@ describe('OAuth authorize requests', () => {
 						portless(request.redirectUri)
 					);
 					for (const s of request.scopes) expect(request.client.scopes).toContain(s);
+					if (!request.client.builtIn) {
+						expect(request.scopes).not.toContain('upload');
+						expect(request.scopes).not.toContain('create_projects');
+						if (!registeredClientScopes) expect(request.scopes).not.toContain('write');
+					}
 				}
 			),
 			RUNS

@@ -33,6 +33,8 @@ Uploaded definitions run their scripts on your Compute server: see [who can put 
 
 They register themselves (dynamic registration or a metadata URL) and Selva doesn't verify their name. They can get **Read** or **Read and run solves**, never **Upload definitions** or project creation. See [MCP server](./mcp.md).
 
+A host app can add **Read and change** (`write`) with `createOAuthServer({ registeredClientScopes: ['read', 'solve', 'write'] })`. Serve the server's `protectedResourceMetadata()` and `authorizationServerMetadata()`, and pass its `registeredScopes` as the MCP server's `challenge.scopes`, so clients ask for the same list. Only do this when writes are drafts a person checks: `write:all` can delete projects and definitions, share them by link and manage project members, and it covers upload and project creation at `/api/v1`, so a look-alike client could get all of that. The consent page offers change access with and without solves and never preselects it.
+
 ## Who may approve what
 
 | Access                        | Who may approve                                                                                                   |
@@ -40,6 +42,9 @@ They register themselves (dynamic registration or a metadata URL) and Selva does
 | Read, Upload                  | Anyone who can create a definition in one project of the org, or `manage_api_tokens`                              |
 | Read, Upload, create projects | The same, or anyone who may create a project in the org (an org admin with no projects yet), or `manage_api_tokens` |
 | Read and run solves           | Holders of `manage_api_tokens`                                                                                    |
+| Read and change (any)         | Holders of `manage_api_tokens`                                                                                    |
+
+A host's `mayHoldApiTokens` policy replaces this table whole.
 
 The check runs on every request, so a token stops working when its owner no longer qualifies, and works again if they regain the right.
 

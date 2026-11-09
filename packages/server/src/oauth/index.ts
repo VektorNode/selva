@@ -25,16 +25,29 @@ import {
 } from 'node:crypto';
 
 /** The scopes a grant can carry. Each maps to one org-wide API scope. */
-export const OAUTH_SCOPES = ['read', 'solve', 'upload', 'create_projects'] as const;
+export const OAUTH_SCOPES = ['read', 'solve', 'write', 'upload', 'create_projects'] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
 
 /**
- * All a registered (DCR or CIMD) client can be granted. Its name and redirects
+ * All a host may hand registered (DCR or CIMD) clients. Their name and redirects
  * are whatever the registrant chose, so `upload`, which puts code on the org's
- * Compute server, and `create_projects` stay with the built-in client and a
- * look-alike can't phish for them.
+ * Compute server, and `create_projects` aren't here. `write` is, but `write:all`
+ * covers both at `/api/v1` and can delete projects and definitions, so it is
+ * off by default. An allowlist: a new scope reaches registered clients only
+ * once it is added here.
  */
-export const REGISTERED_CLIENT_SCOPES = ['read', 'solve'] as const satisfies readonly OAuthScope[];
+export const REGISTERABLE_SCOPES = [
+	'read',
+	'solve',
+	'write'
+] as const satisfies readonly OAuthScope[];
+export type RegisteredClientScope = (typeof REGISTERABLE_SCOPES)[number];
+
+/** The default `registeredClientScopes`. */
+export const REGISTERED_CLIENT_SCOPES = [
+	'read',
+	'solve'
+] as const satisfies readonly RegisteredClientScope[];
 
 /** The Grasshopper plugin's client id. Built in, so it needs no registration and works air-gapped. */
 export const GRASSHOPPER_CLIENT_ID = 'selva-grasshopper';
@@ -114,6 +127,13 @@ export interface OAuthServerOptions {
 	/** The key before the last rotation: client ids and codes it made still verify. */
 	previousSecret?: string;
 	/**
+	 * All a DCR or CIMD client can be granted, from {@link REGISTERABLE_SCOPES}
+	 * and including `read`. Default {@link REGISTERED_CLIENT_SCOPES}. Serve the
+	 * server's discovery documents and pass its `registeredScopes` as the MCP
+	 * 401 challenge's scopes, so clients ask for this same list.
+	 */
+	registeredClientScopes?: readonly RegisteredClientScope[];
+	/**
 	 * Fetches a Client ID Metadata Document. The URL comes from an unknown client,
 	 * so the host must guard it against SSRF. Without it, URL client ids are refused.
 	 */
@@ -145,12 +165,19 @@ export function resourceMetadataUrl(origin: string): string {
 	return `${origin}/.well-known/oauth-protected-resource${MCP_PATH}`;
 }
 
-/** RFC 9728. Claude uses only the first authorization server. */
-export function protectedResourceMetadata(origin: string) {
+/**
+ * RFC 9728. Claude uses only the first authorization server. `scopes` is what a
+ * registered client may be granted; prefer the server's own method, which
+ * passes its `registeredClientScopes`.
+ */
+export function protectedResourceMetadata(
+	origin: string,
+	scopes: readonly RegisteredClientScope[] = REGISTERED_CLIENT_SCOPES
+) {
 	return {
 		resource: mcpResourceUrl(origin),
 		authorization_servers: [origin],
-		scopes_supported: [...REGISTERED_CLIENT_SCOPES],
+		scopes_supported: [...scopes],
 		bearer_methods_supported: ['header']
 	};
 }
@@ -158,8 +185,13 @@ export function protectedResourceMetadata(origin: string) {
 /**
  * RFC 8414. Claude picks Client ID Metadata Documents only when both
  * `client_id_metadata_document_supported` and the `none` auth method appear.
+ * Advertises only scopes some client can be granted: a client that asks for one
+ * it can never get re-authorizes in a loop. Prefer the server's own method.
  */
-export function authorizationServerMetadata(origin: string) {
+export function authorizationServerMetadata(
+	origin: string,
+	registeredScopes: readonly RegisteredClientScope[] = REGISTERED_CLIENT_SCOPES
+) {
 	return {
 		issuer: origin,
 		authorization_endpoint: `${origin}/oauth/authorize`,
@@ -169,10 +201,31 @@ export function authorizationServerMetadata(origin: string) {
 		grant_types_supported: ['authorization_code'],
 		code_challenge_methods_supported: ['S256'],
 		token_endpoint_auth_methods_supported: ['none'],
-		scopes_supported: [...OAUTH_SCOPES],
+		scopes_supported: OAUTH_SCOPES.filter(
+			(s) =>
+				GRASSHOPPER_CLIENT.scopes.includes(s) ||
+				(registeredScopes as readonly OAuthScope[]).includes(s)
+		),
 		client_id_metadata_document_supported: true,
 		authorization_response_iss_parameter_supported: true
 	};
+}
+
+/**
+ * The host's list, checked: a JS host or a cast gets past the type, and a list
+ * without `read` would leave every consent page empty with a message blaming
+ * the user's account.
+ */
+function checkRegisteredScopes(scopes: readonly string[]): RegisteredClientScope[] {
+	for (const s of scopes) {
+		if (!(REGISTERABLE_SCOPES as readonly string[]).includes(s)) {
+			throw new TypeError(
+				`registeredClientScopes: "${s}" can't be granted to a registered client.`
+			);
+		}
+	}
+	if (!scopes.includes('read')) throw new TypeError('registeredClientScopes must include "read".');
+	return REGISTERABLE_SCOPES.filter((s) => scopes.includes(s));
 }
 
 // ============================================================================
@@ -188,6 +241,9 @@ export function createOAuthServer(options: OAuthServerOptions) {
 	const previousSignKey = previous ? derive(previous, 'selva-oauth-client') : undefined;
 	const previousCodeKey = previous ? derive(previous, `selva-oauth-code:${origin}`) : undefined;
 	const redeemed = options.redeemedCodes ?? new Map<string, number>();
+	const registeredScopes = checkRegisteredScopes(
+		options.registeredClientScopes ?? REGISTERED_CLIENT_SCOPES
+	);
 	const metadataCache = new Map<
 		string,
 		{ at: number; client: OAuthClient } | { at: number; failure: OAuthError }
@@ -245,7 +301,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 			name: meta.n || 'An MCP client',
 			redirectUris: meta.r,
 			builtIn: false,
-			scopes: REGISTERED_CLIENT_SCOPES
+			scopes: registeredScopes
 		};
 	}
 
@@ -259,7 +315,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 			throw new OAuthError('invalid_client', 'This server does not accept URL client ids.');
 		}
 		try {
-			const client = await readMetadata(url, options.fetchClientMetadata);
+			const client = await readMetadata(url, options.fetchClientMetadata, registeredScopes);
 			remember(url, { at: now(), client });
 			return client;
 		} catch (err) {
@@ -408,8 +464,10 @@ export function createOAuthServer(options: OAuthServerOptions) {
 		approve,
 		deny,
 		exchange,
-		protectedResourceMetadata: () => protectedResourceMetadata(origin),
-		authorizationServerMetadata: () => authorizationServerMetadata(origin)
+		/** All a registered client can be granted: the MCP 401 challenge's scopes. */
+		registeredScopes: registeredScopes as readonly RegisteredClientScope[],
+		protectedResourceMetadata: () => protectedResourceMetadata(origin, registeredScopes),
+		authorizationServerMetadata: () => authorizationServerMetadata(origin, registeredScopes)
 	};
 }
 
@@ -426,7 +484,8 @@ export function apiScopesFor(scopes: readonly OAuthScope[]): string[] {
 
 async function readMetadata(
 	url: string,
-	fetchClientMetadata: (url: string) => Promise<unknown>
+	fetchClientMetadata: (url: string) => Promise<unknown>,
+	scopes: readonly OAuthScope[]
 ): Promise<OAuthClient> {
 	let doc: { client_id?: unknown; client_name?: unknown; redirect_uris?: unknown };
 	try {
@@ -445,7 +504,7 @@ async function readMetadata(
 				: new URL(url).host,
 		redirectUris: checkRedirectUris(doc.redirect_uris),
 		builtIn: false,
-		scopes: REGISTERED_CLIENT_SCOPES
+		scopes
 	};
 }
 
@@ -454,8 +513,8 @@ async function readMetadata(
  * that is dropped, not refused, so a client that asks for every advertised
  * scope still signs in with what it may have. No `scope` at all means all of
  * them. Asking only for scopes it may not have gets `read`, never more than it
- * asked for. `read` rides along with `solve`, which the consent page offers as
- * "read and run solves".
+ * asked for. `read` rides along with `solve` and `write`, which the consent
+ * page offers as "read and run solves" and "read and change".
  */
 function parseScopes(raw: string | null, allowed: readonly OAuthScope[]): OAuthScope[] {
 	const requested = (raw ?? '').split(' ').filter(Boolean);
@@ -464,25 +523,35 @@ function parseScopes(raw: string | null, allowed: readonly OAuthScope[]): OAuthS
 		(allowed as readonly string[]).includes(s)
 	);
 	if (!asked.length) return allowed.includes('read') ? ['read'] : [];
-	return allowed.filter((s) => asked.includes(s) || (s === 'read' && asked.includes('solve')));
+	const impliesRead = asked.includes('solve') || asked.includes('write');
+	return allowed.filter((s) => asked.includes(s) || (s === 'read' && impliesRead));
 }
 
 /** One access level a consent page offers, and the scopes approving it grants. */
 export interface ConsentChoice {
-	access: 'read' | 'solve' | 'upload';
+	access: 'read' | 'solve' | 'write' | 'write_and_solve' | 'upload';
 	scopes: OAuthScope[];
 }
 
 /**
- * The access levels a consent page offers for a request, narrowest first. The
- * user may narrow what the client asked for, never widen it. An upload request
- * is offered as asked: narrowing it to read would leave the client unable to
- * do the one thing it signed in for.
+ * The access levels a consent page offers for a request: `read` first, all it
+ * asked for last. The user may narrow what the client asked for, never widen
+ * it. `write` is offered with and without `solve`, so change access needn't
+ * spend compute budget, and a host policy that allows one can still grant it.
+ * An upload request is offered as asked: narrowing it to read would leave the
+ * client unable to do the one thing it signed in for.
  */
 export function consentChoices(scopes: readonly OAuthScope[]): ConsentChoice[] {
+	if (!scopes.length) return [];
 	if (scopes.includes('upload')) return [{ access: 'upload', scopes: [...scopes] }];
+	const solve = scopes.includes('solve');
+	const write = scopes.includes('write');
 	const choices: ConsentChoice[] = [{ access: 'read', scopes: ['read'] }];
-	if (scopes.includes('solve')) choices.push({ access: 'solve', scopes: [...scopes] });
+	if (solve) choices.push({ access: 'solve', scopes: ['read', 'solve'] });
+	if (write) choices.push({ access: 'write', scopes: ['read', 'write'] });
+	if (solve && write) {
+		choices.push({ access: 'write_and_solve', scopes: ['read', 'solve', 'write'] });
+	}
 	return choices;
 }
 

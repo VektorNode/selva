@@ -149,6 +149,22 @@ provider needs a migration.
 - Return `access_token`, `token_type`, `expires_in` and `scope`.
 - Answer well under Claude's 10-second limit, and rate-limit by IP, as login does.
 
+**Registered-client scopes are the host's choice.** A registered client gets `read` and `solve`
+because `write:all` here can delete projects and definitions, and a look-alike client could phish
+for it. A host app whose writes are drafts that a person checks before anything ships has the
+opposite trade-off: its agents are no use without `write`. So:
+
+- `OAUTH_SCOPES` gains `write`, mapped to `write:all` by `apiScopesFor`.
+- `createOAuthServer` takes `registeredClientScopes`, defaulting to `['read', 'solve']`, from the
+  allowlist `REGISTERABLE_SCOPES`. It throws on anything else or a list without `read`.
+- The server's discovery documents and `registeredScopes` (the `/mcp` 401's `scope`) carry the
+  same list, so the host can't let them drift.
+- `consentChoices` offers `write` with and without `solve`. The consent page never preselects it.
+- `upload` and `create_projects` can't be listed by name, but `write:all` covers both at
+  `/api/v1`, so enabling `write` hands them over. That is the host's trade-off to make.
+
+Selva itself keeps the default.
+
 **Refresh tokens: not in the first cut.** Access tokens live 30 days. Expiry or revocation gives a
 401 and the client signs in again. The spec leaves refresh to the authorization server. Supporting
 it means storing a rotating secret per grant, which is a store change in both providers. Add it if

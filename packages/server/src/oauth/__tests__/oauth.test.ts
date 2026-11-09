@@ -433,3 +433,86 @@ describe('registered clients and upload', () => {
 		expect(consentChoices(['read'])).toEqual([{ access: 'read', scopes: ['read'] }]);
 	});
 });
+
+describe('registered-client scopes chosen by the host', () => {
+	const withWrite = () => server({ registeredClientScopes: ['read', 'solve', 'write'] });
+
+	it('defaults to read and solve: write is never granted unless the host opts in', async () => {
+		expect((await authorized(server(), { scope: 'read write' })).request.scopes).toEqual(['read']);
+	});
+
+	it('grants write to a registered client when the host allows it, with read alongside', async () => {
+		expect((await authorized(withWrite(), { scope: 'write' })).request.scopes).toEqual([
+			'read',
+			'write'
+		]);
+		expect((await authorized(withWrite())).request.scopes).toEqual(['read', 'solve', 'write']);
+	});
+
+	it('gives a CIMD client the host list too', async () => {
+		const URL_ID = 'https://client.test/metadata';
+		const oauth = server({
+			registeredClientScopes: ['read', 'write'],
+			fetchClientMetadata: async () => ({
+				client_id: URL_ID,
+				redirect_uris: ['https://client.test/cb']
+			})
+		});
+		expect((await oauth.resolveClient(URL_ID)).scopes).toEqual(['read', 'write']);
+	});
+
+	it('refuses a host list naming a scope outside the allowlist, such as upload', () => {
+		for (const scope of ['upload', 'create_projects', 'admin']) {
+			expect(() => server({ registeredClientScopes: ['read', scope] as never })).toThrow(scope);
+		}
+	});
+
+	it('refuses a host list without read, which would leave every consent page empty', () => {
+		expect(() => server({ registeredClientScopes: [] })).toThrow('read');
+		expect(() => server({ registeredClientScopes: ['solve', 'write'] })).toThrow('read');
+	});
+
+	it('de-duplicates the host list and puts it in canonical order', async () => {
+		const oauth = server({ registeredClientScopes: ['write', 'read', 'write'] });
+		expect(oauth.registeredScopes).toEqual(['read', 'write']);
+		expect((await authorized(oauth)).request.scopes).toEqual(['read', 'write']);
+	});
+
+	it('advertises the host list wherever a client reads it', () => {
+		const oauth = withWrite();
+		expect(oauth.registeredScopes).toEqual(['read', 'solve', 'write']);
+		expect(oauth.protectedResourceMetadata().scopes_supported).toEqual(['read', 'solve', 'write']);
+		expect(oauth.authorizationServerMetadata().scopes_supported).toEqual([
+			'read',
+			'solve',
+			'write',
+			'upload',
+			'create_projects'
+		]);
+	});
+
+	it('never advertises write when no client can be granted it', () => {
+		expect(server().authorizationServerMetadata().scopes_supported).not.toContain('write');
+	});
+
+	it('maps write to write:all', () => {
+		expect(apiScopesFor(['read', 'write'])).toEqual(['read:all', 'write:all']);
+	});
+
+	it('offers write with and without solve, read first and all asked for last', () => {
+		expect(consentChoices(['read', 'solve', 'write'])).toEqual([
+			{ access: 'read', scopes: ['read'] },
+			{ access: 'solve', scopes: ['read', 'solve'] },
+			{ access: 'write', scopes: ['read', 'write'] },
+			{ access: 'write_and_solve', scopes: ['read', 'solve', 'write'] }
+		]);
+		expect(consentChoices(['read', 'write'])).toEqual([
+			{ access: 'read', scopes: ['read'] },
+			{ access: 'write', scopes: ['read', 'write'] }
+		]);
+	});
+
+	it('offers nothing for a request that may be granted nothing', () => {
+		expect(consentChoices([])).toEqual([]);
+	});
+});

@@ -45,7 +45,7 @@ function onRedeemed(tokenId: string): void {
 }
 
 /** Whether `oauthServer` would build one, without building it. */
-export function oauthConfigured(): boolean {
+function oauthConfigured(): boolean {
 	const secret = hmacKeys().current;
 	return Boolean(secret && secret.length >= MIN_TOKEN_SECRET_LENGTH);
 }

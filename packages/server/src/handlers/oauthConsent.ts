@@ -42,6 +42,21 @@ async function contextIn(req: ApiRequest, member: OrgMember): Promise<RequestCon
 	return { ...pinned, adapterContext: ctx.adapterContext };
 }
 
+/** The acting org and the user's context pinned to it, or null outside any. */
+async function actingOrg(
+	req: ApiRequest
+): Promise<{ org: ConsentOrg; ctx: RequestContext } | null> {
+	const { ctx } = requireCaller(req);
+	const acting = (await listUserMemberships(req.deps.orgs, ctx.userId)).find(
+		({ org }) => org.id === ctx.actingOrgId
+	);
+	if (!acting) return null;
+	return {
+		org: { id: acting.org.id, name: acting.org.name },
+		ctx: await contextIn(req, acting.member)
+	};
+}
+
 /**
  * The orgs the signed-in user may grant a key with `scopes` in: their acting
  * org, when they may hold such a key there. At most one.
@@ -50,18 +65,8 @@ export async function consentOrgs(
 	req: ApiRequest,
 	scopes: readonly string[]
 ): Promise<ConsentOrg[]> {
-	const { ctx } = requireCaller(req);
-	const memberships = (await listUserMemberships(req.deps.orgs, ctx.userId)).filter(
-		({ org }) => org.id === ctx.actingOrgId
-	);
-	const allowed = await Promise.all(
-		memberships.map(async ({ member }) =>
-			mayHoldApiTokens(req.deps, await contextIn(req, member), scopes)
-		)
-	);
-	return memberships
-		.filter((_, i) => allowed[i])
-		.map(({ org }) => ({ id: org.id, name: org.name }));
+	const acting = await actingOrg(req);
+	return acting && (await mayHoldApiTokens(req.deps, acting.ctx, scopes)) ? [acting.org] : [];
 }
 
 export interface ConsentLevel {
@@ -86,14 +91,16 @@ export async function consentOffer(
 	req: ApiRequest,
 	scopes: readonly OAuthScope[]
 ): Promise<ConsentOffer | null> {
-	const levels = await Promise.all(
-		consentChoices(scopes).map(async (choice) => ({
-			choice,
-			orgs: await consentOrgs(req, apiScopesFor(choice.scopes))
-		}))
+	const choices = consentChoices(scopes);
+	const acting = choices.length ? await actingOrg(req) : null;
+	if (!acting) return null;
+	const allowed = await Promise.all(
+		choices.map((choice) => mayHoldApiTokens(req.deps, acting.ctx, apiScopesFor(choice.scopes)))
 	);
-	const offered = levels.filter((l) => l.orgs.length > 0);
-	return offered.length ? { levels: offered } : null;
+	const levels = choices
+		.filter((_, i) => allowed[i])
+		.map((choice) => ({ choice, orgs: [acting.org] }));
+	return levels.length ? { levels } : null;
 }
 
 /**

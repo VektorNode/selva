@@ -71,6 +71,7 @@ export const load: PageServerLoad = async (event) => {
 		levels: offer.levels.map(({ choice, orgs }) => ({
 			access: choice.access,
 			createsProjects: choice.scopes.includes('create_projects'),
+			changes: choice.scopes.includes('write'),
 			orgs,
 			orgId: (orgs.find((o) => o.id === actingOrgId) ?? orgs[0]!).id
 		})),

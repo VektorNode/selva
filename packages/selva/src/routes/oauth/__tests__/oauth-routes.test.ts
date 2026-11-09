@@ -247,6 +247,20 @@ describe('consent', () => {
 		});
 		expect(forged).toMatchObject({ status: 400 });
 	});
+
+	it('never offers write: Selva keeps the default registered-client scopes', async () => {
+		const w = await world();
+		await grantPlatformPermissions(tp, w.alice.id, ['manage_api_tokens']);
+		const query = authorizeQuery(await registeredClient(), { scope: 'read solve write' });
+		const locals = await actAs(tp, w.alice.id);
+		const data = await load(event(`/oauth/authorize?${query}`, { locals }) as AnyEvent);
+		expect(data).toMatchObject({ ok: true, levels: [{ access: 'read' }, { access: 'solve' }] });
+		for (const access of ['write', 'write_and_solve']) {
+			expect(await approve(query, locals, { access, orgId: w.acme.id })).toMatchObject({
+				status: 400
+			});
+		}
+	});
 });
 
 describe('the Grasshopper plugin', () => {
