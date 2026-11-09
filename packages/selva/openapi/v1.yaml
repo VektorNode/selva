@@ -774,6 +774,12 @@ paths:
                   type: string
                 definitionUrl:
                   type: string
+                mode:
+                  default: full
+                  type: string
+                  enum:
+                    - preview
+                    - full
       responses:
         "200":
           description: Success.

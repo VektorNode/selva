@@ -1,0 +1,45 @@
+. .husky/ensure-pnpm.sh
+
+# Tests otherwise first run in CI, where a push to beta or main runs them in
+# both Test and Release. Test only the packages this push changes: turbo's
+# cache makes the rest free, and a docs-only push runs nothing.
+
+is_zero() { case "$1" in *[!0]*) return 1 ;; esac; }
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>, one line per ref.
+base=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+	case "$local_ref" in refs/tags/*) continue ;; esac
+	# Zero local sha: a branch deletion. Zero remote sha: a new branch.
+	is_zero "$local_sha" && continue
+	if ! is_zero "$remote_sha" && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+		base=$remote_sha
+	else
+		# New branch, or a remote tip not fetched yet: diff from where it left main.
+		base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+	fi
+	break
+done
+
+[ -z "$base" ] && exit 0
+
+echo "pre-push: testing packages changed since $(git rev-parse --short "$base")"
+
+# Same reason as pre-commit: without a TTY, pnpm's implicit install aborts the hook.
+pnpm_run() { pnpm --config.verify-deps-before-run=false "$@"; }
+
+export TURBO_SCM_BASE=$base
+failed=0
+# --continue: report every failing package now, not one per push.
+pnpm_run exec turbo run test --affected --continue \
+	--concurrency=20 --output-logs=errors-only || failed=1
+
+# Root scripts sit outside every turbo package, so --affected never picks them up.
+if git diff --name-only "$base" -- scripts | grep -q .; then
+	pnpm_run test:scripts || failed=1
+fi
+
+if [ "$failed" = 1 ]; then
+	echo "pre-push: tests failed. Fix them, or 'git push --no-verify' to bypass." >&2
+	exit 1
+fi

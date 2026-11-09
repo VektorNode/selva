@@ -1,0 +1,19 @@
+# Sourced by the hooks.
+
+# GUI git clients (VS Code, GitHub Desktop) launch hooks with a minimal PATH
+# that often lacks node. Add the usual install dirs before giving up.
+if ! command -v pnpm >/dev/null 2>&1; then
+	for dir in "/c/Program Files/nodejs" "$HOME/.local/share/pnpm" "/usr/local/bin"; do
+		[ -d "$dir" ] && PATH="$dir:$PATH"
+	done
+	export PATH
+fi
+
+# Fail rather than skip: silently waving a commit through defeats the hook,
+# and the message is easy to miss in a GUI client.
+if ! command -v pnpm >/dev/null 2>&1; then
+	echo "${0##*/}: pnpm not found on PATH." >&2
+	echo "  Run git from a terminal where 'pnpm' works, or add node to your git client's PATH." >&2
+	echo "  To bypass deliberately: --no-verify" >&2
+	exit 1
+fi
