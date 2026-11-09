@@ -18,7 +18,8 @@ let scriptedSolve: (
 	opts: { signal?: AbortSignal; sessionId?: string; headers?: Record<string, string> }
 ) => Promise<Record<string, unknown>>;
 
-vi.mock('@selvajs/compute/grasshopper', () => {
+vi.mock('@selvajs/compute/grasshopper', async (importOriginal) => {
+	const { withSolveMode } = await importOriginal<typeof import('@selvajs/compute/grasshopper')>();
 	class GrasshopperClient {
 		static async create(config: Recorded) {
 			if (createFailure) throw createFailure;
@@ -54,7 +55,8 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 			// Carries the values, so a key that ignored them would show up as a wrong coalesce.
 			fromValues: (entries: unknown[]) => entries
 		},
-		stableStringify: (value: unknown) => JSON.stringify(value)
+		stableStringify: (value: unknown) => JSON.stringify(value),
+		withSolveMode
 	};
 });
 
