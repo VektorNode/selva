@@ -1,6 +1,6 @@
 # Example definitions
 
-Builds the showcase and stress-test `.gh` files from C#, so they can be regenerated when a component changes instead of being rewired by hand. Every step is a stock or Selva component, except the lamp's three C# Scripts: their sources are the `Lamp*.script.cs` files here, which this project doesn't compile.
+Builds the showcase and stress-test `.gh` files from C#, so they can be regenerated when a component changes instead of being rewired by hand. Every step is a stock or Selva component, except the C# Scripts of the lamp and the solve bench: their sources are the `*.script.cs` files here, which this project doesn't compile.
 
 | File                                                | For        | Shows                                                                                                                                                 |
 | --------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -9,6 +9,7 @@ Builds the showcase and stress-test `.gh` files from C#, so they can be regenera
 | `examples/definitions/studio-task-lamp.gh`          | Showcase   | Desk lamp configurator: a light-source list computed from the head, Night lighting, checks, two charts, a priced order, a two-sheet A3 PDF, CSV, 3DM  |
 | `dev/grasshopper/stress-display-throughput.gh`      | Developers | Up to 40,000 objects, mesh density, 64 materials and layers, a text payload up to 20 MB                                                               |
 | `dev/grasshopper/stress-every-input-and-output.gh`  | Developers | Every input widget, visibility rules, a dynamic list, every output kind, messages on demand                                                           |
+| `dev/grasshopper/bench-solve-transport.gh`          | Developers | One input per re-solve cost: a fixed upstream wait, panels sized in MB on the wire, display branches, a static context, colour, a 3DM on demand       |
 
 ## Regenerate
 

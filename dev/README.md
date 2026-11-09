@@ -20,6 +20,7 @@ Definitions for testing the plugin by hand in Rhino.
 | `ui-bridge-minimal.ghx`            | The smallest UI Bridge setup                                                      | by hand                              |
 | `stress-display-throughput.gh`     | Up to 40,000 objects, 64 materials and layers, a text payload up to 20 MB         | `scripts/plugin/example-definitions` |
 | `stress-every-input-and-output.gh` | Every input widget, visibility rules, a dynamic list, every output kind           | `scripts/plugin/example-definitions` |
+| `bench-solve-transport.gh`         | One input per re-solve cost, for `scripts/develop/solve-bench`                    | `scripts/plugin/example-definitions` |
 
 ## viewer-scenes/
 

@@ -29,6 +29,19 @@ interface ServerTimingParts {
 }
 
 /**
+ * False for a header carrying only the proxy's `affinity`, from a child that sends no timing:
+ * read as zeros, it would put the whole solve on `compute_link`.
+ */
+export function reportsTiming(rhino: ServerTiming): boolean {
+	return (
+		rhino.cacheHit === true ||
+		rhino.decode !== undefined ||
+		rhino.solve !== undefined ||
+		rhino.encode !== undefined
+	);
+}
+
+/**
  * `total` is the server's headers-to-out wall time, so browser `ttfb − total`
  * ≈ network+send latency. When the compute server reports its own timing
  * (VektorNode fork), `rhino_*` is time on the compute server and `compute_link`
@@ -45,7 +58,7 @@ export function buildServerTiming(parts: ServerTimingParts): string {
 		`total;dur=${parts.serverTotalMs.toFixed(1)}`;
 
 	const rhino = parts.rhino;
-	if (rhino) {
+	if (rhino && reportsTiming(rhino)) {
 		const decode = rhino.decode ?? 0;
 		const solve = rhino.solve ?? 0;
 		const encode = rhino.encode ?? 0;
@@ -61,6 +74,7 @@ export function buildServerTiming(parts: ServerTimingParts): string {
 			header += `, rhino_recomputed;desc="${rhino.recomputed.ran}/${rhino.recomputed.total}"`;
 		}
 	}
+	if (rhino?.affinity) header += `, rhino_affinity;desc=${rhino.affinity}`;
 
 	for (const [label, ms] of parts.prepMarks) {
 		header += `, p_${label};dur=${ms.toFixed(1)}`;

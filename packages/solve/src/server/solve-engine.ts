@@ -110,16 +110,19 @@ export interface SolveEngineSolveArgs {
 	values: Record<string, unknown>;
 	signal: AbortSignal;
 	acceptEncoding?: string;
-	/**
-	 * Stamped as `X-Selva-Definition` when this solve builds the server's warm client. The header
-	 * is fixed per client, so later solves on that server carry the first definition's guid.
-	 */
+	/** Sent as `X-Selva-Definition`, a key a router can keep one definition's solves together on. */
 	definitionGuid?: string;
 	loadStartMs?: number;
 	defLoadMs?: number;
 	prepMarks?: PrepMark[];
 	/** Per-solve live-event callback. A solve carrying one runs its own compute call, never a shared one. */
 	selvaEvents?: SelvaEventTarget;
+	/**
+	 * Sent as `X-Session-Id` so the compute fork routes the solve to the child holding this
+	 * session's warm document. Not part of the coalesce key: a joined flight routes on the id of
+	 * the caller that started it.
+	 */
+	sessionId?: string;
 }
 
 export interface SolveEngineStats {
@@ -158,8 +161,8 @@ export class SolveEngine {
 		});
 	}
 
-	getClient(server: ResolvedServer, opts?: { definitionGuid?: string }): Promise<CachedClient> {
-		return this.clientCache.getClient(server, opts);
+	getClient(server: ResolvedServer): Promise<CachedClient> {
+		return this.clientCache.getClient(server);
 	}
 
 	definitionRef(
@@ -208,9 +211,7 @@ export class SolveEngine {
 
 		let client: CachedClient;
 		try {
-			client = await this.clientCache.getClient(args.server, {
-				definitionGuid: args.definitionGuid
-			});
+			client = await this.clientCache.getClient(args.server);
 		} catch (error) {
 			if (args.signal.aborted) return { kind: 'client_abort', durationMs: elapsed() };
 			if (error instanceof ComputeError && error.code === ErrorCodes.ABORTED) {
@@ -242,6 +243,10 @@ export class SolveEngine {
 					client,
 					responseMaxBytes: this.limits.computeResponseMaxBytes,
 					selvaEvents: args.selvaEvents,
+					sessionId: args.sessionId,
+					...(args.definitionGuid && {
+						headers: { 'X-Selva-Definition': args.definitionGuid }
+					}),
 					signal
 				}),
 			args.signal

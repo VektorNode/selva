@@ -74,6 +74,15 @@ owner, or delete the org, first.
 **Open gap:** on Supabase, `audit_events` and `solve_metrics` have no time-based retention. Rows live
 until a subject is erased.
 
+## What compute servers receive
+
+A signed-in user's solve of a stored definition carries `X-Session-Id`, an HMAC of the user id and
+definition id under `SELVA_HMAC_KEY`, so the compute fork can route it to a warm child. It names no
+one, but it links that user's solves of that definition on the server, which for a BYO server may
+belong to a third party. A compute build with session affinity keeps it in memory for
+`RHINO_COMPUTE_SESSION_TIMEOUT` after the last solve (an hour by default) and logs only an
+8-character hash of it; other builds drop it at the proxy.
+
 ## Logs are where erasure stops
 
 `onUserDeleted` scrubs rows. It can't reach stdout, which on a real deployment has already shipped to

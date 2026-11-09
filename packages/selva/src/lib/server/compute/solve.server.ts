@@ -30,6 +30,7 @@ import type { ComputeServerConfig, RequestContext, SolveFailureKind } from '@sel
 import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { serverResolver } from './serverResolver.server';
 import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '#lib/server/compute/engine.server.js';
+import { solveSessionId } from '#lib/server/compute/sessionId.server.js';
 import { computeErrorLogFields } from '#lib/server/compute/errorLogFields.js';
 import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
 import {
@@ -454,7 +455,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			loadStartMs: loadStart,
 			defLoadMs,
 			prepMarks,
-			selvaEvents: live.selvaEvents
+			selvaEvents: live.selvaEvents,
+			sessionId: solveSessionId(access, guid)
 		});
 	} finally {
 		live.end(outcome ? solveEndedKind(outcome) : 'error');

@@ -7,6 +7,7 @@ import { ComputeError, enableDebugLogging, ErrorCodes } from '@selvajs/compute/c
 
 import { createConcurrencyProbe } from './concurrency-probe';
 import { fetchForDeadline } from './long-fetch';
+import { reportsTiming } from './server-timing';
 import {
 	MAX_SOLVE_DEADLINE_MS,
 	sameSolveLimits,
@@ -96,7 +97,7 @@ export interface ClientCache {
 	 *
 	 * @throws {ComputeError} `ABORTED` when `evict` or `disposeAll` overtakes the build.
 	 */
-	getClient(server: ResolvedServer, opts?: { definitionGuid?: string }): Promise<CachedClient>;
+	getClient(server: ResolvedServer): Promise<CachedClient>;
 	/**
 	 * Drops the warm client for `id`, so the next request rebuilds, and disposes it once idle. A
 	 * build in flight for `id` is abandoned.
@@ -242,7 +243,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		entry.scheduler.dispose();
 	}
 
-	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
+	async function build(server: ResolvedServer): Promise<CachedClient> {
 		const debugVerbose = config.debug === 'verbose';
 		// The deadline comes from the server, read only once the client exists: pick the fetch
 		// for the longest one. Calls without a signal keep undici's limits either way.
@@ -261,10 +262,15 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		if (config.debug) {
 			clientConfig.onServerTiming = (t) => {
+				const routed = t.affinity ? ` | session ${t.affinity}` : '';
 				if (t.cacheHit) {
 					debugLog(
-						'[Compute/rhino-cache] solve-cache (cachesolve): HIT (cached result, solve skipped)'
+						`[Compute/rhino-cache] solve-cache (cachesolve): HIT (cached result, solve skipped)${routed}`
 					);
+					return;
+				}
+				if (!reportsTiming(t)) {
+					debugLog(`[Compute/rhino-cache] no solve timing${routed}`);
 					return;
 				}
 				const decode = t.decode ?? 0;
@@ -278,15 +284,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				const ran = t.recomputed ? ` | ran ${t.recomputed.ran}/${t.recomputed.total} objects` : '';
 				debugLog(
 					`[Compute/rhino-cache] decode=${decode}ms solve=${solve}ms encode=${encode}ms ` +
-						`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}${ran}`
+						`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}${ran}${routed}`
 				);
 			};
-		}
-
-		// Baked at client-create time because the scheduler has no per-request
-		// header hook.
-		if (definitionGuid) {
-			clientConfig.headers = { 'X-Selva-Definition': definitionGuid };
 		}
 
 		const client = await GrasshopperClient.create(clientConfig);
@@ -378,7 +378,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 	}
 
 	const self: ClientCache = {
-		async getClient(server, opts): Promise<CachedClient> {
+		async getClient(server): Promise<CachedClient> {
 			const key = server.id;
 			const existing = cache.get(key);
 			if (existing) {
@@ -388,7 +388,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				// Only a client whose cache could answer waits on its server's deployment.
 				if (!cacheEnabled || (await deploymentChecks.get(existing)?.()) !== false) return existing;
 				// Retired by the check: whatever now stands for `key` serves, or a fresh build.
-				return self.getClient(server, opts);
+				return self.getClient(server);
 			}
 
 			const inFlight = pending.get(key);
@@ -415,7 +415,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			const promise = (async () => {
 				let entry: CachedClient;
 				try {
-					entry = await build(server, opts?.definitionGuid);
+					entry = await build(server);
 				} catch (err) {
 					if (!token.stale) failed.set(key, { error: err, at: Date.now() });
 					throw err;

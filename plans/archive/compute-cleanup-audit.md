@@ -1,6 +1,6 @@
 # `@selvajs/compute` cleanup audit
 
-> **Tracked in:** unfiled. Implemented; what's left is [Before release](#before-release).
+> **Archived 2026-11-09: implemented and released as `@selvajs/compute` 5.0.0.** The downstream notes in [Before release](#before-release) are a record.
 >
 > Five read-only audits of `packages/compute` (core, solve path, IO/data trees/types/stats, docs,
 > config and exports) against the tree on 2026-10-21. That tree included the uncommitted
@@ -14,7 +14,7 @@
   fails before the fix.
 - **The public API changes only as listed in [Public API](#public-api)**, all in one major.
   `@selvajs/compute` is published and has two consumers outside this monorepo (Consumer A and
-  Consumer B in [compute-package-cleanup](../archive/compute-package-cleanup.md)): check both
+  Consumer B in [compute-package-cleanup](./compute-package-cleanup.md)): check both
   before the release.
 - **Comments follow the repo rules:** default to none; one or two lines for a non-obvious why, a
   footgun, or a suppression; never history, ticket or audit pointers; one fact, one place, at the

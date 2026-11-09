@@ -3,7 +3,7 @@
 > **Tracked in:** unfiled. Review of `packages/compute`. Findings already fixed are removed from
 > this document; `git diff packages/compute` shows them.
 >
-> A second pass after [compute-cleanup-audit](./compute-cleanup-audit.md). It looks for
+> A second pass after [compute-cleanup-audit](../archive/compute-cleanup-audit.md). It looks for
 > duplication, logic that does not earn its place, config drift, and tests that do not exercise a
 > real case. Line numbers drift: when one stops resolving, grep the quoted text.
 

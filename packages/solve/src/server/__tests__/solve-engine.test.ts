@@ -15,7 +15,7 @@ let createFailure: Error | null = null;
 let scriptedSolve: (
 	def: unknown,
 	tree: unknown,
-	opts: { signal?: AbortSignal }
+	opts: { signal?: AbortSignal; sessionId?: string; headers?: Record<string, string> }
 ) => Promise<Record<string, unknown>>;
 
 vi.mock('@selvajs/compute/grasshopper', () => {
@@ -32,7 +32,11 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 				maxConcurrent: options.maxConcurrent as number,
 				inFlightCount: 0,
 				queueDepth: 0,
-				solveDetailed: async (def: unknown, tree: unknown, opts: { signal?: AbortSignal }) => ({
+				solveDetailed: async (
+					def: unknown,
+					tree: unknown,
+					opts: { signal?: AbortSignal; sessionId?: string; headers?: Record<string, string> }
+				) => ({
 					response: await scriptedSolve(def, tree, opts),
 					fromCache: false,
 					durationMs: 0
@@ -279,6 +283,42 @@ describe('SolveEngine.solve — coalescing', () => {
 		expect(held.runs()).toBe(3);
 		held.release();
 		await Promise.all([p1, p2, p3]);
+	});
+
+	it('forwards the session id, and callers with different ids still share one flight', async () => {
+		const held = heldSolve();
+		const holding = scriptedSolve;
+		const sent: (string | undefined)[] = [];
+		scriptedSolve = (def, tree, opts) => {
+			sent.push(opts.sessionId);
+			return holding(def, tree, opts);
+		};
+		const engine = new SolveEngine({ limits: baseLimits() });
+		const p1 = engine.solve(solveArgs({ sessionId: 'alice' }));
+		const p2 = engine.solve(solveArgs({ sessionId: 'bob' }));
+		held.release();
+		await Promise.all([p1, p2]);
+		expect(held.runs()).toBe(1);
+		expect(sent).toEqual(['alice']);
+	});
+
+	it('sends each solve its own definition guid, though both share one warm client', async () => {
+		const sent: (Record<string, string> | undefined)[] = [];
+		scriptedSolve = async (_def, _tree, opts) => {
+			sent.push(opts.headers);
+			return { values: [], errors: [], warnings: [] };
+		};
+		const engine = new SolveEngine({ limits: baseLimits() });
+		await engine.solve(solveArgs({ definitionKey: 'k1', definitionGuid: 'first' }));
+		await engine.solve(solveArgs({ definitionKey: 'k2', definitionGuid: 'second' }));
+		await engine.solve(solveArgs({ definitionKey: 'k3' }));
+		expect(createdConfigs).toHaveLength(1);
+		expect(createdConfigs[0].headers).toBeUndefined();
+		expect(sent).toEqual([
+			{ 'X-Selva-Definition': 'first' },
+			{ 'X-Selva-Definition': 'second' },
+			undefined
+		]);
 	});
 
 	it('different values do not coalesce', async () => {

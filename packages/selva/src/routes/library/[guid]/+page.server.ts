@@ -72,7 +72,7 @@ export const load = (async ({ params, locals, request, url }) => {
 		]);
 
 		// Warm already: loading the definition read its inputs through this client.
-		const { limits } = await getClient(loaded.computeServer, { definitionGuid: guid });
+		const { limits } = await getClient(loaded.computeServer);
 
 		return {
 			schema: loaded.schema,

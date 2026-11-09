@@ -1,12 +1,12 @@
 import { getLogger } from '../utils/logger';
 
-import type { ServerTiming } from '../types';
+import { AFFINITY_OUTCOMES, type AffinityOutcome, type ServerTiming } from '../types';
 
 /**
  * Parse a W3C Server Timing header, as the solve endpoint emits it:
  * `decode;dur=3, solve;dur=120, gh;dur=110, encode;dur=8, recomputed;desc="4/97"`, or
- * `cache;desc="hit"` when the server answered from its result cache. Null when it carries no
- * recognised metric.
+ * `cache;desc="hit"` when the server answered from its result cache. A proxy's `affinity` can
+ * arrive alone, with no durations. Null when it carries no recognised entry.
  */
 export function parseServerTiming(headerValue: string | null): ServerTiming | null {
 	if (!headerValue) return null;
@@ -28,9 +28,18 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
 		} else if (name === 'cache' && param(params, 'desc') === 'hit') {
 			timing.cacheHit = true;
 			sawMetric = true;
+		} else if (name === 'affinity') {
+			const outcome = param(params, 'desc');
+			if (!isAffinity(outcome)) continue;
+			timing.affinity = outcome;
+			sawMetric = true;
 		}
 	}
 	return sawMetric ? timing : null;
+}
+
+function isAffinity(value: string | undefined): value is AffinityOutcome {
+	return (AFFINITY_OUTCOMES as readonly (string | undefined)[]).includes(value);
 }
 
 function param(params: string[], key: string): string | undefined {

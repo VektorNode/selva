@@ -1,3 +1,4 @@
+import { assertSessionId, mergeUnder } from '@/core/compute-fetch/request';
 import { abortedByCaller, ComputeError, ErrorCodes } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
@@ -36,6 +37,8 @@ interface PendingItem {
 	reject: (error: ComputeError) => void;
 	externalSignal?: AbortSignal;
 	selvaevents?: SelvaEventTarget;
+	sessionId?: string;
+	headers?: Record<string, string>;
 	onServerTiming?: SchedulerSolveOptions['onServerTiming'];
 	/** On `externalSignal`: aborts a running item, settles a queued one as ABORTED. */
 	onExternalAbort?: () => void;
@@ -211,6 +214,7 @@ export class SolveScheduler {
 		baseConfig: GrasshopperComputeConfig,
 		options: SolveSchedulerOptions = {}
 	) {
+		assertSessionId(baseConfig.sessionId);
 		this.executor = executor;
 		this.baseConfig = baseConfig;
 		this.mode = options.mode ?? 'latest-wins';
@@ -351,6 +355,11 @@ export class SolveScheduler {
 				)
 			);
 		}
+		try {
+			assertSessionId(options?.sessionId);
+		} catch (error) {
+			return Promise.reject(error);
+		}
 
 		const hashes = new SolveInputHashes(() => this.hashDefinitionMemo(definition), dataTree);
 		// Only the cache and the hooks read the key. Without them, hashing a multi-MB tree would be
@@ -408,6 +417,8 @@ export class SolveScheduler {
 				reject,
 				externalSignal: options?.signal,
 				selvaevents: options?.selvaevents,
+				sessionId: options?.sessionId,
+				headers: options?.headers,
 				onServerTiming: options?.onServerTiming
 			};
 
@@ -559,7 +570,11 @@ export class SolveScheduler {
 				signal: controller.signal,
 				...(this.timeoutMs !== undefined && { timeoutMs: this.timeoutMs }),
 				...(this.retry !== undefined && { retry: this.retry }),
-				...(item.selvaevents !== undefined && { selvaevents: item.selvaevents })
+				...(item.selvaevents !== undefined && { selvaevents: item.selvaevents }),
+				...(item.sessionId !== undefined && { sessionId: item.sessionId }),
+				...(item.headers !== undefined && {
+					headers: mergeUnder(this.baseConfig.headers, item.headers)
+				})
 			};
 			const callTiming = item.onServerTiming;
 			if (callTiming) {

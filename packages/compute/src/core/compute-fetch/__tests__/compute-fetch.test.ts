@@ -121,6 +121,43 @@ describe('fetchCompute — request shape', () => {
 		expect(headers['X-Selva-Definition']).toBe('guid-123');
 	});
 
+	it('sends sessionId as X-Session-Id, and nothing without one', async () => {
+		fetchMock.mockResolvedValue(createMockResponse({ ok: true }));
+
+		await fetchCompute('grasshopper', {}, { ...config, sessionId: 'a1b2c3' });
+		await fetchCompute('grasshopper', {}, config);
+
+		const [withId, withoutId] = fetchMock.mock.calls.map(
+			(call) => call[1].headers as Record<string, string>
+		);
+		expect(withId['X-Session-Id']).toBe('a1b2c3');
+		expect(withoutId['X-Session-Id']).toBeUndefined();
+	});
+
+	it('does not let config.headers send a second X-Session-Id', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchCompute(
+			'grasshopper',
+			{},
+			{ ...config, sessionId: 'real', headers: { 'x-session-id': 'forged' } }
+		);
+
+		const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+		expect(headers['X-Session-Id']).toBe('real');
+		expect(headers['x-session-id']).toBeUndefined();
+	});
+
+	it.each(['', 'has space', 'ü', 'x'.repeat(129)])(
+		'rejects sessionId %j, which compute would ignore, before sending',
+		async (sessionId) => {
+			await expect(fetchCompute('grasshopper', {}, { ...config, sessionId })).rejects.toMatchObject(
+				{ name: 'ComputeError', code: 'INVALID_CONFIG' }
+			);
+			expect(fetchMock).not.toHaveBeenCalled();
+		}
+	);
+
 	it('never lets config.headers override the transport/auth headers', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 

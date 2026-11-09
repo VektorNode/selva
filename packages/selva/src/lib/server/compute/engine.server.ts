@@ -32,14 +32,12 @@ export const engine = new SolveEngine({
 });
 
 /** Get (or create) the warm client + scheduler for a resolved compute server. */
-export function getClient(
-	serverConfig: ComputeServerConfig,
-	opts?: { definitionGuid?: string }
-): Promise<CachedClient> {
-	return engine.getClient(
-		{ id: serverConfig.id, serverUrl: serverConfig.serverUrl, apiKey: serverConfig.apiKey },
-		opts
-	);
+export function getClient(serverConfig: ComputeServerConfig): Promise<CachedClient> {
+	return engine.getClient({
+		id: serverConfig.id,
+		serverUrl: serverConfig.serverUrl,
+		apiKey: serverConfig.apiKey
+	});
 }
 
 /** Drop the warm client for a server whose config just changed (URL/key rotation or deletion). */

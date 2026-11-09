@@ -68,22 +68,19 @@ become a _set_ of URLs without touching any stored reference or any cache key.
 
 ### D2: Solves route by definition-guid affinity. Put the guid on the wire now.
 
-Every solve / `getIO` request to a compute server carries the definition guid as a header
+Every solve request to a compute server carries the definition guid as a header
 (`X-Selva-Definition`). This is the whole forward-compatibility purchase: it lets **any** future router,
 whether nginx `hash ... consistent`, a cloud LB, or app-level pool selection, do definition affinity without
 parsing the solve POST body.
 
 The published `@selvajs/compute` client owns its own `fetch`, so it got an optional
 `ComputeConfig.headers` hook, merged _under_ the transport's own `RhinoComputeKey`/`Authorization`/
-`X-Request-ID` so a caller can never clobber auth. The cache sets it when it creates the warm client.
-The `SolveScheduler` has no per-request header option, so the guid is fixed for that client's lifetime
-rather than truly per-request. That is correct for the routing law below: a router picks the pool
-member from the guid _before_ `getClient`, so within one member the header is inert metadata anyway.
+`X-Request-ID` so a caller can never clobber auth. The solve engine sends the guid per solve, through
+`SchedulerSolveOptions.headers`, so one warm client serves every definition with the right guid.
 
 The routing law is recorded, not implemented: when a pool exists,
 `member = hash(definitionGuid) mod poolSize` with a liveness fallback. Until then there is exactly one
-member and the header is inert metadata. Don't read it in access logs: every solve on a warm client
-carries the guid of the first definition that client served.
+member and the header is inert metadata.
 
 ### What is explicitly NOT decided / built here
 

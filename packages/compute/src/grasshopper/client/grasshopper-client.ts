@@ -1,3 +1,4 @@
+import { assertSessionId, mergeUnder } from '@/core/compute-fetch/request';
 import { sleep } from '@/core/compute-fetch/retry';
 import { abortedByCaller, ErrorCodes, ComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
@@ -34,6 +35,13 @@ export interface SolveOptions {
 	retry?: RetryPolicy;
 	/** Per-solve live-event callback, forwarded onto the request body. */
 	selvaevents?: SelvaEventTarget;
+	/** Routes this solve to its session's warm child; see {@link ComputeConfig.sessionId}. */
+	sessionId?: string;
+	/**
+	 * Request headers for this solve only. One replaces a client config header of any casing; the
+	 * transport's own still win.
+	 */
+	headers?: Record<string, string>;
 }
 
 /** Options for {@link GrasshopperClient.create} that shape construction, not the solves. */
@@ -130,6 +138,7 @@ export default class GrasshopperClient {
 	private static readonly CREATE_PROBE_TIMEOUT_MS = 2000;
 
 	private constructor(config: GrasshopperComputeConfig) {
+		assertSessionId(config.sessionId);
 		this.config = {
 			...config,
 			serverUrl: validateServerUrl(config.serverUrl),
@@ -255,13 +264,18 @@ export default class GrasshopperClient {
 			} else if (isDefinitionRef(definition) && !definition.key.trim()) {
 				throw new ComputeError('DefinitionRef key is empty', ErrorCodes.INVALID_INPUT);
 			}
+			assertSessionId(options?.sessionId);
 
 			const effectiveConfig: GrasshopperComputeConfig = {
 				...this.config,
 				...(options?.signal !== undefined && { signal: options.signal }),
 				...(options?.timeoutMs !== undefined && { timeoutMs: options.timeoutMs }),
 				...(options?.retry !== undefined && { retry: options.retry }),
-				...(options?.selvaevents !== undefined && { selvaevents: options.selvaevents })
+				...(options?.selvaevents !== undefined && { selvaevents: options.selvaevents }),
+				...(options?.sessionId !== undefined && { sessionId: options.sessionId }),
+				...(options?.headers !== undefined && {
+					headers: mergeUnder(this.config.headers, options.headers)
+				})
 			};
 
 			const result = await solveGrasshopperDefinition(dataTree, definition, effectiveConfig);

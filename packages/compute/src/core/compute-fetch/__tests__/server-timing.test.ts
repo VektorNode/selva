@@ -56,6 +56,15 @@ describe('parseServerTiming', () => {
 		});
 	});
 
+	it("reads the fork's session routing outcome, and ignores one it doesn't know", () => {
+		expect(parseServerTiming('solve;dur=900, affinity;desc=hit')).toMatchObject({
+			solve: 900,
+			affinity: 'hit'
+		});
+		expect(parseServerTiming('affinity;desc=spilled')).toMatchObject({ affinity: 'spilled' });
+		expect(parseServerTiming('affinity;desc=sideways')).toBeNull();
+	});
+
 	it('reads a result-cache hit, which carries no durations', () => {
 		expect(parseServerTiming('cache;desc="hit", proxy_child;dur=12')).toEqual({
 			cacheHit: true,

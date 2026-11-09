@@ -1,7 +1,8 @@
 /**
  * Runs one solve against a warm scheduler and classifies how it ended: a solved response, or an
- * expected failure as a value instead of a throw. This is the part single-flight shares, so
- * nothing here depends on who is asking.
+ * expected failure as a value instead of a throw. Single-flight shares this part, so its args come
+ * from the caller that started the flight. Anything per caller must be in the coalesce key, or,
+ * like `sessionId`, be harmless for the joiners to inherit.
  */
 
 import {
@@ -36,6 +37,10 @@ export interface SolvePipelineArgs {
 	responseMaxBytes: number;
 	/** Per-solve live-event callback the compute server hands to the definition; absent when the caller opened no stream. */
 	selvaEvents?: SelvaEventTarget;
+	/** The starting caller's. Joiners route on it too, which only costs them a warm child. */
+	sessionId?: string;
+	/** Request headers for this solve only, e.g. `X-Selva-Definition`. */
+	headers?: Record<string, string>;
 	/**
 	 * Forwarded to the scheduler so a client disconnect cancels the upstream
 	 * compute call. Its `aborted` flag also tells that apart from an abort nobody asked for.
@@ -160,6 +165,8 @@ export async function runSolvePipeline(
 			{
 				signal: args.signal,
 				selvaevents: args.selvaEvents,
+				sessionId: args.sessionId,
+				headers: args.headers,
 				onServerTiming: (t) => {
 					rhino = t;
 				}

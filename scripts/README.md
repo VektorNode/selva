@@ -6,12 +6,13 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 
 ## `develop/`
 
-| Script                                  | Run                                              | Does                                                                                                         |
-| --------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `dev-provider.mjs`, `dev-personas.json` | `pnpm dev:local` / `dev:supabase` / `dev:header` | The Selva app pinned to one auth provider on throwaway data ([DEV-PROVIDERS.md](./develop/DEV-PROVIDERS.md)) |
-| `sync-shared-assets.js`                 | from `plugin-ui` and `ui` builds                 | Copies `assets/shared/` into each package's `static/`                                                        |
-| `check-fixtures.mjs`                    | `pnpm check:fixtures`; CI                        | Fails on an unlisted or misnamed file in `dev/` or `examples/`                                               |
-| `clean.js`                              | `pnpm clean`                                     | Removes `node_modules`, build output and the lockfile                                                        |
+| Script                                  | Run                                              | Does                                                                                                                |
+| --------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `dev-provider.mjs`, `dev-personas.json` | `pnpm dev:local` / `dev:supabase` / `dev:header` | The Selva app pinned to one auth provider on throwaway data ([DEV-PROVIDERS.md](./develop/DEV-PROVIDERS.md))        |
+| `sync-shared-assets.js`                 | from `plugin-ui` and `ui` builds                 | Copies `assets/shared/` into each package's `static/`                                                               |
+| `check-fixtures.mjs`                    | `pnpm check:fixtures`; CI                        | Fails on an unlisted or misnamed file in `dev/` or `examples/`                                                      |
+| `clean.js`                              | `pnpm clean`                                     | Removes `node_modules`, build output and the lockfile                                                               |
+| `solve-bench/`                          | `node scripts/develop/solve-bench/<tool>.mjs`    | Captures and times solves from Grasshopper to the browser's first frame ([README](./develop/solve-bench/README.md)) |
 
 ## `plugin/`
 

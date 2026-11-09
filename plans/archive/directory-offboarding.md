@@ -1,6 +1,6 @@
 # Offboarding: one sign-in rule for every provider
 
-**Tracked in: unfiled.**
+**Archived 2026-11-09: built.** SCIM and object-ID matching remain design only.
 
 When someone leaves, the company disables them in its identity provider and expects Selva to
 follow: no more browser access, and no working API tokens. That has to hold on header-auth, on
@@ -49,7 +49,7 @@ stop protecting anyone, so the test is the point.
      page ends a stale session and sends the person to sign in again first. Without this, a Supabase user
      with a long-lived session would get a plugin key that is refused the moment it's issued.
    - **Off unless set.** A key behind an integration stops too when its human owner stays away.
-     Service accounts ([service-accounts.md](./service-accounts.md)) are the answer for those, and
+     Service accounts ([service-accounts.md](../features/service-accounts.md)) are the answer for those, and
      they are exempt.
    - **A malformed value refuses to boot,** and the boot log states the window in effect. A typo
      must not switch the protection off silently.

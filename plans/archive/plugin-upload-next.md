@@ -1,8 +1,8 @@
 # Plugin upload: a connection setting, and offering only what a key may do
 
-**Tracked in: unfiled.**
+**Archived 2026-11-09: built.** Connection setting, scoped upload dialog and project creation shipped.
 
-Builds on [publish-from-plugin](../archive/publish-from-plugin.md), which is built: browser sign-in
+Builds on [publish-from-plugin](./publish-from-plugin.md), which is built: browser sign-in
 with PKCE, the key in the OS credential store, new definitions and new versions. This plan changes
 where the connection lives, what the upload dialog offers, and lets the plugin create projects. The
 evidence behind the decisions below is in

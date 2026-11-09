@@ -47,6 +47,7 @@ import {
 	resetComputeRateLimit
 } from '#lib/server/computeRateLimit.server.js';
 import { RATE_LIMIT_MAX_REQUESTS } from '#lib/server/computeLimits.js';
+import { computeSessionId } from '#lib/server/compute/sessionId.server.js';
 import { POST } from '../+server.js';
 
 let tp: TestProviders | null = null;
@@ -208,6 +209,45 @@ describe('POST /api/v1/compute — solve counts', () => {
 		expect(res.status).toBe(200);
 		expect((await tp!.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id))?.solveCount).toBe(1);
 		await vi.waitFor(async () => expect(await solveCount(guid)).toBe(1));
+	});
+});
+
+describe('POST /api/v1/compute — compute session id', () => {
+	// Not `ok`: its fire-and-forget solve-count write would race the teardown.
+	const outcome = { kind: 'timeout', durationMs: 1, message: 'deadline' };
+	const sentSessionId = () => (solve.mock.calls[0][0] as { sessionId?: string }).sessionId;
+
+	beforeEach(() => {
+		vi.stubEnv('SELVA_HMAC_KEY', 'test-secret-that-is-at-least-32-chars-long');
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("routes a signed-in user's solve on that user's session for the definition", async () => {
+		const { alice, guid } = await setup();
+		solve.mockResolvedValue(outcome);
+
+		await call(POST, { locals: await actAs(tp!, alice.id), body: body(guid) });
+
+		expect(sentSessionId()).toMatch(/^[0-9a-f]{32}$/);
+		expect(sentSessionId()).toBe(computeSessionId(alice.id, guid));
+	});
+
+	it('sends none for a share-link solve, so visitors cannot share one session', async () => {
+		const { alice, guid } = await setup();
+		const { rawToken } = await seedShareLink(tp!, { definitionId: guid, createdBy: alice.id });
+		solve.mockResolvedValue(outcome);
+
+		await call(POST, {
+			locals: anon(tp!),
+			url: `http://test.local/api/v1/compute?token=${rawToken}`,
+			body: body(guid)
+		});
+
+		expect(solve).toHaveBeenCalledOnce();
+		expect(sentSessionId()).toBeUndefined();
 	});
 });
 

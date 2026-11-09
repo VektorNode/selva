@@ -61,11 +61,8 @@ export interface DefinitionLoaderDeps {
 		orgId: string | null,
 		opts: { definitionPin: string | null }
 	) => Promise<ComputeServerConfig>;
-	/** Shared warm-client cache, keyed by server id with a definition-guid affinity header. */
-	getClient: (
-		server: ComputeServerConfig,
-		opts: { definitionGuid: string }
-	) => Promise<{ client: GrasshopperClient }>;
+	/** Shared warm-client cache, keyed by server id. */
+	getClient: (server: ComputeServerConfig) => Promise<{ client: GrasshopperClient }>;
 	/** Schema extraction; defaults to `fetchSchemaFromCompute`. Injectable for tests. */
 	fetchSchema?: (bytes: Uint8Array, server: ComputeServerConfig) => Promise<UISchema>;
 	/**
@@ -177,7 +174,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		// along unused.
 		let client: GrasshopperClient;
 		try {
-			client = (await getClient(computeServer, { definitionGuid: record.guid })).client;
+			client = (await getClient(computeServer)).client;
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			throw new DefinitionLoadError(

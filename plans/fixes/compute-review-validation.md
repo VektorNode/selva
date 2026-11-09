@@ -12,7 +12,7 @@ wrong was opened and confirmed, and rows they passed were not all re-read.
 **Not verified.**
 
 - External consumers. Consumer A has no checkout here, and Consumer B is known only through
-  [compute-cleanup-audit](./compute-cleanup-audit.md) and
+  [compute-cleanup-audit](../archive/compute-cleanup-audit.md) and
   [compute-package-cleanup](../archive/compute-package-cleanup.md).
 - A live Rhino Compute server. No wire shape here was observed on a real server; the
   `COMPUTE_LIVE_URL` suites stayed skipped.

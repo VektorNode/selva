@@ -43,6 +43,20 @@ describe('buildServerTiming', () => {
 		expect(st).toContain('compute_link;dur=12.0');
 	});
 
+	it("forwards the compute server's session routing outcome only when it sent one", () => {
+		expect(header({ rhino: { solve: 20, affinity: 'spilled', raw: '' } })).toContain(
+			'rhino_affinity;desc=spilled'
+		);
+		expect(header({ rhino: { solve: 20, raw: '' } })).not.toContain('rhino_affinity');
+	});
+
+	it('sends no compute durations for a header that carried only the routing outcome', () => {
+		const st = header({ rhino: { affinity: 'hit', raw: 'affinity;desc=hit' } });
+		expect(st).toContain('rhino_affinity;desc=hit');
+		expect(st).not.toContain('rhino_solve');
+		expect(st).not.toContain('compute_link');
+	});
+
 	it("forwards the compute server's gh time, recomputed count and result-cache verdict", () => {
 		const st = header({
 			rhino: { solve: 20, gh: 18, recomputed: { ran: 4, total: 97 }, raw: '' }

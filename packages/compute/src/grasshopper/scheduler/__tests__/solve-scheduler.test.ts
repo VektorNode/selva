@@ -894,6 +894,69 @@ describe('SolveScheduler', () => {
 		});
 	});
 
+	describe('sessionId', () => {
+		it('hands each solve its own id, and a cache hit, which sends nothing, ignores it', async () => {
+			const sent: (string | undefined)[] = [];
+			const executor: SolveExecutor = async (_def, _tree, _key, config) => {
+				sent.push(config.sessionId);
+				return { response: makeResponse('r'), cacheKey: null, missed: false };
+			};
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				maxConcurrent: 2,
+				cache: { maxBytes: 1024 * 1024 }
+			});
+
+			await scheduler.solveDetailed('def', [tree('a')], { sessionId: 'alice' });
+			await scheduler.solveDetailed('def', [tree('b')], { sessionId: 'bob' });
+			await scheduler.solveDetailed('def', [tree('c')]);
+			const hit = await scheduler.solveDetailed('def', [tree('a')], { sessionId: 'carol' });
+
+			expect(sent).toEqual(['alice', 'bob', undefined]);
+			expect(hit.fromCache).toBe(true);
+		});
+
+		it('rejects a malformed id before the solve takes a slot', async () => {
+			const executor = vi.fn<SolveExecutor>();
+			const onStart = vi.fn();
+			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue', onStart });
+
+			await expect(
+				scheduler.solveDetailed('def', [tree('a')], { sessionId: 'has space' })
+			).rejects.toMatchObject({ code: ErrorCodes.INVALID_CONFIG });
+			expect(() => new SolveScheduler(executor, { ...baseConfig, sessionId: '' })).toThrow(
+				expect.objectContaining({ code: ErrorCodes.INVALID_CONFIG })
+			);
+			expect(onStart).not.toHaveBeenCalled();
+			expect(executor).not.toHaveBeenCalled();
+		});
+	});
+
+	describe('per-solve headers', () => {
+		it("replace the client config's of any casing, for that solve only", async () => {
+			const sent: (Record<string, string> | undefined)[] = [];
+			const executor: SolveExecutor = async (_def, _tree, _key, config) => {
+				sent.push(config.headers);
+				return { response: makeResponse('r'), cacheKey: null, missed: false };
+			};
+			const scheduler = new SolveScheduler(
+				executor,
+				{ ...baseConfig, headers: { 'X-Proxy': 'p', 'X-Selva-Definition': 'old' } },
+				{ mode: 'queue' }
+			);
+
+			await scheduler.solveDetailed('def', [tree('a')], {
+				headers: { 'x-selva-definition': 'new' }
+			});
+			await scheduler.solveDetailed('def', [tree('b')]);
+
+			expect(sent).toEqual([
+				{ 'X-Proxy': 'p', 'x-selva-definition': 'new' },
+				{ 'X-Proxy': 'p', 'X-Selva-Definition': 'old' }
+			]);
+		});
+	});
+
 	describe('dispose', () => {
 		it('cancels everything and rejects new calls', async () => {
 			const { executor } = deferredExecutor();

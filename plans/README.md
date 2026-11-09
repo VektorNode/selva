@@ -44,15 +44,12 @@ Each plan below links to its tracking issue at the top of the file.
 | [solve-events-structure](./features/solve-events-structure.md)               | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
 | [viewer-hotspots](./features/viewer-hotspots.md)                             | **unfiled** — design only; wire-walk verified live in Rhino                     |
 | [publish-from-plugin](./features/publish-from-plugin.md)                     | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
-| [compute-cleanup-audit](./fixes/compute-cleanup-audit.md)                    | **unfiled** — being worked through directly                                     |
 | [host-aware-elements](./features/host-aware-elements.md)                     | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
 | [compute-sessions](./features/compute-sessions.md)                           | **unfiled** — design only; spans the compute fork and Selva                     |
 | [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md) | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
 | [triggers](./features/triggers.md)                                           | **unfiled** — design only                                                       |
 | [webhooks](./features/webhooks.md)                                           | **unfiled** — design only                                                       |
 | [service-accounts](./features/service-accounts.md)                           | **unfiled** — design only                                                       |
-| [directory-offboarding](./features/directory-offboarding.md)                 | **unfiled** — built; SCIM and object-ID matching design only                    |
-| [plugin-upload-next](./features/plugin-upload-next.md)                       | **unfiled** — built                                                             |
 | [notifications](./features/notifications.md)                                 | **unfiled** — package extracted; `notify()` and Selva-side magic links open     |
 | [local-bridge-perf-audit](./fixes/local-bridge-perf-audit.md)                | **unfiled**                                                                     |
 | [scaling-roadmap](./features/scaling-roadmap.md)                             | **unfiled** — design only; nothing built                                        |
@@ -66,6 +63,10 @@ something unblocks them. slva-identity is the opposite case — it is being
 worked through directly, so the handoff lives in the plan rather than in a tracker.
 
 ## Closed since the last index
+
+- **[plugin-upload-next](./archive/plugin-upload-next.md)** (+ [validation](./archive/plugin-upload-next-validation.md)): built.
+- **[compute-cleanup-audit](./archive/compute-cleanup-audit.md)**: implemented and released as `@selvajs/compute` 5.0.0.
+- **[directory-offboarding](./archive/directory-offboarding.md)** (+ [validation](./archive/directory-offboarding-validation.md)): built; SCIM and object-ID matching remain design only.
 
 - **[rhino-panel](./archive/rhino-panel.md)**, **[rhino-player](./archive/rhino-player.md)**: built and
   merged (`Plugin/Selva.Panel`).

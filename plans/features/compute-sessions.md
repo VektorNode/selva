@@ -1,6 +1,7 @@
 # Compute sessions: keeping each user's solve warm
 
-**Unfiled.** Design only; file an epic when someone commits to it.
+**Beta.** Section 4 (Selva sends the header) is built and ships on `beta`, to measure #23 before
+tuning it. Sections 3 and the 8.x backport are not started.
 
 Scope: several people solving the same definition on one Rhino.Compute at the same time, and how
 each of them keeps a warm document. Spans the VektorNode `compute.rhino3d` fork (proxy routing,
@@ -122,7 +123,8 @@ the cap. `runSolve` derives the id on every request:
 hex(HMAC-SHA256(SELVA_HMAC_KEY, "compute-session\0" + userId + "\0" + definitionKey))[0..32]
 ```
 
-`definitionKey` is the definition guid for `local:` definitions and the URL for remote ones.
+`definitionKey` is the definition guid. Remote-URL definitions send no header: the URL is
+caller-chosen, so varying its query string would mint ids.
 
 - **Stateless.** Nothing to expire, it survives restarts, and every Selva instance derives the same
   id because they share the key.
@@ -205,6 +207,20 @@ defaults.
 
 Each step only acts on requests that carry the header, so each one can ship on its own and is a
 candidate for McNeel as is.
+
+## Tuning after the beta
+
+Three gaps from the review of #23 are closed on `9.x.state`: at the cap a new claim replaces the
+one seen longest ago, a 5xx without `Server-Timing` drops the claim, and the outcome reaches
+Selva as `affinity` in `Server-Timing` (`rhino_affinity` in Selva's own header and debug log).
+Two remain:
+
+- **Anonymous traffic overwrites claimed documents** once every child is claimed: share links,
+  `/io` and nested Hops calls route without a header.
+- **A child that lost its Rhino licence keeps its sessions.** It answers 200 with every output
+  empty and no error, so nothing in routing notices. Any other headless Rhino on the same licence
+  can take it. The child would have to report it, for example as a 503 the proxy treats like a
+  failure.
 
 ## Open questions
 

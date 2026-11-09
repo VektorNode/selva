@@ -5,7 +5,7 @@
  * so we mock the module: `create` records the config it was called with and
  * returns a fake client whose `createScheduler` returns a disposable stub. That
  * lets us assert the cache's own behavior (id-keying, LRU eviction, evict,
- * disposeAll, the `X-Selva-Definition` header) without a live compute server.
+ * disposeAll) without a live compute server.
  */
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
@@ -662,28 +662,6 @@ describe('createClientCache — evict during a build', () => {
 	});
 });
 
-describe('createClientCache — X-Selva-Definition', () => {
-	it('stamps the definition guid on the client headers when provided', async () => {
-		const cache = createClientCache(baseConfig());
-		await cache.getClient(server('s1'), { definitionGuid: 'guid-123' });
-		expect(createdConfigs[0].headers).toEqual({ 'X-Selva-Definition': 'guid-123' });
-	});
-
-	it('omits the header entirely when no guid is given', async () => {
-		const cache = createClientCache(baseConfig());
-		await cache.getClient(server('s1'));
-		expect(createdConfigs[0].headers).toBeUndefined();
-	});
-
-	it('stays the first definition on a warm client, since the header is fixed per client', async () => {
-		const cache = createClientCache(baseConfig());
-		await cache.getClient(server('s1'), { definitionGuid: 'first' });
-		await cache.getClient(server('s1'), { definitionGuid: 'second' });
-		expect(createdConfigs).toHaveLength(1);
-		expect(createdConfigs[0].headers).toEqual({ 'X-Selva-Definition': 'first' });
-	});
-});
-
 describe('createClientCache — scheduler backpressure', () => {
 	it('forwards non-zero queue bounds to the scheduler', async () => {
 		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 12, queueWaitMs: 90_000 });
@@ -750,10 +728,18 @@ describe('createClientCache — client-level Server-Timing', () => {
 		expect(lines.at(-1)).toContain('miss');
 	});
 
-	it("logs a compute result-cache hit from the server's own verdict", async () => {
+	it("logs a compute result-cache hit from the server's own verdict, with its routing", async () => {
 		const { lines, timing } = await debugClient();
-		timing({ cacheHit: true });
+		timing({ cacheHit: true, affinity: 'spilled' });
 		expect(lines.at(-1)).toContain('HIT');
+		expect(lines.at(-1)).toContain('session spilled');
+	});
+
+	it('logs routing alone, without made-up cache verdicts, when compute sent no timing', async () => {
+		const { lines, timing } = await debugClient();
+		timing({ affinity: 'hit' });
+		expect(lines.at(-1)).toContain('session hit');
+		expect(lines.at(-1)).not.toContain('definition-cache');
 	});
 
 	it('names a scheduler cache hit and a miss on settle', async () => {

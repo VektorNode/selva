@@ -148,6 +148,16 @@ export interface SchedulerSolveOptions {
 	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
 	selvaevents?: SelvaEventTarget;
 	/**
+	 * Routes this solve to its session's warm child; see `ComputeConfig.sessionId`. Not part of the
+	 * cache key, so sessions still share cached results.
+	 */
+	sessionId?: string;
+	/**
+	 * Request headers for this solve only. One replaces a client config header of any casing; the
+	 * transport's own still win. Not part of the cache key.
+	 */
+	headers?: Record<string, string>;
+	/**
 	 * This call's `Server-Timing` breakdown, after the client config's own `onServerTiming`.
 	 * Never fires for a `fromCache` hit, which sends no request.
 	 */

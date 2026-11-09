@@ -29,6 +29,7 @@ export function buildHeaders(requestId: string, config: ComputeConfig): Record<s
 	const headers = assertSendable(
 		mergeUnder(config.headers, {
 			...credentialHeaders(config),
+			...sessionHeader(config.sessionId),
 			'X-Request-ID': requestId,
 			'Content-Type': 'application/json'
 		})
@@ -56,11 +57,32 @@ function credentialHeaders(auth: ComputeAuth): Record<string, string> {
 	};
 }
 
+const SESSION_ID = /^[!-~]{1,128}$/;
+
+/**
+ * Compute drops a malformed id without an error, so the request would quietly lose its routing.
+ * The client and scheduler call this on entry too: by `buildHeaders` a solve has already taken a
+ * slot and loaded its definition.
+ */
+export function assertSessionId(sessionId: string | undefined): void {
+	if (sessionId === undefined || SESSION_ID.test(sessionId)) return;
+	throw new ComputeError(
+		'sessionId must be 1 to 128 characters from "!" to "~"',
+		ErrorCodes.INVALID_CONFIG,
+		{ context: { length: sessionId.length } }
+	);
+}
+
+function sessionHeader(sessionId: string | undefined): Record<string, string> {
+	assertSessionId(sessionId);
+	return sessionId === undefined ? {} : { 'X-Session-Id': sessionId };
+}
+
 /**
  * Header names are case-insensitive and fetch joins duplicates, so a caller key
  * matching a transport key in any case is dropped rather than sent alongside it.
  */
-function mergeUnder(
+export function mergeUnder(
 	caller: Record<string, string> | undefined,
 	transport: Record<string, string>
 ): Record<string, string> {

@@ -34,9 +34,18 @@ export interface ComputeConfig {
 	authToken?: string;
 	/**
 	 * Extra request headers, e.g. routing hints a reverse proxy reads. A header the transport sets
-	 * (credentials, `X-Request-ID`, `Content-Type`) wins over a caller header of any casing.
+	 * (credentials, `X-Request-ID`, `Content-Type`, and `X-Session-Id` when `sessionId` is set) wins
+	 * over a caller header of any casing.
 	 */
 	headers?: Record<string, string>;
+	/**
+	 * Sent as `X-Session-Id`. The VektorNode compute fork routes requests that share an id back to
+	 * the child holding their warm document. Other servers ignore it, except from a browser: a
+	 * custom header needs a CORS preflight, so a server that doesn't allow `X-Session-Id` fails
+	 * every request with `CORS_ERROR`. 1 to 128 characters from `!` to `~`, or `INVALID_CONFIG` is
+	 * thrown before any request goes out.
+	 */
+	sessionId?: string;
 	/** Log each request at debug level through the configured logger (see `setLogger`). */
 	debug?: boolean;
 	/** Silence the warning logged when a call runs in a browser, where the config is exposed. */
@@ -83,7 +92,15 @@ export interface ComputeConfig {
 /** The config fields that decide how a request authenticates. */
 export type ComputeAuth = Pick<ComputeConfig, 'apiKey' | 'apiKeyHeader' | 'authToken' | 'headers'>;
 
-/** The solve endpoint's `Server-Timing`, durations in ms. `raw` keeps the whole header, unrecognised metrics included. */
+/** Routing outcomes the VektorNode fork reports in `Server-Timing`; the parser drops any other. */
+export const AFFINITY_OUTCOMES = ['hit', 'claimed', 'spilled', 'none'] as const;
+export type AffinityOutcome = (typeof AFFINITY_OUTCOMES)[number];
+
+/**
+ * The solve endpoint's `Server-Timing`, durations in ms. `raw` keeps the whole header,
+ * unrecognised metrics included. Any field but `raw` can be missing: a proxy can report `affinity`
+ * for a child that sends no timing at all.
+ */
 export interface ServerTiming {
 	decode?: number;
 	solve?: number;
@@ -94,5 +111,12 @@ export interface ServerTiming {
 	recomputed?: { ran: number; total: number };
 	/** The server answered from its result cache and solved nothing. */
 	cacheHit?: boolean;
+	/**
+	 * How the VektorNode fork routed a request carrying `sessionId`. `hit`: ran on the child the
+	 * session claims, the only outcome that finds its document warm. `spilled`: that child was busy,
+	 * so it ran on another and the claim moved there. `claimed`: the session had no live claim and
+	 * got one. `none`: no claim was made, because routing is off or the chosen child was gone.
+	 */
+	affinity?: AffinityOutcome;
 	raw: string;
 }

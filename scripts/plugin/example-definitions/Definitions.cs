@@ -24,6 +24,7 @@ public static partial class Definitions
         yield return ("examples/definitions/studio-task-lamp", Lamp);
         yield return ("dev/grasshopper/stress-display-throughput", StressDisplay);
         yield return ("dev/grasshopper/stress-every-input-and-output", KitchenSink);
+        yield return ("dev/grasshopper/bench-solve-transport", SolveBench);
     }
 
     /// <param name="which">File-name prefix to build, or "*" for all.</param>
