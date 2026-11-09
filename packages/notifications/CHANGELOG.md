@@ -1,5 +1,11 @@
 # @selvajs/notifications
 
+## 0.3.1-beta.3
+
+### Patch Changes
+
+- @selvajs/platform@1.1.0-beta.3
+
 ## 0.3.1-beta.2
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @selvajs/platform
 
+## 1.1.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [32a5f6f]
+  - @selvajs/schemas@5.4.0-beta.2
+
 ## 1.1.0-beta.2
 
 ### Minor Changes
