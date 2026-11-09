@@ -21,17 +21,22 @@ public static class SolveDiagnosticsCollector
     private const string MessageComponentTypeName = "GH_Message";
 
     /// <summary>What the finished solution reported, and whether its outputs may be shown.</summary>
-    public static SolveDiagnostics CollectVerdict(GH_Document document)
+    /// <param name="deferredBakes">
+    ///     Bakes fed by file components a preview skipped. Their "failed to collect data" warning
+    ///     is the skip, not the definition, so their warnings are dropped.
+    /// </param>
+    public static SolveDiagnostics CollectVerdict(GH_Document document, ICollection<Guid> deferredBakes = null)
     {
         // An abort leaves every component it skipped complaining that its inputs failed to
         // collect data. That is the abort, not the definition, so only authored messages stay.
         var aborted = document != null && document.AbortRequested;
-        var diagnostics = Collect(document, authoredOnly: aborted);
+        var diagnostics = Collect(document, aborted, deferredBakes);
         if (aborted) diagnostics.MarkAborted();
         return diagnostics;
     }
 
-    public static SolveDiagnostics Collect(GH_Document document, bool authoredOnly = false)
+    public static SolveDiagnostics Collect(GH_Document document, bool authoredOnly = false,
+        ICollection<Guid> deferredBakes = null)
     {
         var diagnostics = new SolveDiagnostics();
         if (document == null)
@@ -61,8 +66,11 @@ public static class SolveDiagnosticsCollector
 
             CollectLevel(activeObject, GH_RuntimeMessageLevel.Error, "error", nickname, isGate,
                 diagnostics);
-            CollectLevel(activeObject, GH_RuntimeMessageLevel.Warning, "warning", nickname, isGate,
-                diagnostics);
+            if (deferredBakes == null || !deferredBakes.Contains(docObject.InstanceGuid))
+            {
+                CollectLevel(activeObject, GH_RuntimeMessageLevel.Warning, "warning", nickname, isGate,
+                    diagnostics);
+            }
             CollectLevel(activeObject, GH_RuntimeMessageLevel.Remark, "remark", nickname, isGate,
                 diagnostics);
         }

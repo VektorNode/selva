@@ -5,6 +5,7 @@ using System.IO;
 using Grasshopper.Kernel;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Selva.FileIO;
@@ -49,6 +50,8 @@ public class GH_FileFromPath : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
+        if (SolveRuntimes.SkipFileOutput(this)) return;
+
         string path = null;
         var nameOverride = "";
         var subFolder = "";

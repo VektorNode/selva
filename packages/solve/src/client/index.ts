@@ -21,6 +21,7 @@ export { EMPTY_LIVE_SOLVE } from './events/live-solve.js';
 export type { LiveSolveState } from './events/live-solve.js';
 
 export type { SolvePhase, RetainedSolveResult } from './session/solve-session-core.js';
+export type { DeferredFiles } from './session/deferred-files.js';
 
 export { createComputeFetchSolveFn } from './compute-fetch-solve-fn.js';
 export type { ComputeFetchSolveFnOptions } from './compute-fetch-solve-fn.js';
@@ -37,6 +38,12 @@ export {
 } from './external-storage.js';
 export type { ExternalValueRef, ExternalInput } from './external-storage.js';
 
-export type { SolveFn, SolveResult, SolveDiagnostic } from '../shared/solve-fn.js';
+export type {
+	SolveFn,
+	SolveResult,
+	SolveDiagnostic,
+	SolveCallOptions,
+	SolveMode
+} from '../shared/solve-fn.js';
 export { decodeOutcome, finalizeResult } from '../shared/outcome.js';
 export type { SolveOutcome } from '../shared/outcome.js';

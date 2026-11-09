@@ -4,6 +4,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Selva.FileIO;
@@ -51,6 +52,8 @@ public class GH_DataToFileGeneric : GH_Component, ISelvaFileOutput
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
+        if (SolveRuntimes.SkipFileOutput(this)) return;
+
         var data = new List<string>();
         var name = "file";
         var extension = ".txt";

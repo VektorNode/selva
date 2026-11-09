@@ -38,7 +38,8 @@ export function decodeDiagnostic(entry: unknown): SolveDiagnostic | null {
 function normalizeOutcome(
 	entries: readonly unknown[],
 	blocked: boolean,
-	aborted: boolean
+	aborted: boolean,
+	deferred?: string[]
 ): SolveOutcome {
 	const seen = new Set<string>();
 	const diagnostics: SolveDiagnostic[] = [];
@@ -50,7 +51,12 @@ function normalizeOutcome(
 		seen.add(key);
 		diagnostics.push(d);
 	}
-	return { diagnostics, blocked: blocked || aborted, aborted };
+	return {
+		diagnostics,
+		blocked: blocked || aborted,
+		aborted,
+		...(deferred && deferred.length > 0 ? { deferred } : {})
+	};
 }
 
 /**
@@ -61,12 +67,20 @@ function normalizeOutcome(
  */
 export function decodeOutcome(wire: unknown): SolveOutcome | null {
 	if (!wire || typeof wire !== 'object') return null;
-	const { diagnostics, blocked, aborted } = wire as Record<string, unknown>;
+	const { diagnostics, blocked, aborted, deferred } = wire as Record<string, unknown>;
 	const hasList = Array.isArray(diagnostics);
 	if (!hasList && blocked === undefined && aborted === undefined) return null;
 	// `'true'` too: a flag that arrives stringified must fail closed, not let a refusal through.
 	const isTrue = (flag: unknown) => flag === true || flag === 'true';
-	return normalizeOutcome(hasList ? diagnostics : [], isTrue(blocked), isTrue(aborted));
+	const deferredIds = Array.isArray(deferred)
+		? deferred.filter((id): id is string => typeof id === 'string' && id !== '')
+		: undefined;
+	return normalizeOutcome(
+		hasList ? diagnostics : [],
+		isTrue(blocked),
+		isTrue(aborted),
+		deferredIds
+	);
 }
 
 /** The legacy verdict, read from Compute's flattened `errors`/`warnings` and their markers. */
@@ -104,6 +118,7 @@ export function finalizeResult<TMesh, TSource>(
 		diagnostics: outcome.diagnostics,
 		blocked: outcome.blocked,
 		aborted: outcome.aborted,
+		...(outcome.deferred && !rejected ? { deferred: outcome.deferred } : {}),
 		...(partial.source !== undefined && !rejected ? { source: partial.source } : {})
 	};
 }

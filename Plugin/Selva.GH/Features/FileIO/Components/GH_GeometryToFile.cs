@@ -15,6 +15,7 @@ using Rhino.Geometry;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Point = Rhino.Geometry.Point;
@@ -118,6 +119,8 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
     /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
+        if (SolveRuntimes.SkipFileOutput(this)) return;
+
         if (!DA.GetDataTree(0, out GH_Structure<IGH_GeometricGoo> geometryTree))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");

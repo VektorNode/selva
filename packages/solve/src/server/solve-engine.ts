@@ -19,7 +19,12 @@ import {
 	type DefinitionRef,
 	type SolveDefinition
 } from '@selvajs/compute/core';
-import { stableStringify, type SelvaEventTarget } from '@selvajs/compute/grasshopper';
+import {
+	stableStringify,
+	withSolveMode,
+	type SelvaEventTarget,
+	type SolveMode
+} from '@selvajs/compute/grasshopper';
 import {
 	createClientCache,
 	type CachedClient,
@@ -123,6 +128,8 @@ export interface SolveEngineSolveArgs {
 	 * the caller that started it.
 	 */
 	sessionId?: string;
+	/** Part of the coalesce key, so a download never joins a preview's flight. Omitted means full. */
+	solveMode?: SolveMode;
 }
 
 export interface SolveEngineStats {
@@ -235,7 +242,7 @@ export class SolveEngine {
 		// who joined, and the joiners would get no progress events.
 		const live = args.selvaEvents ? `:live:${args.selvaEvents.solveId}` : '';
 		const flight = await this.singleFlight.run(
-			`${identity}:${args.server.id}:${this.clientGeneration(client)}:${stableStringify(inputTree)}${live}`,
+			`${identity}:${args.server.id}:${this.clientGeneration(client)}:${withSolveMode(stableStringify(inputTree), args.solveMode)}${live}`,
 			(signal) =>
 				runSolvePipeline({
 					definitionSource,
@@ -244,6 +251,7 @@ export class SolveEngine {
 					responseMaxBytes: this.limits.computeResponseMaxBytes,
 					selvaEvents: args.selvaEvents,
 					sessionId: args.sessionId,
+					solveMode: args.solveMode,
 					...(args.definitionGuid && {
 						headers: { 'X-Selva-Definition': args.definitionGuid }
 					}),

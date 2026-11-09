@@ -26,6 +26,7 @@ import {
 } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
+import type { SolveMode } from '@selvajs/compute/grasshopper';
 import type { ComputeServerConfig, RequestContext, SolveFailureKind } from '@selvajs/platform';
 import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { serverResolver } from './serverResolver.server';
@@ -94,6 +95,8 @@ export interface SolveParams {
 	 * request carries a callback so the definition can emit mid-solve. Ignored otherwise.
 	 */
 	streamId?: string | null;
+	/** See `SolveBodySchema.mode`. */
+	solveMode?: SolveMode;
 	/**
 	 * Report an access refusal as 404 instead of 403.
 	 *
@@ -168,6 +171,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		prepMarks,
 		concealAccessFailure = false,
 		streamId = null,
+		solveMode = 'full',
 		tokenCharged = false
 	} = params;
 	const storage = getStorageProvider();
@@ -456,7 +460,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			defLoadMs,
 			prepMarks,
 			selvaEvents: live.selvaEvents,
-			sessionId: solveSessionId(access, guid)
+			sessionId: solveSessionId(access, guid),
+			solveMode
 		});
 	} finally {
 		live.end(outcome ? solveEndedKind(outcome) : 'error');

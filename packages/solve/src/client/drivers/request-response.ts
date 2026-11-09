@@ -1,7 +1,7 @@
 import { createAsyncThrottle } from '../async-throttle.js';
 import { createSolveMemo, type MeshPolicy } from '../solve-memo.js';
 import { raceAbort } from '../../shared/abort.js';
-import type { SolveFn, SolveResult } from '../../shared/solve-fn.js';
+import type { SolveFn, SolveMode, SolveResult } from '../../shared/solve-fn.js';
 import type { SolveDriver, SolveEventSource, SolveReporter } from './driver.js';
 
 export interface RequestResponseDriverOptions<TMesh> {
@@ -28,6 +28,10 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	// Checked inside the throttled run, not before triggering it, so a hit only serves
 	// after the throttle's latest-wins ordering has picked these values to run.
 	const memo = createSolveMemo<TMesh>({ meshPolicy });
+	// The memo keys on values alone, so it holds one mode's results: a preview and a full result
+	// of the same values differ in their files. Cleared when the mode flips.
+	let memoMode: SolveMode = 'full';
+	let nextMode: SolveMode = 'full';
 
 	// Bumped by `reset`. A run from an older generation belongs to a definition that is gone: it
 	// must neither fill the memo nor report into the session that replaced it.
@@ -51,6 +55,11 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	const throttle = createAsyncThrottle<Record<string, unknown>>(
 		async (values, signal) => {
 			const startedIn = generation;
+			const solveMode = nextMode;
+			if (solveMode !== memoMode) {
+				memo.clear();
+				memoMode = solveMode;
+			}
 			let result: SolveResult<TMesh>;
 			// Only the solve is inside the `try`. A report that throws is a host bug, and landing
 			// here would settle a good solve a second time, as failed.
@@ -61,7 +70,10 @@ export function createRequestResponseDriver<TMesh = unknown>(
 				} else {
 					// Raced: a `SolveFn` that ignores its signal must not pin the throttle's slot past
 					// the deadline. Its late settlement is dropped.
-					const solved = await raceAbort(onSolve(values, signal), signal);
+					const solved = await raceAbort(
+						onSolve(values, signal, solveMode === 'preview' ? { solveMode } : undefined),
+						signal
+					);
 					// Stamped here rather than in the SolveFn: a memo hit never calls it, so values
 					// captured inside would pair the served result with whatever solved last.
 					result = { ...solved, values };
@@ -91,8 +103,22 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	}
 
 	return {
-		solve(values) {
+		solve(values, solveOptions) {
+			nextMode = solveOptions?.solveMode ?? 'full';
 			throttle.trigger(values);
+		},
+		async solveFiles(values, signal) {
+			const startedIn = generation;
+			// One signal for both: the deadline must abort the request itself, not just the race,
+			// or the compute slot stays busy after the UI reports failure.
+			const bounded = AbortSignal.any([signal, AbortSignal.timeout(solveDeadlineMs)]);
+			const result = await raceAbort(
+				onSolve(values, bounded, { solveMode: 'full', skipMeshes: true, liveEvents: false }),
+				bounded
+			);
+			// The definition changed underneath: these files belong to the one that is gone.
+			if (startedIn !== generation) return { outputs: {}, aborted: true };
+			return result;
 		},
 		cancel,
 		get isSolving() {

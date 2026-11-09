@@ -30,6 +30,8 @@ import {
 // Definitions
 // ============================================================================
 
+export const SolveModeSchema = z.enum(['preview', 'full']);
+
 export const SolveBodySchema = z.object({
 	/** Ignored: the solve reads the inputs from the version's stored schema. */
 	inputs: z.array(z.unknown()).optional().meta({ deprecated: true }),
@@ -37,7 +39,13 @@ export const SolveBodySchema = z.object({
 	channel: DefinitionChannelSchema.default('live'),
 	versionId: z.string().optional(),
 	/** Must name this same definition, or the route 400s instead of solving a different one. */
-	definitionUrl: z.string().optional()
+	definitionUrl: z.string().optional(),
+	/**
+	 * `preview` skips the files only a Download output needs, when the definition turns
+	 * `previewSolves` on; the response's outcome lists them as `deferred`. A `full` solve of the
+	 * same values makes them.
+	 */
+	mode: SolveModeSchema.default('full')
 });
 
 export const UpdateDefinitionBodySchema = UpdateMetadataInputSchema;

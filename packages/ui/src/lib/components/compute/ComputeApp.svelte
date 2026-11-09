@@ -23,6 +23,7 @@
 	import { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
+	import { setDeferredFilesContext } from '../../contexts/deferredFilesContext.svelte';
 	import type { Locale, ViewerMessages } from '../../i18n/messages';
 	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
 
@@ -182,6 +183,17 @@
 		schema,
 		scopeKey: externalScopeKey || definitionKey || schema?.id || '',
 		driver
+	});
+
+	setDeferredFilesContext({
+		get files() {
+			return session.files;
+		},
+		get isSolving() {
+			return session.isSolving;
+		},
+		make: () => session.makeFiles(),
+		cancel: () => session.cancelFiles()
 	});
 
 	let isViewerFullscreen = $state(false);

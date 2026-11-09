@@ -265,4 +265,5 @@ export function applyOptionalComputeSettings(
 	if (options.absolutetolerance != null) arglist.absolutetolerance = options.absolutetolerance;
 	if (options.dataversion != null) arglist.dataversion = options.dataversion;
 	if (options.selvaevents != null) arglist.selvaevents = options.selvaevents;
+	if (options.solveMode === 'preview') arglist.selvamode = 'preview';
 }

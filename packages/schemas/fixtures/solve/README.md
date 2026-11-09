@@ -4,6 +4,8 @@ Verdict fixtures shared by both test stacks.
   `solve-event-kinds.test.ts` compare their tables against it.
 - `outcome.json`: a `SolveOutcome` as the plugin serializes it. Written by
   `SolveOutcomeContractTests` (`UPDATE_WIRE_FIXTURES=1`).
+- `outcome-preview.json`: a preview's outcome, with the `deferred` output ids. Written by the
+  same test.
 - `compute-response-selva.json`: the same solve as the VektorNode fork returns it, with the
   `selva` block.
 - `compute-response-legacy.json`: the same solve with markers only, as a stock server or an

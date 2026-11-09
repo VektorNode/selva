@@ -224,6 +224,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("aborted")]
         public bool Aborted { get; set; }
+
+/// <summary>
+/// Output ids (the Context Bake's InstanceGuid) whose files a preview solve skipped. They are made by a full solve of the same inputs. Absent outside a preview.
+/// </summary>
+        [JsonProperty("deferred")]
+        public List<string> Deferred { get; set; } = new List<string>();
     }
 
     public class SolveStartedPayload

@@ -5,7 +5,13 @@
 // Depends on nothing else in this package; `client/` and `server/` both depend on it, never on
 // each other.
 
-export type { SolveFn, SolveResult, SolveDiagnostic } from './solve-fn.js';
+export type {
+	SolveFn,
+	SolveResult,
+	SolveDiagnostic,
+	SolveCallOptions,
+	SolveMode
+} from './solve-fn.js';
 export type { SolveInput } from './solve-input.js';
 export { decodeOutcome, finalizeResult } from './outcome.js';
 export type { SolveOutcome } from './outcome.js';

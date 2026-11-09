@@ -144,6 +144,9 @@
 		         Link="Linked\AbortArm.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\StepProgress.cs"
 		         Link="Linked\StepProgress.cs"/>
+		<!-- The deferral rule; PreviewDeferralReader builds its graph from a GH_Document. -->
+		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\PreviewDeferral.cs"
+		         Link="Linked\PreviewDeferral.cs"/>
 		<Compile Include="..\Selva.GH\Features\Drawing\Goos\StyleJson.cs"
 		         Link="Linked\StyleJson.cs"/>
 		<!-- The tessellator's flatness math, split out of CurveTessellator precisely so it

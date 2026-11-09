@@ -74,6 +74,16 @@ describe('solve', () => {
 			applyOptionalComputeSettings(args, { serverUrl: 'http://x', cachesolve: true });
 			expect(args.cachesolve).toBe(true);
 		});
+
+		it('sends selvamode for a preview only, so a full solve body is unchanged', () => {
+			const preview = base();
+			applyOptionalComputeSettings(preview, { serverUrl: 'http://x', solveMode: 'preview' });
+			expect(preview.selvamode).toBe('preview');
+
+			const full = base();
+			applyOptionalComputeSettings(full, { serverUrl: 'http://x', solveMode: 'full' });
+			expect(full).not.toHaveProperty('selvamode');
+		});
 	});
 });
 

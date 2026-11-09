@@ -151,6 +151,10 @@ export interface SolveOutcome {
 	 * The solve was stopped before it finished.
 	 */
 	aborted: boolean;
+	/**
+	 * Output ids (the Context Bake's InstanceGuid) whose files a preview solve skipped. They are made by a full solve of the same inputs. Absent outside a preview.
+	 */
+	deferred?: string[];
 }
 export interface SolveStartedPayload {}
 export interface SolveEndedPayload {

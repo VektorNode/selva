@@ -46,6 +46,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [publish-from-plugin](./features/publish-from-plugin.md)                     | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
 | [host-aware-elements](./features/host-aware-elements.md)                     | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
 | [compute-sessions](./features/compute-sessions.md)                           | **unfiled** — design only; spans the compute fork and Selva                     |
+| [preview-solves](./features/preview-solves.md)                               | **unfiled** — design only; replaces parafa's own preview mode                   |
 | [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md) | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
 | [triggers](./features/triggers.md)                                           | **unfiled** — design only                                                       |
 | [webhooks](./features/webhooks.md)                                           | **unfiled** — design only                                                       |

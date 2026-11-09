@@ -1,5 +1,5 @@
 import type { SolveEvent } from '@selvajs/schemas';
-import type { SolveResult } from '../../shared/solve-fn.js';
+import type { SolveMode, SolveResult } from '../../shared/solve-fn.js';
 
 /**
  * Transport behind a solve session. `solve()` never returns outputs directly — results
@@ -21,7 +21,14 @@ import type { SolveResult } from '../../shared/solve-fn.js';
  * request silently leaves that promise unresolved until the session is rebuilt or disposed.
  */
 export interface SolveDriver {
-	solve(values: Record<string, unknown>): void;
+	/** A push transport ignores `solveMode`: its solves stay full, so nothing is ever deferred. */
+	solve(values: Record<string, unknown>, options?: { solveMode?: SolveMode }): void;
+	/**
+	 * One full solve of `values` for the files a preview deferred, outside the session: it never
+	 * reports, never fills the memo, builds no meshes and carries no live events. Optional: a
+	 * transport that never previews leaves it out.
+	 */
+	solveFiles?(values: Record<string, unknown>, signal: AbortSignal): Promise<SolveResult>;
 	cancel(): void;
 	readonly isSolving: boolean;
 	/**

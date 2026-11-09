@@ -15,6 +15,7 @@
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { Label } from '#lib/components/primitives/label/index.js';
 	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { getDeferredFilesContext } from '#lib/contexts/deferredFilesContext.svelte.js';
 	import { formatCount, formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
@@ -54,8 +55,35 @@
 	let downloading = $state(false);
 	let downloadError = $state<string | null>(null);
 
+	const deferredContext = getDeferredFilesContext();
+	// This output's files were skipped by a preview, and one full solve makes them.
+	const deferred = $derived.by(() => {
+		const files = deferredContext?.files;
+		return files && files.status !== 'none' && files.ids.includes(item.paramId) ? files : null;
+	});
+	const fileValue = $derived(deferred?.status === 'ready' ? deferred.outputs[item.paramId] : value);
+
+	let now = $state(Date.now());
+	$effect(() => {
+		if (deferred?.status !== 'making') return;
+		now = Date.now();
+		const timer = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
+	const elapsed = $derived.by(() => {
+		if (deferred?.status !== 'making') return '';
+		const s = Math.max(0, Math.floor((now - deferred.startedAt) / 1000));
+		return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+	});
+
 	const filesArray = $derived(
-		!value ? [] : Array.isArray(value) ? value.filter(isFileData) : isFileData(value) ? [value] : []
+		!fileValue
+			? []
+			: Array.isArray(fileValue)
+				? fileValue.filter(isFileData)
+				: isFileData(fileValue)
+					? [fileValue]
+					: []
 	);
 	const fileCount = $derived(filesArray.length);
 	const totalSize = $derived(filesArray.reduce((sum, f) => sum + getBase64FileSize(f.data), 0));
@@ -215,8 +243,69 @@
 	{/each}
 {/snippet}
 
+{#snippet deferredDisplay()}
+	{#if deferred?.status === 'waiting'}
+		<div class="gap-2 flex flex-col">
+			<div
+				class="px-3 py-3 text-sm rounded-md border border-border-strong bg-muted text-muted-foreground"
+			>
+				{t.filesMadeOnDownload}
+			</div>
+			<Button
+				onclick={() => deferredContext?.make()}
+				disabled={deferredContext?.isSolving}
+				class="w-full"
+			>
+				{t.download}
+			</Button>
+		</div>
+	{:else if deferred?.status === 'making'}
+		<div class="gap-2 flex flex-col">
+			<div
+				class="gap-2 px-3 py-3 flex flex-col rounded-md border border-border-strong bg-muted"
+				role="status"
+			>
+				<div class="gap-2 flex items-center justify-between">
+					<span class="text-sm font-medium text-foreground">{t.makingFiles}</span>
+					<span class="text-xs shrink-0 text-muted-foreground tabular-nums">{elapsed}</span>
+				</div>
+				<div class="h-1 overflow-hidden rounded-full bg-selected">
+					<div class="animate-pulse h-full w-full rounded-full bg-primary"></div>
+				</div>
+			</div>
+			<Button variant="outline" onclick={() => deferredContext?.cancel()} class="w-full">
+				{t.cancel}
+			</Button>
+		</div>
+	{:else if deferred?.status === 'empty'}
+		<div
+			class="px-3 py-3 text-sm rounded-md border border-border-strong bg-muted text-muted-foreground"
+		>
+			{t.noFilesForInputs}
+		</div>
+	{:else if deferred?.status === 'failed'}
+		<div class="gap-2 flex flex-col">
+			<div
+				class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"
+			>
+				{deferred.error}
+			</div>
+			<Button
+				variant="outline"
+				onclick={() => deferredContext?.make()}
+				disabled={deferredContext?.isSolving}
+				class="w-full"
+			>
+				{t.tryAgain}
+			</Button>
+		</div>
+	{/if}
+{/snippet}
+
 {#snippet fileDisplay()}
-	{#if fileCount === 0}
+	{#if deferred && deferred.status !== 'ready'}
+		{@render deferredDisplay()}
+	{:else if fileCount === 0}
 		<div
 			class="px-3 py-3 text-sm rounded-md border border-border-strong bg-muted text-muted-foreground"
 		>
@@ -252,6 +341,13 @@
 					</div>
 				{/if}
 			</div>
+			{#if deferred?.status === 'ready'}
+				<span class="text-xs text-muted-foreground">
+					{formatMessage(t.filesMadeIn, {
+						seconds: Math.max(1, Math.round(deferred.durationMs / 1000))
+					})}
+				</span>
+			{/if}
 			{#if hasDuplicates}
 				<div
 					class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"

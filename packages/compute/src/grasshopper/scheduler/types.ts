@@ -5,7 +5,8 @@ import type {
 	DataTree,
 	GrasshopperComputeResponse,
 	GrasshopperComputeConfig,
-	SelvaEventTarget
+	SelvaEventTarget,
+	SolveMode
 } from '../types';
 import type { SolveDefinition } from '@/core/definition-ref';
 
@@ -152,6 +153,11 @@ export interface SchedulerSolveOptions {
 	 * cache key, so sessions still share cached results.
 	 */
 	sessionId?: string;
+	/**
+	 * See {@link SolveMode}. Part of the cache key: a preview's response has no deferred files, so
+	 * a full solve of the same inputs must never be served it.
+	 */
+	solveMode?: SolveMode;
 	/**
 	 * Request headers for this solve only. One replaces a client config header of any casing; the
 	 * transport's own still win. Not part of the cache key.

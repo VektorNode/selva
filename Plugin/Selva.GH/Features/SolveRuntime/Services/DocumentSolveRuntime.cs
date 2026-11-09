@@ -6,7 +6,10 @@ using System.Threading;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Expressions;
 using Newtonsoft.Json;
+using Selva.FileIO;
 using Selva.GH.Features.SolveRuntime.Components;
+using Selva.GH.Features.UIBuilder.Services;
+using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
 using Selva.Schema.Constants;
@@ -37,7 +40,25 @@ public sealed class DocumentSolveRuntime
     /// </summary>
     private const string OutcomeConstant = "SelvaOutcome";
 
+    /// <summary>
+    ///     "preview" asks for a preview solve; anything else, or no constant at all (stock compute,
+    ///     the canvas, the local bridge), is full.
+    /// </summary>
+    private const string ModeConstant = "SelvaMode";
+
     private readonly GH_Document _document;
+
+    // Null until read this solution: a runtime created mid-solve never heard SolutionStart.
+    private bool? _preview;
+
+    // Built on first need. Headless it lasts the document's life, since its wiring never changes;
+    // on the canvas it is rebuilt every solution, since the author rewires.
+    private PreviewDeferral.Plan _plan;
+
+    // Whether each file and Solve Mode component last ran as a preview. Per component, not per
+    // document: an aborted solve, or a cachesolve hit that never reached Grasshopper, must not
+    // leave a component holding the other mode's result. Never ran counts as full.
+    private readonly Dictionary<Guid, bool> _ranAsPreview = new Dictionary<Guid, bool>();
     private readonly ComputeCallbackTransport _compute;
 
     // Per document, not per process: a player session runs a second bridge while the author's
@@ -191,7 +212,20 @@ public sealed class DocumentSolveRuntime
     ///     Collected on first ask after SolutionEnd and kept until the next solution starts, so
     ///     the live <c>solveEnded</c>, the outputs envelope and Compute's constant agree.
     /// </summary>
-    public SolveDiagnostics Verdict() => _verdict ??= SolveDiagnosticsCollector.CollectVerdict(_document);
+    public SolveDiagnostics Verdict() => _verdict ??= CollectVerdict();
+
+    private SolveDiagnostics CollectVerdict()
+    {
+        if (!IsPreview)
+        {
+            return SolveDiagnosticsCollector.CollectVerdict(_document);
+        }
+
+        var plan = Plan();
+        var verdict = SolveDiagnosticsCollector.CollectVerdict(_document, plan.Bakes);
+        verdict.Deferred = plan.DeferredOutputIds();
+        return verdict;
+    }
 
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
@@ -205,6 +239,12 @@ public sealed class DocumentSolveRuntime
         {
             _document.RequestAbortSolution();
         }
+
+        _preview = null;
+        if (!HeadlessGuard.IsHeadless) _plan = null;
+
+        // Before the reporters below: a step this expires must re-run its reporter too.
+        ExpireWhereModeChanged();
 
         // A step re-runs whenever any of its inputs changed, not only the one its reporter sits on
         // (a delay slider feeding the step directly). Re-run that reporter too, or the step runs
@@ -287,7 +327,7 @@ public sealed class DocumentSolveRuntime
         try
         {
             if (!_document.ConstantServer.ContainsKey(OutcomeConstant)) return;
-            var json = JsonConvert.SerializeObject(Verdict().ToOutcome());
+            var json = JsonConvert.SerializeObject(Verdict().ToOutcome(), WireJson.Settings);
             _document.DefineConstant(OutcomeConstant, new GH_Variant(json));
         }
         catch (Exception)
@@ -317,6 +357,98 @@ public sealed class DocumentSolveRuntime
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    // ============================================================================
+    // Preview solves
+    // ============================================================================
+
+    /// <summary>The request asked for a preview and the embedded schema opts in to them.</summary>
+    public bool IsPreview => _preview ??= ReadIsPreview();
+
+    /// <summary>Call from a Solve Mode component's SolveInstance; returns its Preview output.</summary>
+    public bool RunSolveMode(IGH_DocumentObject component)
+    {
+        var preview = IsPreview;
+        _ranAsPreview[component.InstanceGuid] = preview;
+        return preview;
+    }
+
+    /// <summary>
+    ///     Call first in a file component's SolveInstance. True means this preview skips it: return
+    ///     with no output and no runtime message.
+    /// </summary>
+    public bool SkipFileOutput(GH_Component component)
+    {
+        var id = component.InstanceGuid;
+        var canvas = OnAuthorCanvas();
+        var preview = IsPreview;
+        var plan = preview || canvas ? Plan() : PreviewDeferral.Plan.Off;
+        var skip = preview && plan.Defers(id);
+        _ranAsPreview[id] = skip;
+
+        // Author's canvas only: the verdict collects remarks, and a player session has a Rhino
+        // document too, so "not headless" would show this hint to end users. A warning reaches the
+        // verdict anywhere.
+        if (canvas && !skip && plan.Reasons.TryGetValue(id, out var reason))
+        {
+            var remark = $"Made on every preview: {reason}.";
+            if (!component.RuntimeMessages(GH_RuntimeMessageLevel.Remark).Contains(remark))
+            {
+                component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, remark);
+            }
+        }
+
+        return skip;
+    }
+
+    // A player session hides the editor, so the visible editor showing this document means an author.
+    private bool OnAuthorCanvas() =>
+        !HeadlessGuard.IsHeadless
+        && ReferenceEquals(Grasshopper.Instances.ActiveCanvas?.Document, _document)
+        && DefinitionLauncher.IsEditorVisible();
+
+    private bool ReadIsPreview() =>
+        string.Equals(ReadConstant(ModeConstant), "preview", StringComparison.Ordinal) && Plan().Enabled;
+
+    private PreviewDeferral.Plan Plan()
+    {
+        if (_plan != null) return _plan;
+        try
+        {
+            _plan = PreviewDeferralReader.Read(_document);
+        }
+        catch (Exception)
+        {
+            // Never throw into a solve. Off makes every solve full, which is today's behaviour.
+            _plan = PreviewDeferral.Plan.Off;
+        }
+
+        return _plan;
+    }
+
+    /// <summary>
+    ///     A component that last ran in the other mode still holds that mode's result. Expiring it
+    ///     reruns it and everything below it, which on a warm document is all a download costs.
+    /// </summary>
+    private void ExpireWhereModeChanged()
+    {
+        var preview = IsPreview;
+        if (!preview && !_ranAsPreview.ContainsValue(true)) return;
+
+        var plan = preview ? Plan() : PreviewDeferral.Plan.Off;
+        foreach (var obj in _document.Objects)
+        {
+            bool target;
+            if (obj is GH_SolveMode) target = preview;
+            else if (obj is ISelvaFileOutput && obj is IGH_Component) target = preview && plan.Defers(obj.InstanceGuid);
+            else continue;
+
+            var active = (IGH_ActiveObject)obj;
+            if (active.Phase == GH_SolutionPhase.Blank) continue;
+            var ranAsPreview = _ranAsPreview.TryGetValue(obj.InstanceGuid, out var ran) && ran;
+            if (ranAsPreview != target) active.ExpireSolution(false);
         }
     }
 }

@@ -528,6 +528,10 @@ export interface UISchema {
 	 * If true, changes trigger immediate solving. If false, user must press Calculate button.
 	 */
 	instanceSolve?: boolean;
+	/**
+	 * If true, edits solve as previews: file components that only feed a Download output are skipped, and a click on Download runs one full solve. If false or absent, every solve makes every file.
+	 */
+	previewSolves?: boolean;
 	inputs: SchemaInput[];
 	/**
 	 * All output components (print, bake, file download)
@@ -581,7 +585,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.19.0';
+export const UI_SCHEMA_VERSION = '2.20.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

@@ -46,11 +46,16 @@ describe('OrgComputePatchBodySchema', () => {
 });
 
 describe('SolveBodySchema', () => {
-	it('defaults an empty body to a live solve with no values', () => {
-		expect(SolveBodySchema.parse({})).toEqual({ values: {}, channel: 'live' });
+	it('defaults an empty body to a full live solve with no values', () => {
+		expect(SolveBodySchema.parse({})).toEqual({ values: {}, channel: 'live', mode: 'full' });
 	});
 
 	it('rejects a channel that is neither live nor draft', () => {
 		expect(SolveBodySchema.safeParse({ channel: 'preview' }).success).toBe(false);
+	});
+
+	it('takes a preview mode and rejects any other', () => {
+		expect(SolveBodySchema.parse({ mode: 'preview' }).mode).toBe('preview');
+		expect(SolveBodySchema.safeParse({ mode: 'draft' }).success).toBe(false);
 	});
 });

@@ -4,6 +4,7 @@ import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
 import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
 import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { runSolve, mapSolveError, type SolveAccess } from '#lib/server/compute/solve.server.js';
+import { SolveModeSchema } from '@selvajs/server/api';
 
 interface ComputeRequest {
 	/** Read for a remote `definitionUrl` only: a stored definition's inputs come from its schema. */
@@ -19,6 +20,8 @@ interface ComputeRequest {
 	versionId?: string;
 	/** The caller's open live-event stream; see `SolveParams.streamId`. */
 	streamId?: string;
+	/** See `SolveBodySchema.mode`. */
+	mode?: string;
 }
 
 // The URL-addressed solve: takes an arbitrary `definitionUrl`, and is the only
@@ -57,6 +60,14 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 				400,
 				ApiErrorCode.VALIDATION_FAILED,
 				'Missing required fields: values or definitionUrl'
+			);
+		}
+		const mode = SolveModeSchema.default('full').safeParse(body.mode);
+		if (!mode.success) {
+			apiError(
+				400,
+				ApiErrorCode.VALIDATION_FAILED,
+				`Invalid mode: ${String(body.mode)}. Must be 'preview' or 'full'.`
 			);
 		}
 		if (channel !== 'live' && channel !== 'draft') {
@@ -104,7 +115,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			locals,
 			loadStart,
 			prepMarks,
-			streamId: typeof body.streamId === 'string' ? body.streamId : null
+			streamId: typeof body.streamId === 'string' ? body.streamId : null,
+			solveMode: mode.data
 		});
 	} catch (err) {
 		mapSolveError(err, locals);

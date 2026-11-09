@@ -127,6 +127,18 @@
 			onCheckedChange={(checked) => updateSchema({ instanceSolve: checked })}
 		/>
 	</SettingRow>
+	<SettingRow
+		label="Make files on download"
+		for="preview-solves"
+		layout="inline"
+		hint="On: files that only feed a Download output are made when someone downloads them, not on every edit."
+	>
+		<Switch
+			id="preview-solves"
+			checked={schema.previewSolves ?? false}
+			onCheckedChange={(checked) => updateSchema({ previewSolves: checked })}
+		/>
+	</SettingRow>
 </SettingsSection>
 
 <div data-settings-section="app.file" class="flex items-center justify-between gap-2 py-4">

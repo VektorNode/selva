@@ -11,6 +11,7 @@ import type { UISchema } from '@selvajs/schemas';
 import { readExternalValue } from '../external-storage.js';
 import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
 import type { SolveDriver } from '../drivers/driver.js';
+import { createDeferredFiles, type DeferredFiles } from './deferred-files.js';
 import { EMPTY_LIVE_SOLVE, reduceLiveSolve, type LiveSolveState } from '../events/live-solve.js';
 import {
 	applyLoadedValues,
@@ -34,6 +35,10 @@ import {
  * counts. One per solve that lands, whether a host asked for it or an input change did.
  */
 export type SolveSettlement =
+	/**
+	 * With `previewSolves`, `result.deferred` lists the outputs the preview left empty. Their files
+	 * are not merged into `result` or `values`: `makeFiles()` then `files` hold them.
+	 */
 	| { status: 'applied'; result: RetainedSolveResult; diagnostics: SolveDiagnostic[] }
 	/** A held result the user rejected or a newer solve replaced; the screen still shows the one before it. */
 	| { status: 'discarded'; diagnostics: SolveDiagnostic[] }
@@ -98,6 +103,15 @@ export interface SolveSession {
 	abort(): void;
 	readonly meshes: unknown[];
 	/**
+	 * The files the result on screen deferred, and the full solve that makes them. `none` when it
+	 * deferred nothing, which is every result unless the schema turns `previewSolves` on.
+	 */
+	readonly files: DeferredFiles;
+	/** Makes `files` with one full solve of the shown result's values, or joins the running one. Never rejects. */
+	makeFiles(): Promise<void>;
+	/** Stops the full solve `makeFiles()` started; `files` goes back to `waiting`. */
+	cancelFiles(): void;
+	/**
 	 * What the viewer is currently showing, including the `source`/`values` pair a commit path
 	 * needs. Null before the first solve, and again after `rebuild()`. Survives `reportError`: a
 	 * failed solve leaves the last good geometry on screen, so a host committing what it sees
@@ -119,7 +133,8 @@ export interface SolveSession {
 	 * The result for the current inputs, solving only when it has to: right away from the result
 	 * on screen when nothing changed, after the running or held solve when there is one, else
 	 * after a new solve. For an action that needs a fresh result, such as an export. Inputs whose
-	 * result the user just discarded settle as `discarded` rather than ask them again.
+	 * result the user just discarded settle as `discarded` rather than ask them again. A preview
+	 * result settles as `applied` without its deferred files; see {@link SolveSettlement}.
 	 */
 	ensureSolved(): Promise<SolveSettlement>;
 	/** Fires once per settled solve, the ones input changes start included. Returns the unsubscribe. */
@@ -171,6 +186,13 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 
 	const listeners = new Set<() => void>();
 	const emit = () => notifyAll(listeners, undefined);
+
+	const driverSolveFiles = args.driver.solveFiles;
+	const files = createDeferredFiles(
+		driverSolveFiles && ((values, signal) => driverSolveFiles.call(args.driver, values, signal)),
+		emit
+	);
+	const showFiles = () => files.show(state.lastResult);
 
 	const settledListeners = new Set<(settlement: SolveSettlement) => void>();
 	let waiters: ((settlement: SolveSettlement) => void)[] = [];
@@ -244,7 +266,12 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		// async solve — a later setValue must not mutate what's already in flight.
 		lastSent = { ...pickInputValues(currentSchema, state.values) };
 		lastDispatched = lastSent;
-		args.driver.solve(lastSent);
+		// The inputs moved on, so files for the ones on screen are no longer worth waiting for.
+		files.cancel();
+		args.driver.solve(
+			lastSent,
+			currentSchema.previewSolves === true ? { solveMode: 'preview' } : undefined
+		);
 		emit();
 	}
 
@@ -276,6 +303,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			if (!held) return;
 			state.heldResult = null;
 			commitSolveResult(state, held, editedSinceSent());
+			showFiles();
 			land(() => settlementOf(held));
 		},
 
@@ -299,6 +327,15 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 		get meshes() {
 			return state.meshes;
+		},
+		get files() {
+			return files.state;
+		},
+		makeFiles() {
+			return disposed ? Promise.resolve() : files.make();
+		},
+		cancelFiles() {
+			files.cancel();
 		},
 		get lastResult() {
 			return state.lastResult;
@@ -364,6 +401,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// even where the two share input ids.
 			args.driver.reset?.();
 			Object.assign(state, createInitialState(schema, scopeKey, readExternalValue));
+			showFiles();
 			if (Object.keys(state.values).length > 0 && schema.instanceSolve !== false) {
 				dispatch();
 			} else {
@@ -383,6 +421,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 				rejected ? { ...result, outputs: blankOutputs(currentSchema), meshes: [] } : result,
 				edited
 			);
+			showFiles();
 			// A result a queued solve replaces never asks the user anything, and never settles.
 			if (args.driver.hasQueued) state.heldResult = null;
 			// A held result settles on acknowledge() or discard().
@@ -415,6 +454,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			disposed = true;
 			stopEvents?.();
 			listeners.clear();
+			files.show(null);
 			settledListeners.clear();
 			args.driver.reset?.();
 			abandon();

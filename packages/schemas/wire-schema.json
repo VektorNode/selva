@@ -180,7 +180,15 @@
 					"type": "boolean",
 					"description": "A Message component raised an error, or the solve was aborted. The outputs are not a result."
 				},
-				"aborted": { "type": "boolean", "description": "The solve was stopped before it finished." }
+				"aborted": {
+					"type": "boolean",
+					"description": "The solve was stopped before it finished."
+				},
+				"deferred": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "Output ids (the Context Bake's InstanceGuid) whose files a preview solve skipped. They are made by a full solve of the same inputs. Absent outside a preview."
+				}
 			},
 			"required": ["diagnostics", "blocked", "aborted"],
 			"additionalProperties": false

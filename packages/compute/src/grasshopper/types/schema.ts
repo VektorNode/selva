@@ -49,6 +49,14 @@ export interface SelvaEventTarget {
 }
 
 /**
+ * `preview` lets the Selva plugin skip the files only a Download button needs; the outcome lists
+ * the outputs it skipped, and a `full` solve of the same inputs makes them. The VektorNode fork
+ * hands it to the document as the `SelvaMode` constant; a stock server or an older plugin ignores
+ * it and solves in full.
+ */
+export type SolveMode = 'preview' | 'full';
+
+/**
  * Definition source (used in args and response)
  */
 export interface GrasshopperDefinitionSource {
@@ -67,6 +75,8 @@ export interface GrasshopperDefinitionSource {
 export interface GrasshopperComputeConfig extends ComputeConfig, GrasshopperBaseSchema {
 	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
 	selvaevents?: SelvaEventTarget | null;
+	/** See {@link SolveMode}. Sent only for `preview`, so a full solve's body is unchanged. */
+	solveMode?: SolveMode;
 }
 
 /**
@@ -79,6 +89,8 @@ export interface GrasshopperRequestSchema
 	values?: DataTree[];
 	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
 	selvaevents?: SelvaEventTarget | null;
+	/** The wire form of {@link SolveMode}: present only for a preview. */
+	selvamode?: 'preview';
 }
 
 /**

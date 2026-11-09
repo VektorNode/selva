@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.GH.Features.SolveRuntime.Services;
+using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.Schema.Models;
 using Xunit;
 
@@ -42,10 +44,21 @@ public class SolveOutcomeContractTests
     }
 
     [Fact]
-    public void Outcome_MatchesTheCrossStackFixture()
+    public void Outcome_MatchesTheCrossStackFixture() => AssertMatchesFixture("outcome.json", SampleVerdict());
+
+    /// <summary>A preview that skipped one Download's files. Outside a preview <c>deferred</c> is absent.</summary>
+    [Fact]
+    public void PreviewOutcome_MatchesTheCrossStackFixture()
     {
-        var path = Path.Combine(TestPaths.RepoRoot(), "packages", "schemas", "fixtures", "solve", "outcome.json");
-        var produced = JToken.Parse(JsonConvert.SerializeObject(SampleVerdict().ToOutcome()));
+        var bake = Guid.Parse("bbbbbbbb-0000-4000-8000-000000000001");
+        AssertMatchesFixture("outcome-preview.json",
+            new SolveDiagnostics { Deferred = new List<string> { bake.ToString() } });
+    }
+
+    private static void AssertMatchesFixture(string name, SolveDiagnostics verdict)
+    {
+        var path = Path.Combine(TestPaths.RepoRoot(), "packages", "schemas", "fixtures", "solve", name);
+        var produced = JToken.Parse(JsonConvert.SerializeObject(verdict.ToOutcome(), WireJson.Settings));
 
         if (Environment.GetEnvironmentVariable("UPDATE_WIRE_FIXTURES") == "1")
         {

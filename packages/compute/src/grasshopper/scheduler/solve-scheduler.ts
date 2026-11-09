@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import { isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
 import { ResponseCache } from './response-cache';
+import { withSolveMode } from './solve-mode-key';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 import type {
@@ -38,6 +39,7 @@ interface PendingItem {
 	externalSignal?: AbortSignal;
 	selvaevents?: SelvaEventTarget;
 	sessionId?: string;
+	solveMode?: SchedulerSolveOptions['solveMode'];
 	headers?: Record<string, string>;
 	onServerTiming?: SchedulerSolveOptions['onServerTiming'];
 	/** On `externalSignal`: aborts a running item, settles a queued one as ABORTED. */
@@ -367,7 +369,7 @@ export class SolveScheduler {
 		let key = '';
 		if (this.cache.enabled || this.onStart || this.onSettle || this.onSuperseded) {
 			try {
-				key = hashes.key;
+				key = withSolveMode(hashes.key, options?.solveMode);
 			} catch (error) {
 				// A tree too deep or too large to stringify can't be sent either.
 				return Promise.reject(
@@ -418,6 +420,7 @@ export class SolveScheduler {
 				externalSignal: options?.signal,
 				selvaevents: options?.selvaevents,
 				sessionId: options?.sessionId,
+				solveMode: options?.solveMode,
 				headers: options?.headers,
 				onServerTiming: options?.onServerTiming
 			};
@@ -572,6 +575,7 @@ export class SolveScheduler {
 				...(this.retry !== undefined && { retry: this.retry }),
 				...(item.selvaevents !== undefined && { selvaevents: item.selvaevents }),
 				...(item.sessionId !== undefined && { sessionId: item.sessionId }),
+				...(item.solveMode !== undefined && { solveMode: item.solveMode }),
 				...(item.headers !== undefined && {
 					headers: mergeUnder(this.baseConfig.headers, item.headers)
 				})

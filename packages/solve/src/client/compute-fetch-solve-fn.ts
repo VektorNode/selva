@@ -123,7 +123,11 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		return rateLimitedError(retryAfterSeconds);
 	}
 
-	return async (values, signal): Promise<SolveResult<TMesh, GrasshopperComputeResponse>> => {
+	return async (
+		values,
+		signal,
+		call = {}
+	): Promise<SolveResult<TMesh, GrasshopperComputeResponse>> => {
 		const remainingMs = cooldownUntil - Date.now();
 		if (remainingMs > 0) throw rateLimited(remainingMs / 1000);
 
@@ -132,7 +136,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const outputs = opts.outputs();
 		const channel = opts.channel?.();
 		const versionId = opts.versionId?.();
-		const streamId = opts.streamId?.();
+		const streamId = call.liveEvents === false ? null : opts.streamId?.();
 		const bearerToken = opts.bearerToken?.();
 
 		const payload = JSON.stringify({
@@ -140,7 +144,8 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			values,
 			definitionUrl: opts.definitionUrl(),
 			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {}),
-			...(streamId ? { streamId } : {})
+			...(streamId ? { streamId } : {}),
+			...(call.solveMode === 'preview' ? { mode: 'preview' } : {})
 		});
 
 		let res: Response;
@@ -246,7 +251,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const rejected = outcome.blocked || outcome.aborted;
 
 		const meshes =
-			opts.meshes && !rejected
+			opts.meshes && !rejected && !call.skipMeshes
 				? await opts.meshes.extract(processor.response, { debug, signal })
 				: [];
 

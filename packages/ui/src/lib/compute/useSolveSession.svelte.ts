@@ -70,6 +70,11 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get meshes() {
 			return track(() => session.meshes);
 		},
+		get files() {
+			return track(() => session.files);
+		},
+		makeFiles: () => session.makeFiles(),
+		cancelFiles: () => session.cancelFiles(),
 		get lastResult() {
 			return track(() => session.lastResult);
 		},

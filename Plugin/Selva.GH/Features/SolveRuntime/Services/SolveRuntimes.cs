@@ -19,4 +19,11 @@ public static class SolveRuntimes
     /// <summary>Null for a null document, so callers can pass <c>OnPingDocument()</c> straight in.</summary>
     public static DocumentSolveRuntime For(GH_Document document) =>
         document == null ? null : Runtimes.GetValue(document, d => new DocumentSolveRuntime(d));
+
+    /// <summary>
+    ///     The first line of every file component's SolveInstance: <c>if (SolveRuntimes.SkipFileOutput(this)) return;</c>.
+    ///     Without it, a component is still reported deferred but makes its file in every preview.
+    /// </summary>
+    public static bool SkipFileOutput(GH_Component component) =>
+        For(component?.OnPingDocument())?.SkipFileOutput(component) == true;
 }

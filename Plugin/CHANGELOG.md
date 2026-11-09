@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Preview solves, for a schema with `previewSolves` on. A Rhino.Compute solve sent as a preview skips each Selva file component whose every recipient is a Context Bake the layout shows only as a Download, and lists those outputs in the verdict's `deferred`. A file component that feeds a Download but also anything else is made every solve; on the canvas a remark says why.
+- Solve Mode (Selva › Utilities): its `Preview` output is true in a preview solve, to gate production-only work above the file components.
+
 ### Changed
 
 - The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.

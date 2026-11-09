@@ -124,6 +124,12 @@ namespace Selva.Schema.Models
         [JsonProperty("instanceSolve", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? InstanceSolve { get; set; } = true;
 
+/// <summary>
+/// If true, edits solve as previews: file components that only feed a Download output are skipped, and a click on Download runs one full solve. If false or absent, every solve makes every file.
+/// </summary>
+        [JsonProperty("previewSolves")]
+        public bool? PreviewSolves { get; set; }
+
         [JsonProperty("inputs")]
         public List<SchemaInput> Inputs { get; set; } = new List<SchemaInput>();
 

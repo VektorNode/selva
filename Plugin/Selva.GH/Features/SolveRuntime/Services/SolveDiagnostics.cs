@@ -48,6 +48,9 @@ public class SolveDiagnostics
     /// <summary>The solution was stopped before it finished. Always also <see cref="Blocked" />.</summary>
     public bool Aborted { get; private set; }
 
+    /// <summary>Output ids whose files this preview skipped. Null outside a preview.</summary>
+    public List<string> Deferred { get; set; }
+
     public bool HasAny => Messages.Count > 0;
 
     /// <summary>The wire vocabulary of <c>solveEnded.kind</c>, shared with the Selva server.</summary>
@@ -58,7 +61,8 @@ public class SolveDiagnostics
         {
             Diagnostics = new List<SolveDiagnostic>(Messages),
             Blocked = Blocked,
-            Aborted = Aborted
+            Aborted = Aborted,
+            Deferred = Deferred is { Count: > 0 } ? new List<string>(Deferred) : null
         };
 
     /// <summary>

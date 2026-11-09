@@ -25,6 +25,7 @@ export type {
 	GrasshopperComputeResponse,
 	SelvaEventTarget,
 	SelvaResponseBlock,
+	SolveMode,
 	OutputParamSchema,
 	InputParamSchema
 } from './schema';

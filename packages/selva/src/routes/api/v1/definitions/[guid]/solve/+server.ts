@@ -69,6 +69,7 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 			values: body.values,
 			channel: body.channel,
 			versionId: body.versionId ?? null,
+			solveMode: body.mode,
 			request,
 			locals,
 			loadStart,

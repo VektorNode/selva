@@ -14,7 +14,8 @@ import {
 import type {
 	DataTree,
 	GrasshopperComputeResponse,
-	SelvaEventTarget
+	SelvaEventTarget,
+	SolveMode
 } from '@selvajs/compute/grasshopper';
 import type { CachedClient } from './client-cache.js';
 import { isByteCacheRef } from './definition-byte-cache.js';
@@ -39,6 +40,8 @@ export interface SolvePipelineArgs {
 	selvaEvents?: SelvaEventTarget;
 	/** The starting caller's. Joiners route on it too, which only costs them a warm child. */
 	sessionId?: string;
+	/** In the coalesce key: a preview carries no deferred files, so a full solve must never join one. */
+	solveMode?: SolveMode;
 	/** Request headers for this solve only, e.g. `X-Selva-Definition`. */
 	headers?: Record<string, string>;
 	/**
@@ -166,6 +169,7 @@ export async function runSolvePipeline(
 				signal: args.signal,
 				selvaevents: args.selvaEvents,
 				sessionId: args.sessionId,
+				solveMode: args.solveMode,
 				headers: args.headers,
 				onServerTiming: (t) => {
 					rhino = t;

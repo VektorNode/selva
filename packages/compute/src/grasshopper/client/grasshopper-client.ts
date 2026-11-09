@@ -15,7 +15,8 @@ import type {
 	GrasshopperComputeConfig,
 	GrasshopperComputeResponse,
 	DataTree,
-	SelvaEventTarget
+	SelvaEventTarget,
+	SolveMode
 } from '../types';
 import { isDefinitionRef, isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
 import { SolveScheduler } from '../scheduler/solve-scheduler';
@@ -37,6 +38,8 @@ export interface SolveOptions {
 	selvaevents?: SelvaEventTarget;
 	/** Routes this solve to its session's warm child; see {@link ComputeConfig.sessionId}. */
 	sessionId?: string;
+	/** See {@link SolveMode}. Omitted means full. */
+	solveMode?: SolveMode;
 	/**
 	 * Request headers for this solve only. One replaces a client config header of any casing; the
 	 * transport's own still win.
@@ -273,6 +276,7 @@ export default class GrasshopperClient {
 				...(options?.retry !== undefined && { retry: options.retry }),
 				...(options?.selvaevents !== undefined && { selvaevents: options.selvaevents }),
 				...(options?.sessionId !== undefined && { sessionId: options.sessionId }),
+				...(options?.solveMode !== undefined && { solveMode: options.solveMode }),
 				...(options?.headers !== undefined && {
 					headers: mergeUnder(this.config.headers, options.headers)
 				})

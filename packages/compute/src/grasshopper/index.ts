@@ -16,6 +16,7 @@ export { default as GrasshopperResponseProcessor } from './client/grasshopper-re
 // SCHEDULER
 // ============================================================================
 export { SolveScheduler } from './scheduler/solve-scheduler';
+export { withSolveMode } from './scheduler/solve-mode-key';
 export type {
 	SchedulerMode,
 	CacheOptions,
@@ -85,6 +86,7 @@ export type {
 	GrasshopperComputeConfig,
 	SelvaEventTarget,
 	SelvaResponseBlock,
+	SolveMode,
 	GrasshopperComputeResponse,
 	InputParamSchema,
 	OutputParamSchema,

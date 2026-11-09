@@ -140,3 +140,30 @@ describe('finalizeResult', () => {
 		expect(result.warnings).toHaveLength(2);
 	});
 });
+
+describe('deferred files', () => {
+	const preview = { diagnostics: [], blocked: false, aborted: false, deferred: ['bake-1', '', 7] };
+
+	it('keeps the string ids a preview deferred, and omits an empty list', () => {
+		expect(decodeOutcome(preview)?.deferred).toEqual(['bake-1']);
+		expect(decodeOutcome({ ...preview, deferred: [] })).not.toHaveProperty('deferred');
+		expect(decodeOutcome({ diagnostics: [], blocked: false, aborted: false })).not.toHaveProperty(
+			'deferred'
+		);
+	});
+
+	it('decodes the plugin preview outcome', () => {
+		expect(decodeOutcome(fixture('outcome-preview.json'))).toEqual({
+			diagnostics: [],
+			blocked: false,
+			aborted: false,
+			deferred: ['bbbbbbbb-0000-4000-8000-000000000001']
+		});
+	});
+
+	it('reaches the result, unless the solve was rejected', () => {
+		expect(finalizeResult({ outputs: {} }, decodeOutcome(preview)!).deferred).toEqual(['bake-1']);
+		const blocked = decodeOutcome({ ...preview, blocked: true })!;
+		expect(finalizeResult({ outputs: {} }, blocked)).not.toHaveProperty('deferred');
+	});
+});

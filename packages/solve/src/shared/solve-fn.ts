@@ -1,4 +1,7 @@
+import type { SolveMode } from '@selvajs/compute/grasshopper';
 import type { SolveDiagnostic } from '@selvajs/schemas';
+
+export type { SolveMode };
 
 /**
  * The solve contract — what a solve returns and what a caller supplies to run one.
@@ -92,10 +95,26 @@ export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	 * yet", and a consumer that needs the pair requires a request/response driver. See `SolveDriver`.
 	 */
 	values?: Record<string, unknown>;
+	/**
+	 * Output ids whose files this preview skipped; a full solve of `values` makes them. Absent from
+	 * a full solve, and from a plugin or server that predates previews.
+	 */
+	deferred?: string[];
+}
+
+/** Per-call options. A `SolveFn` that cannot honour one ignores it and solves in full. */
+export interface SolveCallOptions {
+	/** Omitted means full. See `SolveMode` in `@selvajs/compute/grasshopper`. */
+	solveMode?: SolveMode;
+	/** The caller discards the meshes, so don't build them: they are GPU-backed and nobody would free them. */
+	skipMeshes?: boolean;
+	/** False: don't attach this solve to the tab's live-event stream, whose events belong to the session's solve. */
+	liveEvents?: boolean;
 }
 
 /** Implementations should listen to `signal` and abort/clean up when it fires. */
 export type SolveFn<TMesh = unknown, TSource = unknown> = (
 	values: Record<string, unknown>,
-	signal: AbortSignal
+	signal: AbortSignal,
+	options?: SolveCallOptions
 ) => Promise<SolveResult<TMesh, TSource>>;

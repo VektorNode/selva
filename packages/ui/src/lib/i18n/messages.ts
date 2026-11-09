@@ -231,6 +231,15 @@ export interface ViewerMessages {
 	downloadFiles: string;
 	downloading: string;
 	downloadFailed: string;
+	/** A preview skipped this output's files; a click makes them. */
+	filesMadeOnDownload: string;
+	download: string;
+	makingFiles: string;
+	/** `{seconds}` is replaced with how long the full solve took. */
+	filesMadeIn: string;
+	noFilesForInputs: string;
+	tryAgain: string;
+	cancel: string;
 	copy: string;
 	copied: string;
 	chartReceiving: string;
@@ -442,6 +451,13 @@ const en: ViewerMessages = {
 	downloadFiles: 'Download {count} Files',
 	downloading: 'Downloading...',
 	downloadFailed: 'Download failed',
+	filesMadeOnDownload: 'Made when you download',
+	download: 'Download',
+	makingFiles: 'Making files',
+	filesMadeIn: 'Made in {seconds} s',
+	noFilesForInputs: 'Nothing to download for these inputs.',
+	tryAgain: 'Try again',
+	cancel: 'Cancel',
 	copy: 'Copy',
 	copied: 'Copied!',
 	chartReceiving: 'Receiving chart data...',
@@ -650,6 +666,13 @@ const de: ViewerMessages = {
 	downloadFiles: '{count} Dateien herunterladen',
 	downloading: 'Wird heruntergeladen…',
 	downloadFailed: 'Download fehlgeschlagen',
+	filesMadeOnDownload: 'Wird beim Herunterladen erstellt',
+	download: 'Herunterladen',
+	makingFiles: 'Dateien werden erstellt',
+	filesMadeIn: 'Erstellt in {seconds} s',
+	noFilesForInputs: 'Für diese Eingaben gibt es nichts herunterzuladen.',
+	tryAgain: 'Erneut versuchen',
+	cancel: 'Abbrechen',
 	copy: 'Kopieren',
 	copied: 'Kopiert!',
 	chartReceiving: 'Diagrammdaten werden empfangen…',

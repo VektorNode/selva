@@ -1618,6 +1618,19 @@
 			]
 		},
 		{
+			"guid": "78B50B54-AB29-49BC-A6AB-902531C15AA6",
+			"class": "GH_SolveMode",
+			"file": "Plugin/Selva.GH/Features/SolveRuntime/Components/GH_SolveMode.cs",
+			"inputs": [],
+			"outputs": [
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Preview",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "7A284A84-2669-46B8-9FCB-46161D611689",
 			"class": "GH_RenderPdf",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_RenderPdf.cs",

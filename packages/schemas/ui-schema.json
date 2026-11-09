@@ -848,7 +848,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.19.0",
+					"default": "2.20.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -873,6 +873,10 @@
 					"type": "boolean",
 					"default": true,
 					"description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
+				},
+				"previewSolves": {
+					"type": "boolean",
+					"description": "If true, edits solve as previews: file components that only feed a Download output are skipped, and a click on Download runs one full solve. If false or absent, every solve makes every file."
 				},
 				"inputs": {
 					"type": "array",

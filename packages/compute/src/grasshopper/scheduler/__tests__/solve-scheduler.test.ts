@@ -594,6 +594,30 @@ describe('SolveScheduler', () => {
 			});
 		});
 
+		it('never serves a preview to a full solve of the same inputs', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 100_000 }
+			});
+			const inputs = [tree('x')];
+
+			const preview = scheduler.solve('def', inputs, { solveMode: 'preview' });
+			await vi.waitFor(() => expect(queue.length).toBe(1));
+			queue[0].release(makeResponse('preview'));
+			await preview;
+
+			const full = scheduler.solve('def', inputs);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('full'));
+			expect((await full).filename).toBe('full');
+
+			expect((await scheduler.solve('def', inputs, { solveMode: 'preview' })).filename).toBe(
+				'preview'
+			);
+			expect(queue).toHaveLength(2);
+		});
+
 		it('latest-wins: a cache hit supersedes the older in-flight solve', async () => {
 			const { executor, queue } = deferredExecutor();
 			const onSettle = vi.fn();
