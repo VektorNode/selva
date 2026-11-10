@@ -1,5 +1,12 @@
 # @selvajs/ui
 
+## 7.1.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [e3c4338]
+  - @selvajs/visualization@1.8.0-beta.2
+
 ## 7.1.0-beta.3
 
 ### Minor Changes
