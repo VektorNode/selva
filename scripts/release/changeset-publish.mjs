@@ -120,17 +120,19 @@ for (const { name, version, found } of checks) {
 
 console.info('');
 
+// exitCode, not process.exit(): exiting while fetch's keep-alive sockets close crashed Node 24 on
+// Windows (libuv "UV_HANDLE_CLOSING" assertion, exit 0xC0000409) after printing success.
 if (missing.length > 0) {
 	console.error(
 		`✗ ${missing.length} package(s) are not on npm at their workspace version:\n` +
 			missing.map((p) => `  · ${p}`).join('\n') +
 			'\n'
 	);
-	process.exit(result.status ?? 1);
+	process.exitCode = result.status ?? 1;
+} else {
+	console.info(
+		'✓ Every publishable package is on npm at its workspace version — the release succeeded ' +
+			'(changeset publish exited non-zero on redundant re-publishes). Treating as success.\n'
+	);
+	process.exitCode = 0;
 }
-
-console.info(
-	'✓ Every publishable package is on npm at its workspace version — the release succeeded ' +
-		'(changeset publish exited non-zero on redundant re-publishes). Treating as success.\n'
-);
-process.exit(0);
