@@ -1,5 +1,11 @@
 # @selvajs/visualization
 
+## 1.8.0-beta.3
+
+### Patch Changes
+
+- 4ed062b: Concrete finish no longer shows jagged dark dashes and stipple: bug holes are now sparse and round, over broad pour clouds and a faint sand grain.
+
 ## 1.8.0-beta.2
 
 ### Minor Changes
