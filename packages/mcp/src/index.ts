@@ -6,6 +6,17 @@ export type {
 	SelvaMcpServer,
 	ToolCallRecord
 } from './server.js';
+export {
+	appResource,
+	MCP_APP_MIME_TYPE,
+	SOLVE_VIEW_KEY,
+	type AppCsp,
+	type AppResourceOptions,
+	type ToolUi,
+	type SolveViewData,
+	type ToolVisibility
+} from './app.js';
+export { solveView, SOLVE_VIEW_URI } from './views.js';
 export { tool, toolkit, fromOperation, inputFrom } from './tool.js';
 export type {
 	Annotations,

@@ -314,3 +314,13 @@ describe('materialAppearanceForLook', () => {
 		expect(appearance.cullBackfaces).toBe(LOOK_PRESETS[look].cullBackfaces);
 	});
 });
+
+describe('applyDefaults environment', () => {
+	it('loads the bundled HDR unless told otherwise, and none for `hdrPath: false`', () => {
+		expect(applyDefaults({}).environment.hdrPath).toBe('/baseHDR.hdr');
+		expect(applyDefaults({ environment: { hdrPath: '/studio.hdr' } }).environment.hdrPath).toBe(
+			'/studio.hdr'
+		);
+		expect(applyDefaults({ environment: { hdrPath: false } }).environment.hdrPath).toBe(false);
+	});
+});

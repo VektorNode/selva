@@ -132,7 +132,10 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			hemisphereIntensity: options.lighting?.hemisphereIntensity ?? preset.hemisphereIntensity
 		},
 		environment: {
-			hdrPath: options.environment?.hdrPath || '/baseHDR.hdr',
+			hdrPath:
+				options.environment?.hdrPath === false
+					? false
+					: options.environment?.hdrPath || '/baseHDR.hdr',
 			backgroundColor: options.environment?.backgroundColor || new THREE.Color(0xf0f0f0),
 			enableEnvironmentLighting: options.environment?.enableEnvironmentLighting ?? true,
 			sceneUp: options.environment?.sceneUp || defaultUp,

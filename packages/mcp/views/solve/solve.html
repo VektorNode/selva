@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Solve in 3D</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				--fg: var(--color-text-primary, #1f2328);
+				--muted: var(--color-text-secondary, #656d76);
+				--bg: var(--color-background-primary, #ffffff);
+				--line: var(--color-border-primary, #d0d7de);
+			}
+			@media (prefers-color-scheme: dark) {
+				:root:not([data-theme='light']) {
+					--fg: var(--color-text-primary, #e6edf3);
+					--muted: var(--color-text-secondary, #8d96a0);
+					--bg: var(--color-background-primary, #0d1117);
+					--line: var(--color-border-primary, #30363d);
+				}
+			}
+			:root[data-theme='dark'] {
+				--fg: var(--color-text-primary, #e6edf3);
+				--muted: var(--color-text-secondary, #8d96a0);
+				--bg: var(--color-background-primary, #0d1117);
+				--line: var(--color-border-primary, #30363d);
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				background: var(--bg);
+				color: var(--fg);
+				font: 14px/1.4 var(--font-sans, system-ui, sans-serif);
+			}
+			header {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 8px 12px;
+				border-bottom: 1px solid var(--line);
+			}
+			h1 {
+				flex: 1;
+				margin: 0;
+				font-size: 14px;
+				font-weight: 600;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			button {
+				font: inherit;
+				color: inherit;
+				background: transparent;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				padding: 2px 10px;
+				cursor: pointer;
+			}
+			#stage {
+				position: relative;
+				height: 420px;
+			}
+			body.fullscreen #stage {
+				height: calc(100vh - 41px);
+			}
+			#status {
+				position: absolute;
+				inset: 0;
+				display: grid;
+				place-items: center;
+				padding: 16px;
+				text-align: center;
+				color: var(--muted);
+				pointer-events: none;
+			}
+		</style>
+	</head>
+	<body>
+		<header>
+			<h1 id="title">Solve in 3D</h1>
+			<button id="fit" type="button" hidden>Fit</button>
+			<button id="fullscreen" type="button" hidden>Fullscreen</button>
+		</header>
+		<div id="stage"><div id="status">Waiting for the solve…</div></div>
+		<script type="module" src="./main.ts"></script>
+	</body>
+</html>

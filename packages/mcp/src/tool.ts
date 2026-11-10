@@ -1,4 +1,5 @@
 import { z, type ZodType } from 'zod';
+import type { ToolUi } from './app.js';
 import type { Api } from './client.js';
 import type { ErrorHint } from './errors.js';
 import { jsonOutput, type ToolOutput } from './output.js';
@@ -36,6 +37,8 @@ export interface ToolDefinition<Ops = never, Args = Record<string, unknown>> {
 	calls: string[];
 	run(api: Api<Ops>, args: Args, ctx: ToolContext): Promise<ToolOutput | string>;
 	errorHint?: ErrorHint;
+	/** The MCP App view a client shows with this tool's results, and who may call it. */
+	ui?: ToolUi;
 }
 
 export function tool<Ops = never, Args = Record<string, unknown>>(

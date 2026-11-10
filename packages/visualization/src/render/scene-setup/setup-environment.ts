@@ -19,6 +19,10 @@ export function setupEnvironment(
 			renderer,
 			environmentRotationFor(config.environment.sceneUp ?? defaultUp)
 		);
+		if (config.environment.hdrPath === false) {
+			config.events.onReady?.();
+			return;
+		}
 		new HDRLoader().load(
 			config.environment.hdrPath || '/baseHDR.hdr',
 			function (envMap) {

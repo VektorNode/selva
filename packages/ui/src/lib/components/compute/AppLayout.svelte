@@ -193,6 +193,14 @@
 	let requestedLeftTabId = $state<string | null>(null);
 	let requestedRightTabId = $state<string | null>(null);
 
+	const leftDefaultSize = $derived(isTwoPanelMode ? 50 : hasViewer && hasRightPanel ? 22 : 30);
+	const rightDefaultSize = $derived(isTwoPanelMode ? 50 : 25);
+	// Paneforge renders a pane without a defaultSize as `flex-grow: 1` until it mounts, beside the
+	// side panes' 22–30: the viewer rendered a sliver, then jumped to its share (CLS ~0.4).
+	const viewerDefaultSize = $derived(
+		100 - (hasLeftPanel ? leftDefaultSize : 0) - (hasRightPanel ? rightDefaultSize : 0)
+	);
+
 	const layoutKey = $derived(
 		`${hasLeftPanel ? 'L' : ''}${hasViewer ? 'V' : ''}${hasRightPanel ? 'R' : ''}`
 	);
@@ -503,7 +511,7 @@
 					<Resizable.Pane
 						bind:this={leftPaneRef}
 						order={1}
-						defaultSize={isTwoPanelMode ? 50 : hasViewer && hasRightPanel ? 22 : 30}
+						defaultSize={leftDefaultSize}
 						minSize={15}
 						maxSize={45}
 						collapsible
@@ -531,7 +539,12 @@
 				{/if}
 
 				{#if hasViewer}
-					<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
+					<Resizable.Pane
+						order={2}
+						defaultSize={viewerDefaultSize}
+						minSize={20}
+						class="min-h-0 flex flex-col"
+					>
 						<Viewer
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
@@ -562,7 +575,7 @@
 					<Resizable.Pane
 						bind:this={rightPaneRef}
 						order={3}
-						defaultSize={isTwoPanelMode ? 50 : 25}
+						defaultSize={rightDefaultSize}
 						minSize={15}
 						maxSize={45}
 						collapsible

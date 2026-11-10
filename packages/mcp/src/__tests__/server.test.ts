@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { appResource, MCP_APP_MIME_TYPE } from '../app.js';
 import { ApiCallError } from '../errors.js';
 import { createMcpServer, type McpServerOptions, type ToolCallRecord } from '../server.js';
 import { fromOperation, inputFrom, tool } from '../tool.js';
@@ -404,6 +405,108 @@ describe('createMcpServer', () => {
 		await expect(server.verify()).rejects.toThrow(
 			/getOrdersById is missing[\s\S]*postJobsByIdSolve needs `write`/
 		);
+	});
+});
+
+describe('MCP App views', () => {
+	const view = appResource({
+		uri: 'ui://test/plan.html',
+		name: 'Plan',
+		html: () => '<!doctype html><title>Plan</title>',
+		csp: { connectDomains: ['https://host'] },
+		prefersBorder: false
+	});
+	const plan = tool({
+		name: 'plan',
+		description: 'The plan.',
+		input: z.object({}),
+		calls: ['getOrders'],
+		ui: { resourceUri: 'ui://test/plan.html' },
+		run: async () => ({ text: `Plan, key ${KEY}`, meta: { plan: { runs: 3, key: KEY } } })
+	});
+	const geometry = tool({
+		name: 'plan_geometry',
+		description: 'Its geometry, for the view.',
+		input: z.object({}),
+		calls: ['getOrders'],
+		ui: { resourceUri: 'ui://test/plan.html', visibility: ['app'] },
+		run: async () => 'mesh'
+	});
+
+	function serveViews(resources = [view]) {
+		return createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: fakeFetch([]).fetch,
+			openapi: SPEC,
+			tools: [plan, geometry],
+			resources
+		});
+	}
+
+	it('names each tool’s view and who may call it', async () => {
+		const { tools } = (await rpc(serveViews(), 'tools/list')) as {
+			tools: { name: string; _meta?: unknown }[];
+		};
+		expect(tools.map((t) => [t.name, t._meta])).toEqual([
+			[
+				'plan',
+				{ ui: { resourceUri: 'ui://test/plan.html' }, 'ui/resourceUri': 'ui://test/plan.html' }
+			],
+			[
+				'plan_geometry',
+				{
+					ui: { resourceUri: 'ui://test/plan.html', visibility: ['app'] },
+					'ui/resourceUri': 'ui://test/plan.html'
+				}
+			]
+		]);
+	});
+
+	it('serves the view as an MCP App with its CSP, listed and read alike', async () => {
+		const server = serveViews();
+		const meta = { ui: { csp: { connectDomains: ['https://host'] }, prefersBorder: false } };
+		const { resources } = await rpc(server, 'resources/list');
+		expect(resources).toEqual([
+			{ uri: 'ui://test/plan.html', name: 'Plan', mimeType: MCP_APP_MIME_TYPE, _meta: meta }
+		]);
+		const { contents } = await rpc(server, 'resources/read', { uri: 'ui://test/plan.html' });
+		expect(contents).toEqual([
+			{
+				uri: 'ui://test/plan.html',
+				mimeType: 'text/html;profile=mcp-app',
+				text: '<!doctype html><title>Plan</title>',
+				_meta: meta
+			}
+		]);
+	});
+
+	it('returns view data as the result’s _meta, the key redacted', async () => {
+		const result = await rpc(serveViews(), 'tools/call', { name: 'plan', arguments: {} });
+		expect(result._meta).toEqual({ plan: { runs: 3, key: '[redacted]' } });
+		expect(JSON.stringify(result)).not.toContain(KEY);
+	});
+
+	it('refuses at startup a tool whose view no appResource serves', () => {
+		expect(() => serveViews([])).toThrow(/plan shows ui:\/\/test\/plan.html/);
+	});
+
+	it('refuses at startup an app tool that needs a scope its view’s tool does not', () => {
+		const solving = tool({ ...geometry, calls: ['postJobsByIdSolve'] });
+		expect(() =>
+			createMcpServer({
+				name: 'test',
+				version: '0.0.0',
+				baseUrl: 'https://host',
+				apiKey: KEY,
+				fetch: fakeFetch([]).fetch,
+				openapi: SPEC,
+				tools: [plan, solving],
+				resources: [view]
+			})
+		).toThrow(/App tool plan_geometry needs/);
 	});
 });
 

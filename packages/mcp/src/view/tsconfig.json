@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo.view.json",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"]
+	},
+	"include": ["./**/*"],
+	"exclude": []
+}

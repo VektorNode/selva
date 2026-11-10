@@ -31,6 +31,11 @@
 			"selva-source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
+		},
+		"./view": {
+			"selva-source": "./src/view/index.ts",
+			"types": "./dist/view/index.d.ts",
+			"import": "./dist/view/index.js"
 		}
 	},
 	"files": [
@@ -40,9 +45,9 @@
 		"!**/*.spec.*"
 	],
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && tsc -p src/view && vite build --config views/vite.config.ts",
 		"dev": "tsc --watch",
-		"type-check": "tsc --noEmit",
+		"type-check": "tsc --noEmit && tsc -p src/view --noEmit && tsc -p views",
 		"prepack": "publint --strict",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -54,10 +59,33 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@modelcontextprotocol/client": "catalog:",
+		"@modelcontextprotocol/ext-apps": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@selvajs/server": "workspace:*",
+		"@selvajs/visualization": "workspace:*",
 		"@types/node": "catalog:",
+		"@types/three": "catalog:",
+		"three": "catalog:",
 		"typescript": "catalog:",
+		"vite": "catalog:",
+		"vite-plugin-singlefile": "catalog:",
 		"vitest": "catalog:"
+	},
+	"peerDependencies": {
+		"@modelcontextprotocol/ext-apps": "^2.0.4",
+		"@selvajs/visualization": "workspace:^",
+		"three": ">=0.179.0"
+	},
+	"peerDependenciesMeta": {
+		"@modelcontextprotocol/ext-apps": {
+			"optional": true
+		},
+		"@selvajs/visualization": {
+			"optional": true
+		},
+		"three": {
+			"optional": true
+		}
 	}
 }

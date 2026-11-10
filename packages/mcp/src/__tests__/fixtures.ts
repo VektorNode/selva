@@ -77,7 +77,7 @@ export interface Recorded {
 	method: string;
 	url: string;
 	headers: Record<string, string>;
-	credentials?: RequestCredentials;
+	credentials?: RequestInit['credentials'];
 	body?: unknown;
 }
 
@@ -100,7 +100,7 @@ export function fakeFetch(responses: (Response | Error)[]) {
 	return { fetch: fn, calls };
 }
 
-export const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+export const json = (body: unknown, status = 200, headers: Record<string, string> = {}): Response =>
 	new Response(JSON.stringify(body), {
 		status,
 		headers: { 'Content-Type': 'application/json', ...headers }

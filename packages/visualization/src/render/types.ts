@@ -35,7 +35,11 @@ export type LightingConfig = {
 };
 
 export type EnvironmentConfig = {
-	hdrPath?: string;
+	/**
+	 * Default `/baseHDR.hdr`. `false` loads none, leaving the generated reflection environment to
+	 * light the scene: for a page that may not fetch, such as an MCP App view.
+	 */
+	hdrPath?: string | false;
 	backgroundColor?: THREE.Color | string;
 	enableEnvironmentLighting?: boolean;
 	/**

@@ -14,6 +14,7 @@ import {
 	type ApiClientOptions,
 	type UntypedApi
 } from './client.js';
+import { MCP_APP_MIME_TYPE } from './app.js';
 import { ApiCallError, describeError, type ErrorHint } from './errors.js';
 import type { ToolOutput } from './output.js';
 import { indexOperations, type JsonSchema, type OperationIndex, type ScopeAction } from './spec.js';
@@ -31,6 +32,8 @@ export interface ResourceDefinition {
 	name: string;
 	description?: string;
 	mimeType?: string;
+	/** The resource's `_meta`, listed and read alike: an MCP App view's `ui`. */
+	meta?: Record<string, unknown>;
 	calls: string[];
 	read(api: Api): Promise<string>;
 }
@@ -97,7 +100,7 @@ export interface ToolCallRecord {
 	calls: ApiCallRecord[];
 	/** Each argument's JSON length, by name. */
 	argumentBytes: Record<string, number>;
-	/** The text and structured content returned, in characters. */
+	/** The text, structured content and view data returned, in characters. */
 	responseBytes: number;
 }
 
@@ -136,6 +139,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 	const spec = indexOperations(options.openapi);
 	const tools = resolveTools(options.tools, spec);
 	for (const r of options.resources ?? []) checkCalls(`resource ${r.uri}`, r.calls, spec);
+	checkViews(tools, options.resources ?? []);
 
 	/** `visible` limits which tools this request sees; undefined means all of them. */
 	function build(apiKey: string, fetch = options.fetch, visible?: ReadonlySet<string>): Server {
@@ -144,6 +148,18 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 		const keys = [apiKey, ...(options.apiKey ? [options.apiKey] : [])];
 		const redact = (text: string) =>
 			keys.reduce((out, key) => out.split(key).join('[redacted]'), text);
+		// Walks the value instead of stringifying it: a view's `_meta` can carry megabytes of meshes.
+		const redactValue = (value: unknown): unknown => {
+			if (typeof value === 'string')
+				return keys.some((k) => value.includes(k)) ? redact(value) : value;
+			if (Array.isArray(value)) return value.map(redactValue);
+			if (value && typeof value === 'object') {
+				return Object.fromEntries(
+					Object.entries(value).map(([k, v]) => [redact(k), redactValue(v)])
+				);
+			}
+			return value;
+		};
 
 		function toResult(out: ToolOutput): CallToolResult {
 			return {
@@ -160,6 +176,9 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 						string,
 						unknown
 					>
+				}),
+				...(out.meta && {
+					_meta: redactValue(out.meta) as Record<string, unknown>
 				})
 			};
 		}
@@ -190,7 +209,9 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 				description: def.description,
 				inputSchema: input.schema as { type: 'object' },
 				...(output && { outputSchema: output as { type: 'object' } }),
-				annotations: { title: def.title, ...annotations }
+				annotations: { title: def.title, ...annotations },
+				// The flat `ui/resourceUri` is the key older MCP Apps hosts read.
+				...(def.ui && { _meta: { ui: def.ui, 'ui/resourceUri': def.ui.resourceUri } })
 			}))
 		}));
 
@@ -254,7 +275,9 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 						calls,
 						argumentBytes: sizes(req.params.arguments),
 						responseBytes: result
-							? jsonLength(result.content) + jsonLength(result.structuredContent)
+							? jsonLength(result.content) +
+								jsonLength(result.structuredContent) +
+								jsonLength(result._meta)
 							: 0
 					});
 				}
@@ -264,11 +287,12 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 		if (options.resources?.length) {
 			const resources = options.resources;
 			server.setRequestHandler('resources/list', () => ({
-				resources: resources.map(({ uri, name, description, mimeType }) => ({
+				resources: resources.map(({ uri, name, description, mimeType, meta }) => ({
 					uri,
 					name,
 					description,
-					mimeType
+					mimeType,
+					...(meta && { _meta: meta })
 				}))
 			}));
 			server.setRequestHandler('resources/read', async (req) => {
@@ -281,7 +305,8 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 				}
 				const api = createApiClient(spec, clientOptions, new Set(resource.calls));
 				const text = redact(await resource.read(api));
-				return { contents: [{ uri: resource.uri, mimeType: resource.mimeType, text }] };
+				const { uri, mimeType, meta } = resource;
+				return { contents: [{ uri, mimeType, text, ...(meta && { _meta: meta }) }] };
 			});
 		}
 
@@ -540,6 +565,34 @@ function resolveTools(
 		});
 	}
 	return tools;
+}
+
+// A tool naming a view the server never serves renders as an empty frame, and nothing errors.
+function checkViews(tools: Map<string, ResolvedTool>, resources: ResourceDefinition[]): void {
+	const views = new Set(
+		resources.filter((r) => r.mimeType === MCP_APP_MIME_TYPE).map((r) => r.uri)
+	);
+	for (const { def } of tools.values()) {
+		if (def.ui && !views.has(def.ui.resourceUri)) {
+			throw new Error(`Tool ${def.name} shows ${def.ui.resourceUri}, which no appResource serves`);
+		}
+	}
+	// A key that sees a view's model tool must also see the `['app']` tools its view calls,
+	// or the view fails with "Unknown tool" and nothing warns.
+	const all = [...tools.values()];
+	const appOnly = (t: ResolvedTool) => t.def.ui?.visibility?.includes('model') === false;
+	for (const parent of all.filter((t) => t.def.ui && !appOnly(t))) {
+		for (const child of all.filter(
+			(t) => appOnly(t) && t.def.ui!.resourceUri === parent.def.ui!.resourceUri
+		)) {
+			const missing = child.actions.filter((a) => !parent.actions.includes(a));
+			if (missing.length) {
+				throw new Error(
+					`App tool ${child.def.name} needs \`${missing.join('`, `')}\`, which ${parent.def.name} does not; a key that can call ${parent.def.name} could not load its view`
+				);
+			}
+		}
+	}
 }
 
 function checkCalls(owner: string, calls: string[], spec: OperationIndex): void {

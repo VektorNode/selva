@@ -74,6 +74,54 @@ Schema) lists it as `outputSchema`, and clients may reject a `structured` that d
 base64) follow the text as MCP image content, for a model that can see. Clients render PNG, JPEG,
 GIF and WebP, not SVG.
 
+## Views (MCP Apps)
+
+A client that supports MCP Apps (Claude, ChatGPT) shows an HTML view inside the chat beside a
+tool's result. `appResource` serves the view; a tool names it in `ui`; `meta` carries the data
+the view draws, as the result's `_meta`, which clients keep out of the model's context. A
+client without views shows the text, so the text must stand alone.
+
+```ts
+const planView = appResource({
+	uri: 'ui://acme/plan.html',
+	name: 'Plan',
+	html: () => readFile(new URL('./plan.html', import.meta.url), 'utf8'),
+	csp: { connectDomains: ['https://acme.example'] } // default: no fetch, no outside script
+});
+
+tool({
+	name: 'acme_check_plan',
+	ui: { resourceUri: planView.uri },
+	run: async (api, args) => ({ text: 'Plan builds, 4 runs.', meta: { plan } }),
+	...
+});
+```
+
+`visibility: ['app']` hides a tool from the model and leaves it callable by its view: for data
+only the view needs, such as geometry. A tool naming a view no `appResource` serves is refused
+at startup.
+
+**3D.** `solveView()` serves a ready-made view (`SOLVE_VIEW_URI`) that draws a solve. The tool
+hands it the geometry under `SOLVE_VIEW_KEY`, inline, or as an `['app']` tool to call for it,
+so megabytes of meshes stay out of the first result:
+
+```ts
+resources: [solveView()],
+tools: [
+	tool({ name: 'acme_solve', ui: { resourceUri: SOLVE_VIEW_URI },
+		run: async () => ({ text, meta: { [SOLVE_VIEW_KEY]: { title, load: { tool: 'acme_geometry', arguments } } } }) }),
+	tool({ name: 'acme_geometry', ui: { resourceUri: SOLVE_VIEW_URI, visibility: ['app'] },
+		run: async () => ({ text: 'Geometry.', meta: { [SOLVE_VIEW_KEY]: { response } } }) })
+]
+```
+
+**Your own view** imports `@selvajs/mcp/view` (peers: `@modelcontextprotocol/ext-apps`,
+`@selvajs/visualization`, `three`) and is built into one HTML file, e.g. with
+`vite-plugin-singlefile`: `connectView` connects it to the host and follows the host's theme
+(add listeners in its callback, or the first result arrives before them), `mountSolveViewer`
+draws a Rhino.Compute response. A view's CSP allows no `fetch` and no outside script unless the
+`appResource` lists them, so the renderer loads no HDR there.
+
 ## Typed calls
 
 Pass the `operations` type `openapi-typescript` generates from the spec, and `api.call` checks

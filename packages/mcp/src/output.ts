@@ -4,6 +4,11 @@ export interface ToolOutput {
 	structured?: Record<string, unknown>;
 	/** Pictures for a model that can see, after the text. Clients render PNG, JPEG, GIF and WebP; not SVG. */
 	images?: ToolImage[];
+	/**
+	 * The result's `_meta`: data for a tool's MCP App view, which clients keep out of the model's
+	 * context. A client without views drops it, so the text must stand alone.
+	 */
+	meta?: Record<string, unknown>;
 }
 
 export interface ToolImage {

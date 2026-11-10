@@ -31,6 +31,7 @@
 				"vite.config.ts",
 				"vite.config.js",
 				"tsdown.config.ts",
+				"views/**",
 				"$TURBO_ROOT$/packages/config/vite.config.js"
 			],
 			"env": ["ADAPTER", "NODE_ENV", "SELVA_HMAC_KEY", "SELVA_AT_REST_KEY", "DATA_PATH"]
@@ -122,7 +123,7 @@
 		"type-check": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tests/**", "examples/**", "tsconfig.json"]
+			"inputs": ["src/**", "tests/**", "examples/**", "views/**", "tsconfig.json"]
 		},
 		"lint": {
 			"outputs": [],
