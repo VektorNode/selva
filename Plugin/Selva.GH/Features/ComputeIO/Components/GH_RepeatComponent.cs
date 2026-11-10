@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Selva.GH.Features.ComputeIO.Goos;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
@@ -28,6 +30,7 @@ public class GH_RepeatComponent : GH_DynamicValueListOutput
     }
 
     public override Guid ComponentGuid => new Guid("3B8F5D21-7C6A-4E19-A2D4-8E0B1C9F6A57");
+    protected override Bitmap Icon => Resources.Repeat;
     public override bool TargetFromWiring => true;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

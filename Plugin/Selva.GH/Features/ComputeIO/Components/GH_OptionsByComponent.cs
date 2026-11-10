@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Selva.GH.Features.ComputeIO.Goos;
+using Selva.GH.Properties;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
@@ -30,6 +32,7 @@ public class GH_OptionsByComponent : GH_DynamicValueListOutput
     }
 
     public override Guid ComponentGuid => new Guid("6C1E2B7A-4D3F-4E8B-9A15-2F7C0D6E8B31");
+    protected override Bitmap Icon => Resources.OptionsBy;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

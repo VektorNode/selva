@@ -111,14 +111,20 @@ const RECIPES: Partial<Record<Finish, string>> = {
 	maple: wood({ ring: 3, latewood: 0.2, band: 0.1, pores: 0, streaks: 0.12 }),
 	// Dark, with tight black and brown bands at high contrast.
 	wenge: wood({ ring: 1.5, latewood: 0.7, band: 0.5, pores: 0.6, streaks: 0.4 }),
-	// Slow blotches from the pour, plus bug holes.
+	// Smooth-cast: broad clouds from the pour, a finer mottle, faint sand, and sparse round bug holes.
+	// Holes come from cellular noise: thresholded value noise draws them as jagged dashes.
 	concrete: /* glsl */ `
-		float blotch = ( selvaFbm( uv * 0.0035 ) - 0.5 ) * selvaDetail( 40.0 );
-		float holes = smoothstep( 0.8, 0.88, selvaNoise( uv * 0.22 ) ) * selvaDetail( 5.0 );
-		float speck = selvaNoise( uv * 0.9 ) - 0.5;
-		tone = vec3( 1.0 + blotch * 0.26 + speck * 0.05 * selvaDetail( 1.0 ) - holes * 0.2 );
-		gloss = 1.0 + blotch * 0.3;
-		height = -holes * 0.0005;`,
+		float cloud = ( selvaFbm( uv * 0.002 ) - 0.5 ) * selvaDetail( 80.0 );
+		float mottle = ( selvaFbm( uv * 0.018 + vec2( 5.0, 1.0 ) ) - 0.5 ) * selvaDetail( 15.0 );
+		float sand = ( selvaNoise( uv * 0.5 ) - 0.5 ) * selvaDetail( 2.5 );
+		vec3 pore = selvaCell( uv / 30.0 );
+		// One cell in ten holds a hole 2 to 5 mm across.
+		float radius = mix( 1.0, 2.5, selvaHash( vec2( pore.z, 4.0 ) ) ) / 30.0;
+		float hole = 1.0 - smoothstep( radius * 0.5, radius, pore.x );
+		hole *= step( 0.9, selvaHash( vec2( pore.z, 2.0 ) ) ) * selvaDetail( 4.0 );
+		tone = vec3( 1.0 + cloud * 0.18 + mottle * 0.07 + sand * 0.03 - hole * 0.3 );
+		gloss = 1.0 + cloud * 0.15 + hole * 0.1;
+		height = -hole * 0.0003;`,
 	// Hand-trowelled: all relief, barely any colour.
 	plaster: /* glsl */ `
 		float trowel = 0.5 + ( selvaFbm( uv * 0.05 ) - 0.5 ) * selvaDetail( 6.0 );

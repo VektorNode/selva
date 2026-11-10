@@ -295,6 +295,28 @@ ICONS.update({
     "EvaluateSchema": i_evaluate_schema, "CombineDisplay": i_combine_display,
 })
 
+
+def chevron(x, y, fill=TILE):
+    """Dropdown chevron, 4x2, top-left at (x, y)."""
+    return path(f"M{x} {y} H{x + 4} L{x + 2} {y + 2} Z", fill)
+
+
+def i_options_by():
+    # A key forks to one of several dropdowns: the picked one is PALE.
+    return tile(rect(4, 9, 4, 6),
+                stroke("M8 12 H11 M14 7 H11 V17 H14", MID),
+                rect(14, 4, 6, 6, MID), chevron(15, 6),
+                rect(14, 14, 6, 6), chevron(15, 16))
+
+
+def i_repeat():
+    # The same dropdown once per row, each behind its row label.
+    return tile(*(rect(4, y, 3, 4, MID, 0.5) + rect(9, y, 11, 4) + chevron(15, y + 1)
+                  for y in (4, 10, 16)))
+
+
+ICONS.update({"OptionsBy": i_options_by, "Repeat": i_repeat})
+
 # ============================================================================
 # Drawing (PDF / SVG output)
 # ============================================================================
