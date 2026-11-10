@@ -130,6 +130,35 @@ describe('member visibility', () => {
 	});
 });
 
+describe('one object split across materials', () => {
+	it('lists one row and hides every part with it', () => {
+		const scene = new THREE.Scene();
+		const bare = mergedMesh();
+		const coated = mergedMesh();
+		scene.add(bare, coated);
+		const outliner = createSceneOutliner(scene);
+
+		const entries = outliner.entries();
+		expect(entries).toHaveLength(3);
+		expect(entries[1]!.parts).toEqual([
+			{ object: bare, memberIndex: 1 },
+			{ object: coated, memberIndex: 1 }
+		]);
+
+		outliner.toggleEntry(entries[1]!);
+
+		const skipped = [
+			expect.objectContaining({ start: 0, count: 36 }),
+			expect.objectContaining({ start: 72, count: 36 })
+		];
+		expect(bare.geometry.groups).toEqual(skipped);
+		expect(coated.geometry.groups).toEqual(skipped);
+
+		outliner.toggleEntry(entries[1]!);
+		expect(coated.geometry.groups).toHaveLength(0);
+	});
+});
+
 // A collision in `key` is meaningful — the colliding things hide together — but a keyed list
 // throws on it (`each_key_duplicate`), which took down the whole scene panel. `rowKey` is the
 // unique one.

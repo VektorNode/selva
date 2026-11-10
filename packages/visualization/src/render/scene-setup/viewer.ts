@@ -105,8 +105,12 @@ export interface ThreeViewer {
 	/**
 	 * Tints one object, or one member of a merged mesh, as a preview (an outliner row under the
 	 * pointer), lighter than a selection. `null` clears it. A selected object keeps its selection tint.
+	 * Pass a list to tint several at once: a row's `parts`.
 	 */
-	setHover: (object: THREE.Object3D | null, memberIndex?: number | null) => void;
+	setHover: (
+		target: THREE.Object3D | readonly SelectionTarget[] | null,
+		memberIndex?: number | null
+	) => void;
 	/**
 	 * Adds host-owned geometry that survives `updateScene` solves and counts for fit-to-view.
 	 * Pass `appId` to scope it to one app (`userData.source = 'app:<id>'`) so `clearUserGeometry`

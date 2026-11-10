@@ -17,11 +17,20 @@ import type * as THREE from 'three';
 import { getMemberKeys, getTrackingKey, type MergedMember } from './identity.js';
 import { getObjectLabel, getSceneObjects, prettyType } from './objects.js';
 
-export interface SceneEntry {
-	/** The THREE object that renders this entry — the merged mesh when `member` is set. */
+/** One rendering of an entry: a whole object, or one member inside a merged mesh. */
+export interface EntryPart {
 	object: THREE.Object3D;
 	/** The member's index within `object.userData.members`, or null for a whole object. */
 	memberIndex: number | null;
+}
+
+export interface SceneEntry extends EntryPart {
+	/**
+	 * Every rendering of this entry, the entry's own `object`/`memberIndex` first. More than one when
+	 * a writer split one source object across materials (a sheet coated on one face) and gave the
+	 * pieces one id: a material is per mesh, so the object arrives as several.
+	 */
+	parts: EntryPart[];
 	/**
 	 * Stable identity. Matches the key visibility stores, so a row's eye toggles exactly the thing
 	 * the row names. Deliberately not unique: two identity-less objects sharing a name and layer
@@ -62,34 +71,45 @@ export function getSceneEntries(scene: THREE.Scene, defaultLayer: string): Scene
 		return n === 0 ? key : `${key}#${n}`;
 	};
 
+	// Entries by writer-minted id within a layer. Only minted ids fold into one row: a name + layer
+	// fallback key repeats for objects that are merely named alike.
+	const minted = new Map<string, SceneEntry>();
+	const add = (part: EntryPart, key: string, isMinted: boolean, label: string, layer: string) => {
+		const slot = `${layer}\u001f${key}`;
+		const existing = isMinted ? minted.get(slot) : undefined;
+		if (existing) {
+			existing.parts.push(part);
+			return;
+		}
+		const entry: SceneEntry = { ...part, parts: [part], key, rowKey: rowKeyFor(key), label, layer };
+		if (isMinted) minted.set(slot, entry);
+		entries.push(entry);
+	};
+
 	for (const object of getSceneObjects(scene)) {
 		const members = membersOf(object);
 		if (!members) {
-			const key = getTrackingKey(object);
-			entries.push({
-				object,
-				memberIndex: null,
-				key,
-				rowKey: rowKeyFor(key),
-				label: getObjectLabel(object),
-				layer: layerOf(object, defaultLayer)
-			});
+			add(
+				{ object, memberIndex: null },
+				getTrackingKey(object),
+				!!object.userData?.trackingKey,
+				getObjectLabel(object),
+				layerOf(object, defaultLayer)
+			);
 			continue;
 		}
 
 		const keys = getMemberKeys(object);
 		members.forEach((member, i) => {
-			const key = keys[i] ?? `${object.uuid}:${i}`;
-			entries.push({
-				object,
-				memberIndex: i,
-				key,
-				rowKey: rowKeyFor(key),
-				label: member.name || prettyType(object.type),
+			add(
+				{ object, memberIndex: i },
+				keys[i] ?? `${object.uuid}:${i}`,
+				!!member.trackingKey,
+				member.name || prettyType(object.type),
 				// A merge never spans layers (`splitGroupByLayer`), so the member's layer and its
 				// mesh's agree; the member's is used anyway, since it is the one being listed.
-				layer: member.layer || layerOf(object, defaultLayer)
-			});
+				member.layer || layerOf(object, defaultLayer)
+			);
 		});
 	}
 

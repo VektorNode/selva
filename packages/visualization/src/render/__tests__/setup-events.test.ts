@@ -342,6 +342,78 @@ describe('setupEventHandlers selectEntries', () => {
 	});
 });
 
+// A material is per mesh, so an object drawn in two materials arrives as two meshes under one id.
+describe('setupEventHandlers one object in two meshes', () => {
+	const config = {
+		events: { enableClickToFocus: true, enableDoubleClickZoom: true, selectionColor: '#ff0000' }
+	} as unknown as ResolvedOptions;
+
+	function setup() {
+		const { canvas, click, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		cube.userData.trackingKey = 'piece';
+		const part = (key: string) => {
+			const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+			mesh.userData = { name: 'cube', layer: 'Default', trackingKey: key };
+			mesh.position.set(50, 0, 0);
+			mesh.updateMatrixWorld(true);
+			scene.add(mesh);
+			return mesh;
+		};
+		const skin = part('piece');
+		const stranger = part('other');
+		const controller = stubCameraController();
+		const handlers = setupHandlers(canvas, scene, controller, config);
+		return { click, fire, cube, skin, stranger, controller, handlers };
+	}
+
+	it('selects every mesh of the clicked object, and only those', () => {
+		const { click, cube, skin, stranger, handlers } = setup();
+		const [cubeMaterial, skinMaterial, strangerMaterial] = [cube, skin, stranger].map(
+			(m) => m.material
+		);
+
+		click();
+
+		expect(cube.material).not.toBe(cubeMaterial);
+		expect(skin.material).not.toBe(skinMaterial);
+		expect(stranger.material).toBe(strangerMaterial);
+
+		handlers.clearSelection();
+		expect(skin.material).toBe(skinMaterial);
+		handlers.dispose();
+	});
+
+	it('frames every mesh of the double-clicked object', () => {
+		const { click, fire, controller, handlers } = setup();
+
+		click();
+		fire('dblclick', CENTRE);
+
+		const [box] = vi.mocked(controller.frameBounds).mock.calls[0];
+		expect(box.max.x).toBe(50.5);
+		handlers.dispose();
+	});
+
+	it('hovers every part passed and restores them all', () => {
+		const { cube, skin, handlers } = setup();
+		const [cubeMaterial, skinMaterial] = [cube.material, skin.material];
+
+		handlers.setHover([
+			{ object: cube, memberIndex: null },
+			{ object: skin, memberIndex: null }
+		]);
+		expect(cube.material).not.toBe(cubeMaterial);
+		expect(skin.material).not.toBe(skinMaterial);
+
+		handlers.setHover(null);
+		expect(cube.material).toBe(cubeMaterial);
+		expect(skin.material).toBe(skinMaterial);
+		handlers.dispose();
+	});
+});
+
 describe('setupEventHandlers viewer aids', () => {
 	it('never picks the grid, whose camera-sized box would fling the camera out', () => {
 		const { canvas, fire, click } = fakeCanvas();

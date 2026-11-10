@@ -5,6 +5,7 @@ import {
 	setMemberHighlight,
 	type HighlightKind
 } from '../../shared/index.js';
+import type { SelectionTarget } from './viewer.js';
 
 // ============================================================================
 // Picking inside a merged mesh
@@ -66,6 +67,40 @@ export function resolveHitMember(hit: THREE.Intersection): ResolvedMember | null
 		else return { member, index: mid };
 	}
 	return null;
+}
+
+/**
+ * Every rendering of the source object minted `key` on `layer`. A material is per mesh, so a writer
+ * that draws one object in two materials sends two meshes under one id; they pick as one.
+ */
+export function partsWithKey(scene: THREE.Scene, key: string, layer: string): SelectionTarget[] {
+	const parts: SelectionTarget[] = [];
+	scene.traverse((object) => {
+		const members = membersOf(object);
+		if (!members) {
+			const data = object.userData;
+			if (data?.trackingKey === key && (data.layer ?? '') === layer) {
+				parts.push({ object, memberIndex: null });
+			}
+			return;
+		}
+		members.forEach((member, memberIndex) => {
+			if (member.trackingKey === key && (member.layer ?? '') === layer) {
+				parts.push({ object, memberIndex });
+			}
+		});
+	});
+	return parts;
+}
+
+/** {@link partsWithKey} for a raycast hit; just the hit itself when it carries no minted id. */
+export function partsOfHit(scene: THREE.Scene, hit: THREE.Intersection): SelectionTarget[] {
+	const resolved = resolveHitMember(hit);
+	const data = resolved ? resolved.member : hit.object.userData;
+	const own = { object: hit.object, memberIndex: resolved?.index ?? null };
+	if (typeof data?.trackingKey !== 'string' || !data.trackingKey) return [own];
+	const parts = partsWithKey(scene, data.trackingKey, data.layer ?? '');
+	return parts.length > 1 ? parts : [own];
 }
 
 /**

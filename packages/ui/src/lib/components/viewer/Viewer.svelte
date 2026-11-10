@@ -416,7 +416,7 @@
 		}
 		const chosen = outliner?.entries().filter((entry) => selectedObjects.has(entry.key)) ?? [];
 		closeMetadata();
-		selectEntries?.(chosen);
+		selectEntries?.(chosen.flatMap((entry) => entry.parts));
 	});
 
 	function dismissMetadata() {
@@ -590,7 +590,7 @@
 					{outliner}
 					{sceneVersion}
 					onVisibilityChange={() => syncEmissiveLights?.()}
-					onHover={(entry) => setHover?.(entry?.object ?? null, entry?.memberIndex ?? null)}
+					onHover={(entry) => setHover?.(entry?.parts ?? null)}
 				/>
 			</Resizable.Pane>
 		{/if}

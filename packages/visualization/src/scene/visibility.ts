@@ -22,6 +22,8 @@ export interface EntryRef {
 	object: THREE.Object3D;
 	memberIndex: number | null;
 	key: string;
+	/** Every rendering of the entry when it has several (see `SceneEntry.parts`); absent means itself. */
+	parts?: readonly { object: THREE.Object3D; memberIndex: number | null }[];
 }
 
 // Backed by a caller-supplied `Set` so a reactive host can pass a framework-observable set
@@ -76,18 +78,20 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 			entry.memberIndex === null ? allHidden(entry.object) : hidden.has(entry.key),
 
 		setEntryVisible(entry, visible) {
-			if (entry.memberIndex === null) {
-				state.setVisible(entry.object, visible);
-				return;
-			}
-			if (visible) hidden.delete(entry.key);
-			else hidden.add(entry.key);
-			applyEntryVisibility(entry.object, hidden);
-			// The whole mesh may be off from a layer toggle; showing one member has to turn it back on.
-			if (visible && !entry.object.visible) {
-				entry.object.traverse((child) => {
-					child.visible = true;
-				});
+			for (const part of entry.parts ?? [entry]) {
+				if (part.memberIndex === null) {
+					state.setVisible(part.object, visible);
+					continue;
+				}
+				if (visible) hidden.delete(entry.key);
+				else hidden.add(entry.key);
+				applyEntryVisibility(part.object, hidden);
+				// The whole mesh may be off from a layer toggle; showing one member has to turn it back on.
+				if (visible && !part.object.visible) {
+					part.object.traverse((child) => {
+						child.visible = true;
+					});
+				}
 			}
 		},
 
