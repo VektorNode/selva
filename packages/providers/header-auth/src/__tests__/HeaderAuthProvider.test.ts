@@ -482,8 +482,8 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 		expect(all?.items).toEqual([]);
 	});
 
-	// Root ignores directory permissions, so the write would succeed and prove nothing.
-	it.skipIf(process.getuid?.() === 0)(
+	// Root and Windows ignore directory permissions, so the write would succeed and prove nothing.
+	it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')(
 		'still signs in an unclaimed user when the allowlist cannot be written',
 		async () => {
 			const alice = await provider.createUser('alice@company.com');
