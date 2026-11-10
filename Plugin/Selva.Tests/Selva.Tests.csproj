@@ -85,6 +85,8 @@
 		         Link="Linked\PrepareUIInputInference.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\DynamicValueListLogic.cs"
 		         Link="Linked\DynamicValueListLogic.cs"/>
+		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionTableLogic.cs"
+		         Link="Linked\OptionTableLogic.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaHash.cs"
 		         Link="Linked\SchemaHash.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaSaveGuard.cs"

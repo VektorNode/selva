@@ -239,10 +239,15 @@ export function applySolveResult(
 /**
  * Every schema output set to null. A blocked solve reports `outputs: {}`, and merging that into
  * `values` would leave the previous solve's outputs behind.
+ *
+ * Dynamic value list outputs stay: they hold the options and rows the form is drawn from, not a
+ * result. Blanked, a repeated block disappears and every list empties until the next good solve.
  */
 export function blankOutputs(schema: UISchema): Record<string, null> {
 	const blank: Record<string, null> = {};
-	for (const output of schema.outputs) blank[output.id] = null;
+	for (const output of schema.outputs) {
+		if (output.type !== 'dynamicValueList') blank[output.id] = null;
+	}
 	return blank;
 }
 

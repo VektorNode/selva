@@ -1,0 +1,16 @@
+{
+	"_comment": "Cross-stack golden contract for an Options By payload: a dynamicValueList output whose options are a table keyed by another input's value, '*' as the fallback. Loaded by BOTH dotnet test (DynamicValueListPayload) and vitest (buildFormModel). Do not edit without updating both sides.",
+	"targetInputId": "aaaaaaaa-bbbb-cccc-dddd-000000000001",
+	"options": {},
+	"resolvedInSolve": true,
+	"by": "aaaaaaaa-bbbb-cccc-dddd-000000000002",
+	"table": {
+		"Shaker": {
+			"Shaker door": "Shaker door",
+			"Shaker drawers": "Shaker drawers",
+			"Open shelves": "Open shelves"
+		},
+		"Handleless": { "Push door": "Push door" },
+		"*": { "Slab door": "Slab door" }
+	}
+}

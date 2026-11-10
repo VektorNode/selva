@@ -231,7 +231,14 @@ public static class ParameterTypeHelper
 
             // A bare param (relay/generic) just forwards data, so keep walking up through it.
             // A param owned by a real (non-T) component stops the search on this branch unless the
-            // caller opted in: reaching a producer doesn't prove its data arrives here.
+            // caller opted in: reaching a producer doesn't prove its data arrives here. A Selva input
+            // is floating too, but emits its own data (a Get DynVL fed by Options By outputs a pick,
+            // not the payload), so it ends the branch.
+            if (source is IGH_ContextualParameter)
+            {
+                continue;
+            }
+
             if (owner == null || ReferenceEquals(owner, source))
             {
                 var deeper = WalkUpstreamFor<T>(source, visited, throughComponents);

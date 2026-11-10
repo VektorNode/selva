@@ -199,7 +199,7 @@
 								.filter(Boolean)}
 							<span class="truncate">{selectedNames.join(', ')}</span>
 						{:else}
-							Select values...
+							<span class="truncate">Select values...</span>
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
@@ -238,9 +238,9 @@
 				>
 					<Select.Trigger class="h-9 w-full text-sm">
 						{#if rule.value !== undefined && rule.value !== null}
-							{String(rule.value)}
+							<span class="truncate">{String(rule.value)}</span>
 						{:else}
-							Select value...
+							<span class="truncate">Select value...</span>
 						{/if}
 					</Select.Trigger>
 					<Select.Content>
@@ -261,9 +261,9 @@
 							{@const optionEntry = Object.entries(selectedParamInfo.options).find(
 								([_, val]) => val === rule.value
 							)}
-							{optionEntry ? optionEntry[0] : rule.value}
+							<span class="truncate">{optionEntry ? optionEntry[0] : rule.value}</span>
 						{:else}
-							Select value...
+							<span class="truncate">Select value...</span>
 						{/if}
 					</Select.Trigger>
 					<Select.Content>

@@ -1,10 +1,16 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
+	import { getLayoutItems } from '@selvajs/schemas';
 	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
 	import { isTabVisible } from '#lib/schema/visibility-rules.js';
-	import { buildDynamicValueListOptions } from '#lib/schema/dynamic-value-list.js';
+	import {
+		buildFormModel,
+		keepHiddenPicks,
+		withRowPick,
+		type FormModel
+	} from '#lib/schema/dynamic-value-list.js';
 
 	interface Props {
 		schema: UISchema;
@@ -33,10 +39,19 @@
 	let activeTabId = $state('');
 	let collapsedGroups = $state<Record<string, boolean>>({});
 
+	// Option tables are looked up against the values on screen, so a driver change switches its
+	// lists here, before any solve.
+	let lastModel: FormModel | undefined;
+	const formModel = $derived.by(() => (lastModel = buildFormModel(schema, values, lastModel)));
+
+	// An input Grasshopper resolves in the solve shows the resolved pick. What the user picked
+	// stays in `values` and goes out unchanged: the solve resolves it the same way.
+	const shownValues = $derived({ ...values, ...formModel.shown });
+
 	const visibleTabs = $derived(
 		schema.layout.type === 'tabbed'
 			? schema.layout.tabs.filter((tab) => {
-					if (!isTabVisible(tab, values)) return false;
+					if (!isTabVisible(tab, shownValues)) return false;
 					if (!panelFilter) return true;
 					return panelFilter === 'right' ? tab.position === 'right' : tab.position !== 'right';
 				})
@@ -45,8 +60,43 @@
 
 	const showTabBar = $derived(visibleTabs.length > 1);
 
-	// Computed value list options keyed by the target input id, derived from solved outputs.
-	const dynamicOptions = $derived(buildDynamicValueListOptions(schema, values));
+	// Each repeat is drawn once, at the first of its members placed in the layout.
+	const repeatLeads = $derived.by(() => {
+		const placed = new Set(
+			getLayoutItems(schema)
+				.filter((item) => item.type === 'input')
+				.map((item) => item.paramId)
+		);
+		const leads: Record<string, string> = {};
+		for (const repeat of formModel.repeats) {
+			const lead = repeat.members.find((m) => placed.has(m));
+			if (lead) leads[repeat.id] = lead;
+		}
+		return leads;
+	});
+
+	const memberLabels = $derived.by(() => {
+		const labels: Record<string, string> = {};
+		for (const input of schema.inputs) labels[input.id] = input.nickname;
+		for (const item of getLayoutItems(schema)) {
+			if (item.type === 'input' && item.displayName) labels[item.paramId] = item.displayName;
+		}
+		return labels;
+	});
+
+	// Controls edit the resolved picks, which leave out the ones not offered now. Merge the edit back
+	// so those survive it.
+	function handleValueChange(paramId: string, value: SupportedTypes, forceSolve?: boolean) {
+		const merged =
+			Array.isArray(value) && Array.isArray(formModel.shown[paramId])
+				? keepHiddenPicks(formModel.options[paramId], values[paramId], value as string[])
+				: value;
+		onValueChange(paramId, merged as SupportedTypes, forceSolve);
+	}
+
+	function handleRowPick(memberId: string, rowKey: string, pick: string) {
+		onValueChange(memberId, withRowPick(values[memberId], rowKey, pick));
+	}
 
 	$effect(() => {
 		if (requestedTabId && visibleTabs.some((t) => t.id === requestedTabId)) {
@@ -86,13 +136,17 @@
 		{#each visibleTabs as tab (tab.id)}
 			<TabContent
 				{tab}
-				{values}
+				values={shownValues}
 				{collapsedGroups}
 				onToggleGroup={toggleGroup}
-				{onValueChange}
+				onValueChange={handleValueChange}
+				onRowPick={handleRowPick}
 				inputs={schema.inputs}
 				outputs={schema.outputs}
-				{dynamicOptions}
+				dynamicOptions={formModel.options}
+				{formModel}
+				{repeatLeads}
+				{memberLabels}
 				assets={schema.assets}
 				{bare}
 			/>

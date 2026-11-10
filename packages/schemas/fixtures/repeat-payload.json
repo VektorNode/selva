@@ -1,0 +1,12 @@
+{
+	"_comment": "Cross-stack golden contract for a Repeat payload: rows from Grasshopper and the inputs shown once per row. Rides the dynamicValueList output channel with no target. Loaded by BOTH dotnet test (DynamicValueListPayload) and vitest (buildFormModel). Do not edit without updating both sides.",
+	"targetInputId": null,
+	"options": {},
+	"resolvedInSolve": true,
+	"rows": [
+		{ "key": "back/sink", "label": "Sink", "section": "Back wall" },
+		{ "key": "back/drawers", "label": "Drawers", "section": "Back wall" },
+		{ "key": "side/larder", "label": "Larder", "section": "Side wall" }
+	],
+	"members": ["aaaaaaaa-bbbb-cccc-dddd-000000000001", "aaaaaaaa-bbbb-cccc-dddd-000000000003"]
+}

@@ -14,6 +14,8 @@
 	import Group from './Group.svelte';
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
+	import RepeatBlock from './RepeatBlock.svelte';
+	import type { FormModel } from '#lib/schema/dynamic-value-list.js';
 	import { evaluateGroupVisibility } from '#lib/schema/visibility-rules.js';
 	import { isSupportedOn, layoutItemKind } from '#lib/schema/host-support.js';
 	import { getHostContext } from '#lib/contexts/hostContext.svelte.js';
@@ -32,6 +34,13 @@
 		outputs: DiscoveredOutput[];
 		/** Computed value list options keyed by the target dynamic-value-list input id. */
 		dynamicOptions?: Record<string, Record<string, string>>;
+		/** Option tables and repeats from the last solve. */
+		formModel?: FormModel;
+		/** Sets one row's pick of a repeated input. */
+		onRowPick?: (memberId: string, rowKey: string, pick: string) => void;
+		/** The member input each repeat is drawn at, keyed by repeat id. */
+		repeatLeads?: Record<string, string>;
+		memberLabels?: Record<string, string>;
 		/** The schema's icons and thumbnails, which value-list options point into. */
 		assets?: UISchema['assets'];
 		/** No tinted backdrop and no scroll area of its own: the container scrolls. */
@@ -47,6 +56,10 @@
 		inputs,
 		outputs,
 		dynamicOptions = {},
+		formModel,
+		onRowPick,
+		repeatLeads = {},
+		memberLabels = {},
 		assets,
 		bare = false
 	}: Props = $props();
@@ -80,7 +93,22 @@
 	visibility: { visible: boolean; disabled: boolean; defaultValue?: unknown }
 )}
 	{@const input = getInputById(layoutItem.paramId)}
-	{#if input}
+	{@const repeatId = formModel?.repeatOf[layoutItem.paramId]}
+	{@const repeat = repeatId ? formModel?.repeats.find((r) => r.id === repeatId) : undefined}
+	{#if input && repeat && formModel}
+		<!-- A repeat is drawn once, at its lead member; the other members render nothing here. -->
+		{#if repeatLeads[repeat.id] === input.id && onRowPick}
+			<RepeatBlock
+				{repeat}
+				{memberLabels}
+				shown={formModel.shown}
+				rowOptions={formModel.rowOptions}
+				onPick={onRowPick}
+				disabled={visibility.disabled}
+				{assets}
+			/>
+		{/if}
+	{:else if input}
 		<InputControl
 			item={layoutItem}
 			value={values[input.id] as SupportedTypes | undefined}

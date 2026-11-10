@@ -11,8 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Preview solves, for a schema with `previewSolves` on. A Rhino.Compute solve sent as a preview skips each Selva file component whose every recipient is a Context Bake the layout shows only as a Download, and lists those outputs in the verdict's `deferred`. A file component that feeds a Download but also anything else is made every solve; on the canvas a remark says why.
 - Solve Mode (Selva › Utilities): its `Preview` output is true in a preview solve, to gate production-only work above the file components.
+- Options By (Selva › Utilities): options for one input that depend on the value of another. Branch i of Options holds the options for By's i-th value; Keys names the values when By's aren't known up front, `*` matching any other. The web UI switches the list itself when By changes, without a solve. Wire its output into the Get Dynamic Value List it fills.
+- Repeat (Selva › Utilities): shows the Get Dynamic Value Lists wired from its output once per row in the web UI, rows from Keys with optional Labels and Section. Each repeated input outputs one item per row, and finds its pick by row key, so a pick stays with its row when rows come and go.
 
 ### Changed
+
+- A Get Dynamic Value List wired from Set Dynamic Value List, Options By or Repeat resolves its pick in the same solve: a pick still offered stays, anything else takes the first option, with a remark. A chain of lists solves once instead of once per link. Set Dynamic Value List finds its target from that wire. With only a target picked in the builder it works as before, and a remark suggests the wire unless the options are computed from that input.
 
 - The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.
 - Bake Files creates nested folders for a file name with slashes, the way the web download already did. A file name whose last part can't be a file name (`C:x`, `..`, `plan:v2`, `nul`) fails the bake with an error instead of writing somewhere unexpected.

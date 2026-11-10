@@ -16,13 +16,22 @@ namespace Selva.GH.Features.ComputeIO.Components;
 /// <summary>
 ///     A contextual parameter whose options are populated at runtime rather than read from a wired
 ///     GH_ValueList. The options are computed by a <see cref="GH_DynamicValueListOutput" /> that targets
-///     this parameter; the web UI applies the user's selection back here on the next solve.
+///     this parameter.
+///     <para>
+///         Wired from that output (Set Dynamic Value List, Options By, Repeat), the param knows its
+///         options inside the solve that computes them and resolves the pick there: one solve per
+///         change, however long the chain. Unwired, it passes the pick through and the web UI corrects
+///         it one solve later.
+///     </para>
 /// </summary>
 public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueListDataGoo>
 {
     // Name -> expression, from the last LoadItems call. Persisted so a saved document round-trips
     // its last-known options for Rhino.Compute.
     private List<(string Name, string Expression)> _storedItems = new List<(string Name, string Expression)>();
+
+    // Row keys from a wired Repeat; null when this input isn't repeated.
+    private List<string> _rowKeys;
 
     public GetDynamicValueListParameter()
         : base("Get Dynamic Value List", "Get DynVL", "Get a value from a runtime-computed value list",
@@ -127,8 +136,130 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
     /// <summary>Returns the currently-selected value, or the first known option, or empty.</summary>
     public string GetDefaultValue()
     {
+        if (_rowKeys != null)
+        {
+            // A repeated input's value is its row picks, never one option.
+            var picks = SelectedValues()?.FirstOrDefault();
+            return DynamicValueListLogic.ParseRowPicks(picks).Count > 0 ? picks : "{}";
+        }
+
         var selected = SelectedValues()?.Select(value => ToGoo(value).Value).ToList();
         return DynamicValueListLogic.GetDefaultValue(selected, _storedItems);
+    }
+
+    protected override void CollectVolatileData_FromSources()
+    {
+        var wired = ReadWiredOptions();
+        if (!wired.Found)
+        {
+            _rowKeys = null;
+            base.CollectVolatileData_FromSources();
+            return;
+        }
+
+        m_data.Clear();
+        _rowKeys = wired.RowKeys;
+        if (wired.OptionSets.Count > 0)
+        {
+            _storedItems = wired.OptionSets[0];
+        }
+
+        var picks = SelectedValues() ?? new List<string>();
+        var optionSets = wired.OptionSets.Cast<IReadOnlyList<(string, string)>>().ToList();
+        List<ResolvedPick> resolved;
+        if (_rowKeys != null)
+        {
+            resolved = DynamicValueListLogic.ResolveRows(_rowKeys,
+                DynamicValueListLogic.ParseRowPicks(picks.FirstOrDefault()), optionSets);
+        }
+        else if (Access == GH_ParamAccess.list)
+        {
+            resolved = DynamicValueListLogic.ResolvePicks(optionSets.FirstOrDefault(), picks);
+        }
+        else
+        {
+            resolved = new List<ResolvedPick>
+            {
+                DynamicValueListLogic.ResolvePick(optionSets.FirstOrDefault(), picks.FirstOrDefault())
+            };
+        }
+
+        var path = new GH_Path(0);
+        for (var i = 0; i < resolved.Count; i++)
+        {
+            var options = wired.OptionSets.Count == 0
+                ? _storedItems
+                : wired.OptionSets[Math.Min(i, wired.OptionSets.Count - 1)];
+            m_data.Append(new GH_ValueListDataGoo(resolved[i].Expression, options, resolved[i].Index, allowEmpty: true),
+                path);
+        }
+
+        var replaced = resolved.Count(pick => pick.Replaced);
+        if (replaced > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"{replaced} pick(s) aren't offered now, so they take the first option. They come back when offered again.");
+        }
+    }
+
+    /// <summary>
+    ///     The options and rows wired in from Selva's option components. Found is false when none is
+    ///     wired: a Panel of "key" = value pairs only seeds options, and resolves nothing.
+    /// </summary>
+    private (bool Found, List<string> RowKeys, List<List<(string Name, string Expression)>> OptionSets)
+        ReadWiredOptions()
+    {
+        var found = false;
+        List<string> rowKeys = null;
+        var optionSets = new List<List<(string Name, string Expression)>>();
+        foreach (var source in Sources)
+        {
+            var data = source?.VolatileData;
+            if (data == null || data.IsEmpty)
+            {
+                continue;
+            }
+
+            foreach (var goo in data.AllData(true))
+            {
+                var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value : goo;
+                if (inner is not DynamicValueListGoo dvl || !IsFor(dvl.Payload))
+                {
+                    continue;
+                }
+
+                found = true;
+                var payload = dvl.Payload;
+                if (payload.Rows != null)
+                {
+                    rowKeys = payload.Rows.Select(row => row.Key).ToList();
+                }
+                else if (payload.ItemOptions is { Count: > 0 })
+                {
+                    optionSets.AddRange(payload.ItemOptions.Select(ToItems));
+                }
+                else
+                {
+                    optionSets.Add(ToItems(payload.Options));
+                }
+            }
+        }
+
+        return (found, rowKeys, optionSets);
+    }
+
+    // An output wired into several inputs fills only its target; the others must not resolve
+    // against options the browser never shows them.
+    private bool IsFor(DynamicValueListPayload payload)
+    {
+        return payload.Rows != null
+            ? payload.Members?.Contains(InstanceGuid.ToString()) == true
+            : payload.TargetInputId == InstanceGuid;
+    }
+
+    private static List<(string Name, string Expression)> ToItems(Dictionary<string, string> options)
+    {
+        return options?.Select(kvp => (kvp.Key, kvp.Value)).ToList() ?? new List<(string Name, string Expression)>();
     }
 
     // Assigned values stay raw strings and resolve here, at emit time, against whatever options are

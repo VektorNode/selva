@@ -26,6 +26,47 @@ public class GH_DynamicValueListOutput : GH_Component
     {
     }
 
+    // For components that ride the same output channel: schema discovery, the target lookup and
+    // the collectors all find them as GH_DynamicValueListOutput.
+    protected GH_DynamicValueListOutput(string name, string nickname, string description)
+        : base(name, nickname, description, "Selva", "Utilities")
+    {
+    }
+
+    /// <summary>
+    ///     True when the component reads its target from a wire. The builder's target picker must not
+    ///     overwrite it then.
+    /// </summary>
+    public virtual bool TargetFromWiring => WiredTargets().Count > 0;
+
+    /// <summary>
+    ///     The Get Dynamic Value Lists this component's output is wired into. A wired target resolves
+    ///     its pick against these options in the same solve.
+    /// </summary>
+    protected List<GetDynamicValueListParameter> WiredTargets()
+    {
+        return Params.Output.Count == 0
+            ? new List<GetDynamicValueListParameter>()
+            : WiredInputs.Fed(Params.Output[0]).OfType<GetDynamicValueListParameter>().ToList();
+    }
+
+    /// <summary>
+    ///     Suggests wiring the output into the target picked in the builder, unless the options are
+    ///     computed from that input: the wire would close a loop, and Grasshopper refuses loops.
+    /// </summary>
+    protected void SuggestWiringTarget(Guid targetId)
+    {
+        var target = OnPingDocument()?.FindObject(targetId, true);
+        if (target == null || WiredInputs.FeedsComponent(target, this))
+        {
+            return;
+        }
+
+        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+            $"Wire the output into \"{target.NickName}\" too, so its pick updates in the same solve " +
+            "instead of one solve later.");
+    }
+
     public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("1D8E3F62-7B4A-4C9E-A0F1-5C2D8E7B3A41");
 
@@ -53,8 +94,8 @@ public class GH_DynamicValueListOutput : GH_Component
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("Dynamic Value List", "DVL",
-            "Routing payload { targetInputId, options } consumed by the web UI / Rhino.Compute",
-            GH_ParamAccess.item);
+            "Wire into the Get Dynamic Value List it fills, and into a Context Bake so the options reach " +
+            "the web UI", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess da)
@@ -86,14 +127,31 @@ public class GH_DynamicValueListOutput : GH_Component
             return;
         }
 
-        if (_targetInputId == Guid.Empty)
+        var targets = WiredTargets();
+        var wired = targets.FirstOrDefault();
+        if (wired != null)
+        {
+            _targetInputId = wired.InstanceGuid;
+            if (targets.Count > 1)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    "Wire the output into one Get Dynamic Value List; only the first gets these options.");
+            }
+        }
+        else if (_targetInputId == Guid.Empty)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                "No target Get Dynamic Value List input set. Set the Target Input under this output's " +
-                "Advanced settings in the Selva UI builder.");
+                "No target set. Wire the output into the Get Dynamic Value List it fills.");
+        }
+        else
+        {
+            SuggestWiringTarget(_targetInputId);
         }
 
-        da.SetData(0, new DynamicValueListGoo(_targetInputId, Options));
+        da.SetData(0, new DynamicValueListGoo(new DynamicValueListPayload(_targetInputId, Options)
+        {
+            ResolvedInSolve = wired != null
+        }));
     }
 
     public override bool Write(GH_IWriter writer)

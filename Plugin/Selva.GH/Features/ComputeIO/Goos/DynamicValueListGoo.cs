@@ -51,12 +51,19 @@ public class DynamicValueListGoo : GH_Goo<DynamicValueListGoo>, ISelvaSerializab
 
     public override IGH_Goo Duplicate()
     {
-        return new DynamicValueListGoo(TargetInputId, Options);
+        return new DynamicValueListGoo(Payload.Clone());
     }
 
     public override string ToString()
     {
-        return $"Dynamic Value List: {Options?.Count ?? 0} option(s)";
+        if (Payload.Rows != null)
+        {
+            return $"Repeat: {Payload.Rows.Count} row(s), {Payload.Members?.Count ?? 0} control(s)";
+        }
+
+        return Payload.Table != null
+            ? $"Option table: {Payload.Table.Count} branch(es)"
+            : $"Dynamic Value List: {Options?.Count ?? 0} option(s)";
     }
 
     // Rhino.Compute returns this payload; the web UI routes it back into the targeted input.

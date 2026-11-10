@@ -22,6 +22,8 @@ public static partial class Definitions
         yield return ("examples/definitions/timber-gridshell-pavilion", Pavilion);
         yield return ("examples/definitions/perforated-facade", Facade);
         yield return ("examples/definitions/studio-task-lamp", Lamp);
+        yield return ("examples/definitions/shelving-unit", Shelving);
+        yield return ("examples/definitions/kitchen-run", Kitchen);
         yield return ("dev/grasshopper/stress-display-throughput", StressDisplay);
         yield return ("dev/grasshopper/stress-every-input-and-output", KitchenSink);
         yield return ("dev/grasshopper/bench-solve-transport", SolveBench);

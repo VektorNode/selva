@@ -746,6 +746,35 @@
 			]
 		},
 		{
+			"guid": "3B8F5D21-7C6A-4E19-A2D4-8E0B1C9F6A57",
+			"class": "GH_RepeatComponent",
+			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_RepeatComponent.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Keys",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Labels",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Section",
+					"access": "tree"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Rows",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "3C9A7E1F-4D62-4B8A-8F05-6E1D2C3B4A50",
 			"class": "GH_DisplayToFile",
 			"file": "Plugin/Selva.GH/Features/Display/Components/GH_DisplayToFile.cs",
@@ -1549,6 +1578,35 @@
 				{
 					"kind": "AddGenericParameter",
 					"name": "Drawing",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "6C1E2B7A-4D3F-4E8B-9A15-2F7C0D6E8B31",
+			"class": "GH_OptionsByComponent",
+			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_OptionsByComponent.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Options",
+					"access": "tree"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "By",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Keys",
+					"access": "tree"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Options",
 					"access": "item"
 				}
 			]

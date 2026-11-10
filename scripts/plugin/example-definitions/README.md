@@ -1,11 +1,13 @@
 # Example definitions
 
-Builds the showcase and stress-test `.gh` files from C#, so they can be regenerated when a component changes instead of being rewired by hand. Every step is a stock or Selva component, except the C# Scripts of the lamp and the solve bench: their sources are the `*.script.cs` files here, which this project doesn't compile.
+Builds the showcase and stress-test `.gh` files from C#, so they can be regenerated when a component changes instead of being rewired by hand. Every step is a stock or Selva component, except the C# Scripts that build the lamp, shelving and kitchen geometry and the solve bench: their sources are the `*.script.cs` files here, which this project doesn't compile.
 
 | File                                                | For        | Shows                                                                                                                                                 |
 | --------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `examples/definitions/timber-gridshell-pavilion.gh` | Showcase   | Timber lamella shell in three forms: material tiles, Night lamps, quantities and checks, a chart, a two-sheet A2 drawing set (PDF), CSV cut list, 3DM |
 | `examples/definitions/perforated-facade.gh`         | Showcase   | Attractor perforation, metal finishes, colour picker, a DXF per panel in a folder, SVG                                                                |
+| `examples/definitions/shelving-unit.gh`             | Showcase   | Dynamic value lists: bays from the width, shelves from the height, door patterns from the resolved bays; one solve per change                         |
+| `examples/definitions/kitchen-run.gh`               | Showcase   | Options By and Repeat: one cabinet per row from the layout, fronts by style, handles by each cabinet's front                                          |
 | `examples/definitions/studio-task-lamp.gh`          | Showcase   | Desk lamp configurator: a light-source list computed from the head, Night lighting, checks, two charts, a priced order, a two-sheet A3 PDF, CSV, 3DM  |
 | `dev/grasshopper/stress-display-throughput.gh`      | Developers | Up to 40,000 objects, mesh density, 64 materials and layers, a text payload up to 20 MB                                                               |
 | `dev/grasshopper/stress-every-input-and-output.gh`  | Developers | Every input widget, visibility rules, a dynamic list, every output kind, messages on demand                                                           |

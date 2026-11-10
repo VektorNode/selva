@@ -1,12 +1,12 @@
 # Dynamic value list: resolve the selection in Grasshopper, so lists can drive lists
 
-**Unfiled.** Design only; file an epic when someone commits to it.
+**Unfiled.** Prototype on `feat/dependent-forms`, uncommitted: built as described below.
 
 Scope: where a dynamic value list's selection is checked against its options, and what that means
 for one list driving another (A's selection computes B's options). Spans `Plugin/Selva.GH`,
 `@selvajs/ui`, `@selvajs/solve` and the compute fork. Companion to
 [dynamic-value-list-loop.md](../fixes/dynamic-value-list-loop.md), whose premises this changes in
-two places (see "What this changes in the loop plan").
+two places: no `selected` field is needed, and wired lists need no `AlreadySet` exemption.
 
 ## How it works today: the browser reconciles, one solve late
 
@@ -48,100 +48,91 @@ cloud input tree is keyed by nickname, so two inputs with the same nickname over
 
 ## Design: resolve in the same solve, in Grasshopper
 
-The options already exist inside the solve that changed them. Resolve there, and tell the browser
-the answer instead of letting it guess one solve later.
+The options already exist inside the solve that changed them. Resolve there, and let the browser
+show the same answer instead of correcting it one solve later.
 
-### 1. The Get param reads current options through a wire
+### 1. The options output is wired into the Get param
 
-`GetDynamicValueListParameter` already reads `"key" = value` pairs from wired sources into
-`_storedItems` (`ReadInitialOptionsFromSources`, meant for seed options). The author wires the same
-options list into both `Set DynVL` and the target `Get DynVL`. A wire is what gives the ordering
-guarantee: Grasshopper computes the Get param after its options, in the same solve, and expires it
-whenever anything upstream of the options changes.
+The author wires the output of `Set DynVL` (or Options By, or Repeat) into the `Get DynVL` it fills,
+as well as into the Context Bake. One wire does three jobs:
 
-In `EmitData`, with wired options present: a selection that matches an option resolves to it; one
-that doesn't falls back to the first option (checklist: prune to survivors, empty → first), with a
-Remark naming both. Resolution is a pure function of selection and options each solve;
-`_selectedValues` keeps what was applied. Put it in `DynamicValueListLogic` so it is unit-tested
-without Grasshopper.
+- **Order.** Grasshopper computes the Get param after its options, in the same solve, and expires
+  it whenever anything upstream of the options changes.
+- **Options.** The Get param reads the payload off the wire (`ReadWiredOptions`): one option set,
+  one per item of By (Options By's `ItemOptions`, Grasshopper-side only), or row keys (Repeat).
+- **Target.** The output finds its target by walking the wire forward through layout holders
+  (`WiredInputs.Fed`), so the builder's target picker isn't needed and isn't written back.
 
-### 2. The payload carries the resolved selection
+No param-list change on the released `Set DynVL`: its output already exists. A `"key" = value`
+Panel wired into the Get param still only seeds options and resolves nothing.
 
-`{ targetInputId, options, selected }`. `Set DynVL` can't read it in `SolveInstance`, since nothing
-orders it after the Get param. But the payload is serialized after the solution, during harvest
-(compute's `Solve`, the plugin's `ValueCollector`), when the Get param has resolved. So the goo
-holds a reference to its target param, taken in `SolveInstance` from the document, and reads the
-param's resolved data when it serializes. No new input on `Set DynVL`: adding one changes the param
-list of a released component, which needs the OBSOLETE + upgrader procedure.
+### 2. Resolution is one rule on both sides
 
-All three serialization paths (`ToJObject`, `ToCollectorPayload`, `FromJson`) change together,
-pinned by the golden fixture both stacks load. `selected` is absent when the Get param has no wired
-options, which is how the browser tells the two modes apart.
+With an options payload wired in, the Get param resolves each pick in `CollectVolatileData`: a pick
+still offered (by value or name, ignoring case) stays, anything else takes the first option; a
+checklist keeps the offered picks, or the first option when none is left. `DynamicValueListLogic`
+holds the rule; `@selvajs/ui`'s `resolvePick` is its twin, and
+`packages/schemas/fixtures/dynamic-value-list-resolution.json` pins both.
 
-### 3. Identity becomes the option name
+The payload carries `resolvedInSolve: true` instead of a `selected` field. The browser already has
+the options the solve used and the picks it sent, so it computes the same answer without one, and
+the goo needs no reference to its target param.
 
-With `selected` present, the browser sends the option **name**, and the Get param resolves it to
-the value against the current options. Names are unique (`Set DynVL` rejects duplicates); values
-aren't, which is the index-valued defect above. Without `selected` (unwired Get, older plugin),
-the browser keeps sending values, since a verbatim pass-through needs one.
+### 3. The browser shows the resolved pick and never sends a fix
 
-### 4. The browser adopts instead of reconciling
+`buildFormModel` returns `shown`: what each resolved input shows, which is what the solve used.
+`values` keeps what the user picked, and that is what goes out. No auto-pick, no budget, no forced
+solve. A pick that isn't offered now comes back when it is offered again. Payloads without
+`resolvedInSolve` keep the control's reconciler.
 
-When the payload has `selected`, the control shows it and sets the value without a solve: the
-solve that produced it already used it. No auto-pick, no budget, no forced solve. The reconciler
-stays only for payloads without `selected`, where the loop plan's session-level reconciler with a
-global budget still applies.
+### 4. Repeated inputs store picks by row key
 
-On a blocked or aborted result, keep the previous options and selection instead of blanking them.
-This one is independent of the rest and worth shipping first.
+A Repeat member's value is one JSON object of row key to pick (`withRowPick`, `ParseRowPicks`): a
+plain string on the wire, one contextual item whatever the row count. The Get param looks each
+row's pick up by key in the same solve that computed the rows, so a change of rows solves once and
+picks stay with their rows. Picks for rows not shown now are kept.
 
 ## Chaining, under this design
 
-A→B: A's selection feeds logic that produces B's options, wired into `Set DynVL(B)` and
-`Get DynVL(B)`. The user changes A. One solve: A expires B's Get param through the wire, B
-re-resolves its selection against the new options, everything downstream computes with a valid B,
-and the payload tells the browser what B ended on. A→B→C is still one solve. No intermediate
-result, so the throttle, late results, manual mode and inactive tabs stop mattering.
+Style → Fronts → Handles, with Fronts and Handles repeated (`examples/definitions/kitchen-run.gh`):
+Options By(Fronts) → Get Fronts → Options By(Handles, By = Fronts) → Get Handles, Repeat → both
+Gets. Changing the style, a pick, or the layout that decides the rows is one solve, and every Get
+param downstream computes with a valid pick. Set DynVL chains the same way
+(`examples/definitions/shelving-unit.gh`: Width → Bays → Doors). No intermediate result, so the
+throttle, late results, manual mode and inactive tabs stop mattering.
 
 Mutual dependence (B's selection feeds A's options too) can't be wired: it's a cycle, and
-Grasshopper refuses it. That's correct, because the answer would depend on solve order. Such
-definitions keep the unwired path, where the budget, once fixed, stops the ping-pong.
+Grasshopper refuses it. Such definitions keep the unwired path.
 
 ## Compute
 
-Nothing changes in the fork. Compute's `AlreadySet` skip is right under this design: B's options
-only change because something upstream changed, and that expires B's Get param through its wire,
-so an unchanged selection re-resolves against the new options anyway. Exempting value lists from
-`AlreadySet` (loop plan, Phase 3) is not needed for wired lists, and would cost every solve the
-warmth of everything downstream of a value list.
+Nothing changes in the fork. `AlreadySet` skips an unchanged pick string, which is right: options
+only change because something upstream changed, and that expires the Get param through its wire,
+so the unchanged pick re-resolves against the new options. Checked on `9.x.state`
+(`compute-roundtrip.check.test.ts`): five changes, five solves, and the form matched every result.
+
+## Blocked and aborted results
+
+A rejected solve blanks every output except dynamic value lists (`blankOutputs`): those hold the
+options and rows the form is drawn from, so the lists and repeated blocks stay as they were.
+
+## Not done
+
+- **Identity by name.** The browser still sends option values, so two options with the same value
+  stay indistinguishable. Matching takes name or value, first match, so switching later keeps
+  saved picks working.
+- **Unwired lists** keep the old behaviour and its defects above; the loop plan still applies to
+  them. `Set DynVL` with a builder-picked target and no wire remarks that it should be wired.
+- **The Context Bake** is still needed for the payload to reach the browser; Compute only
+  harvests through Context Bake and Context Print.
 
 ## Rejected
 
 - **The Get param finds its `Set DynVL` by target id and reads its options, no wire.** Nothing
   orders the two, so it would often read the previous solve's options: today's bug, moved.
+- **Wiring the options list into both `Set DynVL` and the Get param.** Two wires that must agree;
+  the output wire carries the same options and also names the target.
+- **A `selected` field read from the target at harvest.** Needs the goo to hold a live param
+  reference through `Duplicate()` and the bake; the browser can compute the answer itself.
 - **Solve twice server-side when a selection turns invalid.** Doubles the cost of every such solve,
   hides loops inside compute, and does nothing for local mode.
-- **Only the browser reconciler (the loop plan's Phase 1).** It handles every topology but keeps one
-  solve per chain link and the wrong intermediate result. It stays as the fallback, not the main
-  path.
-
-## What this changes in the loop plan
-
-- Its "not adding a `selected` field" rests on the Set component not knowing the resolved
-  selection, because the Get param resolves against the previous options. With options wired into
-  the Get param, it resolves against the current ones, and the payload can carry the answer.
-- Its Phase 3 (exempt value lists from compute's `AlreadySet`) is unnecessary for wired lists and
-  costs warm solves; see "Compute".
-
-## Open questions
-
-- Authoring cost: the options must be wired twice. A builder lint can flag a `Set DynVL` whose
-  options don't also reach its target Get param. Or the Get param grows an "Options" input of its
-  own so the Set component reads from it — check whether that is a param-list change.
-- Does the goo's reference to its target param survive `Duplicate()` and the bake's handling? If
-  not, read the target from the document at harvest instead.
-- A wired Get param stops being sourceless. Compute registers contextual params either way, but
-  `SchemaSynchronizer` reads a wired param's default from its first source's data, which for an
-  options wire is a raw `"key" = value` string. Check that path before relying on the wire.
-- Fallback policy: first option, or keep the last valid selection when it reappears? First is what
-  the browser does today, so it changes nothing users see.

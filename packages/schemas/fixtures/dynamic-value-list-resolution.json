@@ -1,0 +1,63 @@
+{
+	"$comment": "What a dynamic value list resolves a pick to, against the options offered now. Grasshopper resolves in the solve (DynamicValueListLogic) and the browser shows the same answer (@selvajs/ui dynamic-value-list.ts); both test suites load this file.",
+	"single": [
+		{
+			"name": "a pick still offered stays",
+			"options": { "Shaker door": "Shaker door", "Shaker drawers": "Shaker drawers" },
+			"pick": "Shaker drawers",
+			"expect": "Shaker drawers",
+			"replaced": false
+		},
+		{
+			"name": "a pick no longer offered takes the first option",
+			"options": { "Shaker door": "Shaker door", "Shaker drawers": "Shaker drawers" },
+			"pick": "Push door",
+			"expect": "Shaker door",
+			"replaced": true
+		},
+		{
+			"name": "no pick takes the first option",
+			"options": { "Shaker door": "Shaker door", "Shaker drawers": "Shaker drawers" },
+			"pick": null,
+			"expect": "Shaker door",
+			"replaced": false
+		},
+		{
+			"name": "a pick naming an option gives its value",
+			"options": { "Small": "10", "Large": "20" },
+			"pick": "Large",
+			"expect": "20",
+			"replaced": false
+		},
+		{
+			"name": "matching ignores case",
+			"options": { "Knob": "Knob", "Bar": "Bar" },
+			"pick": "bar",
+			"expect": "Bar",
+			"replaced": false
+		},
+		{
+			"name": "with no options the pick passes through",
+			"options": {},
+			"pick": "anything",
+			"expect": "anything",
+			"replaced": false
+		}
+	],
+	"rows": [
+		{
+			"name": "picks follow their row keys, and a new row takes its first option",
+			"rows": ["back/sink", "back/hob", "back/drawers"],
+			"picks": { "back/drawers": "Bar", "back/sink": "Cup pull", "side/larder": "Knob" },
+			"options": [{ "Knob": "Knob", "Bar": "Bar", "Cup pull": "Cup pull" }],
+			"expect": ["Cup pull", "Knob", "Bar"]
+		},
+		{
+			"name": "each row resolves against its own options",
+			"rows": ["back/sink", "back/drawers"],
+			"picks": { "back/sink": "Bar", "back/drawers": "Bar" },
+			"options": [{ "Knob": "Knob", "Bar": "Bar" }, { "None": "None" }],
+			"expect": ["Bar", "None"]
+		}
+	]
+}

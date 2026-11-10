@@ -397,6 +397,26 @@ describe('createSolveSession — holding a result behind its messages', () => {
 		expect(session.computeErrors).toEqual(['refused']);
 	});
 
+	it.each([
+		['blocked', { blocked: true }],
+		['aborted', { aborted: true }]
+	])('a %s solve keeps the options the form is drawn from', (_, outcome) => {
+		const withOptions = {
+			...schema(true),
+			outputs: [{ id: 'out' }, { id: 'options', type: 'dynamicValueList' }]
+		} as unknown as UISchema;
+		const session = createSolveSession({
+			schema: withOptions,
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		const options = { targetInputId: 'a', options: { x: 'x' } };
+		session.report({ outputs: { out: 'clean', options } });
+		session.report({ outputs: {}, ...outcome });
+		expect(session.values.out).toBe(null);
+		expect(session.values.options).toEqual(options);
+	});
+
 	it('both are no-ops when nothing is held', () => {
 		const session = createSolveSession({
 			schema: schema(true),

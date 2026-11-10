@@ -649,6 +649,7 @@ public class SchemaSynchronizer
                         // GH_DynamicValueListOutput feeding it to write the picked target back.
                         if (document.FindObject(dvl.ParamId, false) is GH_Component bake &&
                             ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake) is { } output &&
+                            !output.TargetFromWiring &&
                             output.TargetInputId != dvl.Config.TargetInputId)
                         {
                             output.TargetInputId = dvl.Config.TargetInputId;
