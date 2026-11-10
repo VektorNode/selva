@@ -83,3 +83,20 @@ Concretely:
   is updated. Accepted: it's an operator-visible misconfiguration, not a data hazard.
 - `@selvajs/server` embeds no migration shim: its contract is "cache if current, else re-extract", and
   the blob format itself never becomes package API.
+
+## Amendment (2026-11-10): an older format is cached for a recheck window
+
+The "re-extracts on every render" consequence above proved costly and invisible in production: on
+Cloud Run every cold instance paid a Compute round trip (10 s+ while a child starts) per definition
+whose plugin lagged, and nothing logged why. Decision 2's "persist only when current" is replaced:
+
+- A re-extracted schema in an **older** format (a missing version counts: pre-2.12.0 plugins emit
+  none) is persisted too, and also kept in process, since a viewer context's write can silently
+  land nothing. A warning per instance per window names the version and both formats ("update the
+  plugin").
+- `isUsableCachedSchema(schema, extractedAt)` accepts an older format extracted within
+  `OLDER_SCHEMA_RECHECK_MS` (24 h, either side of now, so a skewed future stamp still expires);
+  past it the next render re-extracts. A plugin upgrade therefore lands within a day instead of at
+  once. The write path stores exactly what this check would serve.
+- Unparseable or newer versions, and PascalCase rows (no `inputs` array), are never served, so
+  decision 3 stands. Without `extractedAt` the check is the old exact-version one.

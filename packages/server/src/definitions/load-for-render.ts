@@ -20,7 +20,7 @@ import type {
 	RequestContext
 } from '@selvajs/platform';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
-import { fetchSchemaFromCompute } from './schema-extraction.js';
+import { compareSchemaVersion, fetchSchemaFromCompute } from './schema-extraction.js';
 
 export type DefinitionChannel = 'live' | 'draft';
 
@@ -118,6 +118,28 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		logger = new NoopLogger()
 	} = deps;
 
+	// Older-format extracts, keyed by version id. The window must not hang on the row's
+	// `schemaExtractedAt`: a viewer or share-link context may not be able to write it (Supabase
+	// RLS turns the UPDATE into a silent 0-row success), and then every load would call Compute.
+	const olderExtracts = new Map<string, { schema: UISchema; extractedAt: string }>();
+
+	function cachedSchemaFor(version: DefinitionVersion): UISchema | null {
+		const row = version.schema as UISchema | undefined;
+		if (row && isUsableCachedSchema(row, version.schemaExtractedAt)) return row;
+		const memo = olderExtracts.get(version.id);
+		if (!memo) return null;
+		if (isUsableCachedSchema(memo.schema, memo.extractedAt)) return memo.schema;
+		olderExtracts.delete(version.id);
+		return null;
+	}
+
+	function rememberOlderExtract(versionId: string, schema: UISchema, extractedAt: string) {
+		if (olderExtracts.size >= OLDER_EXTRACTS_MAX && !olderExtracts.has(versionId)) {
+			olderExtracts.delete(olderExtracts.keys().next().value!);
+		}
+		olderExtracts.set(versionId, { schema, extractedAt });
+	}
+
 	return async function loadDefinitionForRender(ctx, record, channel, explicitVersionId, options) {
 		const versionId =
 			explicitVersionId ?? (channel === 'draft' ? record.draftVersionId : record.liveVersionId);
@@ -161,13 +183,11 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		const computeServer = await pendingServer;
 
 		// Returning before `getClient` is the point — the connect is the cost, not
-		// the `getIO` it carries. A missing or stale-format cache falls through to
-		// the full path below, so the result is always a valid schema.
+		// the `getIO` it carries. The cache may hold an older format inside the recheck
+		// window, exactly as the full path would serve; an unusable one falls through.
 		if (options?.skipComputeDefaults) {
-			const cachedSchema = version.schema as UISchema | undefined;
-			if (cachedSchema && isUsableCachedSchema(cachedSchema)) {
-				return { version, definitionSource, computeServer, schema: cachedSchema };
-			}
+			const cachedSchema = cachedSchemaFor(version);
+			if (cachedSchema) return { version, definitionSource, computeServer, schema: cachedSchema };
 		}
 
 		// Only the client is used here (getIO); the entry's solve scheduler rides
@@ -185,23 +205,39 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		}
 
 		try {
-			// The stored schema is a disposable cache, used ONLY when its format
-			// version matches the app's. On a mismatch (or a pre-caching row with no
-			// schema) re-extract from compute, whose C# SchemaMigrator emits the
-			// current format — the web side never migrates schemas itself. `getIO`
-			// runs either way, to merge compute default values in.
-			const cachedSchema = version.schema as UISchema | undefined;
-			const freshCache = cachedSchema && isUsableCachedSchema(cachedSchema) ? cachedSchema : null;
+			// The stored schema is a disposable cache (`isUsableCachedSchema`). Past it
+			// (or on a pre-caching row with no schema) re-extract from compute, whose C#
+			// SchemaMigrator emits its plugin's format — the web side never migrates
+			// schemas itself. `getIO` runs either way, to merge compute default values in.
+			const freshCache = cachedSchemaFor(version);
 			const [definition, fetchedSchema] = await Promise.all([
 				client.getIO(definitionSource),
 				freshCache ? Promise.resolve(freshCache) : fetchSchema(definitionSource, computeServer)
 			]);
 
-			// Best-effort — a viewer context may lack write access, and the next
-			// editor render or the solve-time backfill will land it. Guarded on the
-			// current version because persisting an older format (compute plugin
-			// behind the app) would just go stale again next render.
-			if (!freshCache && fetchedSchema.schemaVersion === UI_SCHEMA_VERSION) {
+			// An older format (compute plugin behind the app) is remembered in-process and
+			// warned about once per window, so it costs one Compute call per instance per window.
+			const extractedAt = new Date().toISOString();
+			if (!freshCache && compareSchemaVersion(fetchedSchema.schemaVersion) === -1) {
+				rememberOlderExtract(version.id, fetchedSchema, extractedAt);
+				const message =
+					`[loadForRender] compute's plugin emits schema format ${fetchedSchema.schemaVersion ?? '(none)'} ` +
+					`for version ${version.id}, behind this app's ${UI_SCHEMA_VERSION}; serving it for ` +
+					`${OLDER_SCHEMA_RECHECK_MS / 3_600_000} h before asking again. Update the plugin.`;
+				if (onWarn) onWarn(message);
+				else
+					logger.warn('Compute plugin behind the app schema format', {
+						component: 'loadForRender',
+						versionId: version.id,
+						emitted: fetchedSchema.schemaVersion,
+						expected: UI_SCHEMA_VERSION
+					});
+			}
+
+			// Best-effort — a viewer context may lack write access, and the next editor
+			// render or the solve-time backfill will land it. Stores exactly what a read
+			// right after the write would serve, so the two rules cannot drift.
+			if (!freshCache && isUsableCachedSchema(fetchedSchema, extractedAt)) {
 				definitions.setVersionSchema(ctx, version.id, fetchedSchema).catch((err) => {
 					if (onWarn) {
 						onWarn(
@@ -279,15 +315,34 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 }
 
 /**
- * A cached schema is usable only if it is BOTH the current format version and
- * structurally sound. The version check alone is not enough: a compute server
- * that serialized the schema with the wrong Newtonsoft emits PascalCase keys, so
- * `schemaVersion` reads as undefined while `SchemaVersion` holds the value —
- * and a row cached during that window would otherwise be served forever, long
- * after the server was fixed. See `assertCamelCaseSchema`.
+ * How long a schema in an OLDER format serves from the cache before Compute is asked again. A
+ * plugin behind the app re-emits that same format, so asking on every load only buys a Compute
+ * round trip (10 s+ while a child starts); the window bounds how long a plugin upgrade waits.
  */
-export function isUsableCachedSchema(schema: UISchema): boolean {
-	return schema.schemaVersion === UI_SCHEMA_VERSION && Array.isArray(schema.inputs);
+export const OLDER_SCHEMA_RECHECK_MS = 24 * 60 * 60 * 1000;
+
+// Bounds the in-process older-extract memo; the oldest entry is evicted first.
+const OLDER_EXTRACTS_MAX = 1000;
+
+/**
+ * A cached schema is usable when it is structurally sound and either the current format version,
+ * or an older one (missing counts, see `compareSchemaVersion`) extracted within
+ * `OLDER_SCHEMA_RECHECK_MS` of `now`, either side: a future stamp from a skewed clock still
+ * expires. Without `extractedAt` only the current version passes. The `inputs` check is the
+ * PascalCase guard: a compute server that serialized with the wrong Newtonsoft emits `Inputs`, and
+ * such a row must never be served. See `assertCamelCaseSchema`.
+ */
+export function isUsableCachedSchema(
+	schema: UISchema,
+	extractedAt?: string,
+	now: number = Date.now()
+): boolean {
+	if (!Array.isArray(schema.inputs)) return false;
+	const order = compareSchemaVersion(schema.schemaVersion);
+	if (order === 0) return true;
+	if (order !== -1 || !extractedAt) return false;
+	const at = Date.parse(extractedAt);
+	return Number.isFinite(at) && Math.abs(now - at) < OLDER_SCHEMA_RECHECK_MS;
 }
 
 // Colors come back from Compute as "r,g,b" or "a,r,g,b" strings — converted to

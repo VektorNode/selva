@@ -81,26 +81,31 @@ function parseSemver(version: string): [number, number, number] | null {
 }
 
 /**
+ * Orders a schema format version against the app's `UI_SCHEMA_VERSION`: -1 older, 0 current,
+ * 1 newer, null unparseable. A missing version is older: plugins before 2.12.0 emitted none.
+ */
+export function compareSchemaVersion(version: string | undefined): -1 | 0 | 1 | null {
+	if (!version) return -1;
+	const extracted = parseSemver(version);
+	const supported = parseSemver(UI_SCHEMA_VERSION);
+	if (!extracted || !supported) return null;
+	for (let i = 0; i < 3; i++) {
+		if (extracted[i] !== supported[i]) return extracted[i] < supported[i] ? -1 : 1;
+	}
+	return 0;
+}
+
+/**
  * Rejects a schema from a NEWER plugin than this app was built against — its
  * shape may contain constructs the renderer doesn't know. Older (or missing)
  * versions pass: the compute-side C# migrator always emits its own current
  * version, and an older shape only lacks optional additions.
  */
 export function assertSupportedSchemaVersion(schema: UISchema): void {
-	const version = schema.schemaVersion;
-	if (!version) return; // pre-2.12.0 plugin — older than the app, fine
-	const extracted = parseSemver(version);
-	const supported = parseSemver(UI_SCHEMA_VERSION);
-	if (!extracted || !supported) return;
-	const newer =
-		extracted[0] > supported[0] ||
-		(extracted[0] === supported[0] &&
-			(extracted[1] > supported[1] ||
-				(extracted[1] === supported[1] && extracted[2] > supported[2])));
-	if (newer) {
+	if (compareSchemaVersion(schema.schemaVersion) === 1) {
 		throw new SchemaExtractionError(
 			'unsupported',
-			`This definition was authored with a newer Selva plugin (schema format ${version}); ` +
+			`This definition was authored with a newer Selva plugin (schema format ${schema.schemaVersion}); ` +
 				`this server supports schema format ≤ ${UI_SCHEMA_VERSION}. Update the server, or ` +
 				`re-save the definition with a matching plugin version.`
 		);

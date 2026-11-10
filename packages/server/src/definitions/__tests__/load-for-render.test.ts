@@ -1,7 +1,7 @@
 /**
- * Schema-staleness rule under test: a cached schema is used only at the app's
- * current format version; anything else re-extracts from compute and persists
- * back, best-effort and only when the result is itself current.
+ * Schema-staleness rule under test: a cached schema is used at the app's current
+ * format version, or at an older one within the recheck window; anything else
+ * re-extracts from compute and persists back, best-effort, unless it is newer.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -12,7 +12,12 @@ import type {
 	DefinitionVersion,
 	RequestContext
 } from '@selvajs/platform';
-import { createDefinitionLoader, DefinitionLoadError } from '../load-for-render.js';
+import {
+	createDefinitionLoader,
+	DefinitionLoadError,
+	isUsableCachedSchema,
+	OLDER_SCHEMA_RECHECK_MS
+} from '../load-for-render.js';
 
 const ctx = { userId: 'user-1' } as RequestContext;
 
@@ -116,9 +121,9 @@ describe('schema cache staleness (ADR 0005)', () => {
 		expect(mocks.definitions.setVersionSchema).toHaveBeenCalledTimes(1);
 	});
 
-	it('does NOT persist a re-extracted schema that is still not at the current version', async () => {
-		// The deployed compute plugin is behind the app, so even a fresh extract
-		// comes back old — caching it would pin the stale shape.
+	it('persists an older re-extracted schema and warns that the plugin is behind', async () => {
+		// The deployed compute plugin is behind the app: every extract comes back old, so
+		// dropping it would send each load back to Compute.
 		const { deps, mocks } = makeDeps({
 			fetchSchema: vi.fn(async () => uiSchema('2.10.0'))
 		});
@@ -127,9 +132,60 @@ describe('schema cache staleness (ADR 0005)', () => {
 		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
 		await flushMicrotasks();
 
-		expect(mocks.definitions.setVersionSchema).not.toHaveBeenCalled();
-		// Not persisted, but still returned — an old schema renders fine.
+		expect(mocks.definitions.setVersionSchema).toHaveBeenCalledWith(
+			ctx,
+			'v-live',
+			expect.objectContaining({ schemaVersion: '2.10.0' })
+		);
+		expect(mocks.onWarn).toHaveBeenCalledWith(expect.stringContaining('Update the plugin'));
 		expect(result.schema.schemaVersion).toBe('2.10.0');
+	});
+
+	it('serves an older extract from memory when the persist never lands', async () => {
+		// Viewer context under RLS: the write "succeeds" but the row keeps no schema.
+		const { deps, mocks } = makeDeps({
+			fetchSchema: vi.fn(async () => uiSchema('2.10.0'))
+		});
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+		const load = createDefinitionLoader(deps);
+
+		await load(ctx, record, 'live');
+		await load(ctx, record, 'live');
+		await load(ctx, record, 'live', null, { skipComputeDefaults: true });
+
+		expect(mocks.fetchSchema).toHaveBeenCalledTimes(1);
+		expect(mocks.onWarn).toHaveBeenCalledTimes(1);
+	});
+
+	it('serves an older schema extracted within the recheck window without asking Compute', async () => {
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema('2.10.0'), schemaExtractedAt: new Date().toISOString() })
+		);
+
+		await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(mocks.fetchSchema).not.toHaveBeenCalled();
+		expect(mocks.definitions.setVersionSchema).not.toHaveBeenCalled();
+	});
+
+	it('asks Compute again for an older schema past the recheck window', async () => {
+		const { deps, mocks } = makeDeps();
+		const old = new Date(Date.now() - OLDER_SCHEMA_RECHECK_MS - 1000).toISOString();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema('2.10.0'), schemaExtractedAt: old })
+		);
+
+		await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(mocks.fetchSchema).toHaveBeenCalledTimes(1);
+		expect(mocks.definitions.setVersionSchema).toHaveBeenCalledWith(
+			ctx,
+			'v-live',
+			expect.objectContaining({ schemaVersion: UI_SCHEMA_VERSION })
+		);
 	});
 
 	it('a failed persist warns but does not fail the render', async () => {
@@ -142,6 +198,40 @@ describe('schema cache staleness (ADR 0005)', () => {
 
 		expect(result.schema.schemaVersion).toBe(UI_SCHEMA_VERSION);
 		expect(mocks.onWarn).toHaveBeenCalledWith(expect.stringContaining('cache refresh failed'));
+	});
+});
+
+describe('isUsableCachedSchema', () => {
+	const now = Date.parse('2026-11-10T12:00:00Z');
+	const recent = '2026-11-10T11:00:00Z';
+
+	it('takes the current version with or without an extraction time', () => {
+		expect(isUsableCachedSchema(uiSchema(UI_SCHEMA_VERSION))).toBe(true);
+		expect(isUsableCachedSchema(uiSchema(UI_SCHEMA_VERSION), recent, now)).toBe(true);
+	});
+
+	it('takes an older version only with a recent extraction time', () => {
+		expect(isUsableCachedSchema(uiSchema('2.10.0'))).toBe(false);
+		expect(isUsableCachedSchema(uiSchema('2.10.0'), recent, now)).toBe(true);
+		expect(isUsableCachedSchema(uiSchema('2.10.0'), '2026-11-08T00:00:00Z', now)).toBe(false);
+	});
+
+	it('treats a missing version (pre-2.12.0 plugin) as older', () => {
+		const unversioned = { ...uiSchema('x'), schemaVersion: undefined } as unknown as UISchema;
+		expect(isUsableCachedSchema(unversioned)).toBe(false);
+		expect(isUsableCachedSchema(unversioned, recent, now)).toBe(true);
+	});
+
+	it('expires a future-dated extraction time too', () => {
+		expect(isUsableCachedSchema(uiSchema('2.10.0'), '2026-11-10T13:00:00Z', now)).toBe(true);
+		expect(isUsableCachedSchema(uiSchema('2.10.0'), '2026-11-20T00:00:00Z', now)).toBe(false);
+	});
+
+	it('never takes a PascalCase, unreadable or newer schema', () => {
+		const pascal = { SchemaVersion: '2.10.0', Inputs: [] } as unknown as UISchema;
+		expect(isUsableCachedSchema(pascal, recent, now)).toBe(false);
+		expect(isUsableCachedSchema(uiSchema('next'), recent, now)).toBe(false);
+		expect(isUsableCachedSchema(uiSchema('99.0.0'), recent, now)).toBe(false);
 	});
 });
 
