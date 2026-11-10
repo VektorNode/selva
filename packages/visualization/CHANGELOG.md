@@ -1,5 +1,12 @@
 # @selvajs/visualization
 
+## 1.8.0-beta.2
+
+### Minor Changes
+
+- e3c4338: `environment.hdrPath: false` loads no HDR: the generated reflection environment lights the scene
+  alone, for a page that may not fetch, such as an MCP App view.
+
 ## 1.7.1-beta.1
 
 ### Patch Changes
