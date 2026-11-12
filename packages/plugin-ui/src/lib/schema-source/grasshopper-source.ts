@@ -48,6 +48,8 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 			if (!sessionId) return { ok: false, error: 'No session ID provided' };
 			const secret = bridgeSecretForPage(sessionId);
 			if (!secret) return { ok: false, error: NOT_OPENED_FROM_GRASSHOPPER };
+			// Only the Rhino panel declares its host. The plugin closes a socket that declares any
+			// other, so the Selva app's page (`host=app`) authenticates as a browser tab.
 			wsState.setAuthSecret(secret, isRhinoPanel());
 
 			const connected = await wsState.connect();

@@ -13,6 +13,9 @@ selva/
 │   ├── Selva.FileIO/               # File in/out contract: FileData, FileInputData, path + URL rules (no Rhino/GH deps)
 │   ├── Selva.Rhino/                # Rhino interop layer for Selva.Drawing (Rhino/GH deps, no Goos)
 │   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Slva + Selva.Drawing + Selva.FileIO)
+│   ├── Selva.Panel/                # .rhp hosting the UI in a Rhino panel, or serving the Selva app
+│   ├── Selva.App/                  # SelvaApp.exe: runs a definition as an app, Rhino out of sight (Windows)
+│   ├── Selva.Setup/                # SelvaSetup.exe: per-user Windows installer carrying the .yak packages
 │   ├── Selva.PluginVerifier/       # Post-merge smoke test that loads the built .gha
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
 │   ├── Selva.Slva.Tests/           # xUnit tests for Selva.Slva (incl. cross-stack fixture contracts)
@@ -63,6 +66,8 @@ selva/
 | `Selva.Rhino`          | `net8/net10`      | yes           | Rhino interop adapter for `Selva.Drawing`                        |
 | `Selva.GH`             | `net8/net10`      | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
 | `Selva.Panel`          | `net8/net10`      | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
+| `Selva.App`            | `net48`           | none          | `SelvaApp.exe`: its own window over a Rhino that is never shown  |
+| `Selva.Setup`          | `net48`           | none          | `SelvaSetup.exe`: installs the built `.yak` packages per user    |
 | `Selva.PluginVerifier` | `net8/net10`      | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
 | `Selva.Tests`          | `net10.0` (xUnit) | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
 | `Selva.Slva.Tests`     | `net10.0` (xUnit) | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
@@ -79,6 +84,11 @@ needs Rhino on the matching OS.
 namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `Panel` inside
 `Selva.GH`. The `.gha` and the `.rhp` never reference each other. They share one file,
 `PanelContract.cs`, which `Selva.GH` compiles in as a link.
+
+`Selva.App` targets .NET Framework because every Windows has it, while Rhino brings a private .NET
+the exe could not start on. It shares no assembly with the plug-ins either: `AppHostProtocol.cs` (the
+pipe between the app and `Selva.Panel`) and `Format/` (the app file) are compiled into each side as
+links. The exe ships in an `app/` folder beside `Selva.gha`.
 
 ### NuGet versions live in one file
 
@@ -243,6 +253,7 @@ it is cheap (readers detect by magic) but readers must accept retired extensions
 | Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `SlvaWriter.cs` header / `docs/contributing/slva-format.md` |
 | Selva mesh file  | `.slvm` (was `.dmf`) | `SLVM` / `DMF1`* | `SlvmDocument.cs` header, chunked container (GEOM/TABL/...) |
 | Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                       |
+| Selva app file   | `.slvx`              | `SLVX`           | `Plugin/Selva.App/Format/AppFile.cs` header                 |
 
 \* `SLVZ` is `SLVA` in an optional DEFLATE container; `DMF1` is the retired pre-SLVM file
 container, read-only forever. Decoders sniff by the leading magic.

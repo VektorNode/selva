@@ -66,6 +66,11 @@
 		<Compile Include="..\Selva.Panel\PanelContract.cs" Link="Features\UIBuilder\Services\PanelContract.cs"/>
 	</ItemGroup>
 
+	<!-- The Selva app file format. The app compiles the same sources, minus the cipher. -->
+	<ItemGroup>
+		<Compile Include="..\Selva.App\Format\*.cs" Link="Features\UIBuilder\Services\AppFormat\%(Filename)%(Extension)"/>
+	</ItemGroup>
+
 	<!--
 		Release-only ILRepack: merge Newtonsoft.Json + Selva.Schema into Selva.dll and
 		internalize them.

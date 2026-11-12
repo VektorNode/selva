@@ -1,0 +1,6 @@
+{
+	"type": "exportAppFailed",
+	"sessionId": "session-fixture",
+	"requestId": "5",
+	"error": "Save a schema in the builder first: the app shows it."
+}

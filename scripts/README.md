@@ -18,7 +18,8 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 
 | Script                           | Run                                                  | Does                                                                                          |
 | -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs and stages the yak packages           |
+| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs, the yak packages and `SelvaSetup`    |
+| `make-app-icon.mjs`              | `node scripts/plugin/make-app-icon.mjs`              | Draws `Plugin/Selva.App/selva.ico` from the SVG logo; rerun when the logo changes             |
 | `install-local.js`               | `pnpm install:plugin`                                | Builds and installs into Rhino 8's and 9's package folders                                    |
 | `check-component-signatures.mjs` | CI; `--update` after a param change                  | Fails on a changed param list behind an existing component GUID, or any change in `OBSOLETE/` |
 | `bridge-drive.mjs`               | `node scripts/plugin/bridge-drive.mjs <url> <steps>` | Drives a running UI Bridge from outside Rhino and logs every frame with timings               |

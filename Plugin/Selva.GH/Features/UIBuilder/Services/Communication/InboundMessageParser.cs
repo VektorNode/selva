@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Selva.AppFormat;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 
@@ -310,6 +311,33 @@ public sealed class InboundMessageParser
                         }
                         : InboundMessage.Of(InboundKind.MissingField, msgType);
 
+                case "exportApp":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        var name = jObj["name"]?.Type == JTokenType.String ? ((string)jObj["name"]).Trim() : null;
+
+                        // A key of the wrong type is refused, not dropped: the app would go out unprotected.
+                        var keyToken = jObj["key"];
+                        var keyAbsent = keyToken == null || keyToken.Type == JTokenType.Null;
+                        if (requestId == null || string.IsNullOrEmpty(name) ||
+                            (!keyAbsent && keyToken.Type != JTokenType.String) ||
+                            !TryReadAppIcon(jObj["icon"], out var icon))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        var key = keyAbsent ? null : (string)keyToken;
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.ExportApp,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            AppName = name,
+                            AppKey = string.IsNullOrEmpty(key) ? null : key,
+                            AppIcon = icon
+                        };
+                    }
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }
@@ -357,6 +385,37 @@ public sealed class InboundMessageParser
         return jObj["paramId"]?.Type == JTokenType.String && Guid.TryParse((string)jObj["paramId"], out var id)
             ? id
             : null;
+    }
+
+    /// <summary>
+    ///     An absent icon is fine. One that isn't a PNG of an accepted size refuses the whole
+    ///     export, so an app never goes out quietly missing the icon its author picked.
+    /// </summary>
+    private static bool TryReadAppIcon(JToken token, out byte[] icon)
+    {
+        icon = null;
+        if (token == null || token.Type == JTokenType.Null)
+        {
+            return true;
+        }
+
+        // Base64 is four characters per three bytes; checked first so nothing oversized is decoded.
+        var text = token.Type == JTokenType.String ? (string)token : null;
+        if (text == null || text.Length > AppFile.MaxIconBytes / 3 * 4 + 4)
+        {
+            return false;
+        }
+
+        try
+        {
+            icon = Convert.FromBase64String(text);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return icon.Length <= AppFile.MaxIconBytes && AppFile.IsPng(icon);
     }
 
     private static string RequestIdOf(JObject jObj)

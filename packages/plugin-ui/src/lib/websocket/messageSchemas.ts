@@ -325,6 +325,22 @@ const hostPickedFileSchema = baseEnvelope.extend({
 });
 
 // ============================================================================
+// Export as app (replies only ever reach the socket that asked)
+// ============================================================================
+
+// The header of a binary host-frame.ts frame; the dispatcher adds the Selva app file as `body`.
+const exportedAppSchema = baseEnvelope.extend({
+	type: z.literal('exportedApp'),
+	requestId: z.string()
+});
+
+const exportAppFailedSchema = baseEnvelope.extend({
+	type: z.literal('exportAppFailed'),
+	requestId: z.string(),
+	error: z.string().nullish()
+});
+
+// ============================================================================
 // Geometry inputs (answers go to every socket; the page matches its requestId)
 // ============================================================================
 
@@ -376,6 +392,8 @@ const schemasByType = {
 	hostSaveFileResult: hostSaveFileResultSchema,
 	hostPickFileResult: hostPickFileResultSchema,
 	hostPickedFile: hostPickedFileSchema,
+	exportedApp: exportedAppSchema,
+	exportAppFailed: exportAppFailedSchema,
 	pickGeometryResult: pickGeometryResultSchema,
 	geometrySummary: geometrySummarySchema,
 	layoutPlaced: layoutPlacedSchema,

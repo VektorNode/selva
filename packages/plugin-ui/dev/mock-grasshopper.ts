@@ -1207,6 +1207,15 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 	ws.send(JSON.stringify(message));
 }
 
+// A file and its envelope in one binary frame, laid out as src/lib/websocket/host-frame.ts reads it.
+function sendFile(ws: WebSocket, header: Record<string, unknown>, body: Buffer) {
+	const headerBytes = Buffer.from(JSON.stringify(header), 'utf-8');
+	const prefix = Buffer.alloc(8);
+	prefix.write('SLHF', 0, 'ascii');
+	prefix.writeUInt32LE(headerBytes.length, 4);
+	ws.send(Buffer.concat([prefix, headerBytes, body]));
+}
+
 // The plugin hands the page a fresh secret per session; the mock's is fixed.
 const SECRET = 'mock';
 const authenticated = new WeakSet<WebSocket>();
@@ -1351,6 +1360,26 @@ wss.on('connection', (ws) => {
 			case 'applySyncChanges':
 				send(ws, { type: 'syncApplied', sessionId, success: true });
 				break;
+
+			// Not an app file the Selva app could open: the magic and the name, enough to walk
+			// through the dialog and the save. An app named "fail" is refused.
+			case 'exportApp': {
+				const name = String(msg.name ?? '');
+				const { requestId } = msg;
+				setTimeout(() => {
+					if (name.toLowerCase() === 'fail') {
+						send(ws, {
+							type: 'exportAppFailed',
+							sessionId,
+							requestId,
+							error: "Grasshopper couldn't serialise the definition."
+						});
+					} else {
+						sendFile(ws, { type: 'exportedApp', sessionId, requestId }, Buffer.from(`SLVX${name}`));
+					}
+				}, 400);
+				break;
+			}
 
 			default:
 				handleSelva(ws, msg, sessionId);

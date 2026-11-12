@@ -65,6 +65,12 @@ internal sealed class DefinitionLauncherClient
     /// <summary>Set by the plug-in: true while the UI is popped out of the panel.</summary>
     public Func<bool> IsInWindow { get; set; } = () => false;
 
+    /// <summary>
+    ///     The Selva app shows the UI and Rhino has no window: nothing here may open the panel or
+    ///     a dialog, and the app keeps its own recent list.
+    /// </summary>
+    public bool HostedByApp { get; set; }
+
     public void ShowOpenDialog()
     {
         var dialog = new Eto.Forms.OpenFileDialog { Title = "Open a Grasshopper definition" };
@@ -75,10 +81,11 @@ internal sealed class DefinitionLauncherClient
         }
     }
 
-    public void Open(string path)
+    /// <param name="key">What the user typed for a protected Selva app file; null otherwise.</param>
+    public void Open(string path, string? key = null)
     {
         // Popped out, the panel would only show the in-window label; the new session lands in the window.
-        if (!IsInWindow())
+        if (!HostedByApp && !IsInWindow())
         {
             Panels.OpenPanel(typeof(SelvaPanel).GUID);
         }
@@ -98,7 +105,7 @@ internal sealed class DefinitionLauncherClient
         string? refusal;
         try
         {
-            refusal = open(path);
+            refusal = open(path, key);
         }
         catch (Exception ex)
         {
@@ -111,7 +118,10 @@ internal sealed class DefinitionLauncherClient
             return;
         }
 
-        RememberRecent(path);
+        if (!HostedByApp)
+        {
+            RememberRecent(path);
+        }
 
         // Armed first: painting the step runs the .gha's queued show, which can end the wait.
         WaitForSession();
@@ -136,7 +146,18 @@ internal sealed class DefinitionLauncherClient
         Fail(message);
     }
 
-    private static Func<string, string?>? FindOpenDelegate(out string? unavailable)
+    /// <summary>Closes the player definition, if Grasshopper is loaded and one is open.</summary>
+    public void CloseDefinition()
+    {
+        if (AppDomain.CurrentDomain.GetData(PanelContract.LauncherSlot) is IDictionary<string, object> contract &&
+            contract.TryGetValue(PanelContract.CloseDefinitionKey, out var closeValue) &&
+            closeValue is Action close)
+        {
+            close();
+        }
+    }
+
+    private static Func<string, string?, string?>? FindOpenDelegate(out string? unavailable)
     {
         unavailable = null;
         if (!(AppDomain.CurrentDomain.GetData(PanelContract.LauncherSlot) is IDictionary<string, object>))
@@ -154,7 +175,7 @@ internal sealed class DefinitionLauncherClient
         if (!contract.TryGetValue(PanelContract.VersionKey, out var version) ||
             !(version is int v) || v != PanelContract.Version ||
             !contract.TryGetValue(PanelContract.OpenDefinitionKey, out var openValue) ||
-            !(openValue is Func<string, string?> open))
+            !(openValue is Func<string, string?, string?> open))
         {
             unavailable = "Selva.Panel.rhp and Selva.gha come from different Selva versions. Reinstall Selva " +
                           "from the package manager.";
@@ -208,8 +229,9 @@ internal sealed class DefinitionLauncherClient
         StopWaiting();
         Step = null;
 
-        // A session is still showing, so the launcher isn't on screen.
-        if (IsShowingSession())
+        // A session is still showing, so the launcher isn't on screen. Never under the app: a
+        // dialog in a Rhino without a window can't be answered.
+        if (!HostedByApp && IsShowingSession())
         {
             Dialogs.ShowMessage(message, "Selva");
             Changed?.Invoke();

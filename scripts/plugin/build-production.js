@@ -229,6 +229,41 @@ async function build() {
 			logSuccess(`${tfm}: Selva.Panel.rhp staged beside Selva.gha`);
 		}
 
+		// The Selva app is one .NET Framework exe for every Rhino. It ships in its own
+		// subfolder: its WebView2 assemblies must not sit where Rhino resolves the plug-in's.
+		log('Building SelvaApp.exe...');
+		try {
+			execSync('dotnet build Selva.App/Selva.App.csproj --configuration Release', {
+				cwd: join(projectRoot, 'Plugin'),
+				stdio: 'inherit'
+			});
+		} catch {
+			logError('Selva.App build failed');
+			process.exit(1);
+		}
+		const appReleaseDir = join(projectRoot, 'Plugin/Selva.App/bin/Release/net48');
+		const appFiles = [
+			'SelvaApp.exe',
+			'SelvaApp.exe.config',
+			'Microsoft.Web.WebView2.Core.dll',
+			'Microsoft.Web.WebView2.WinForms.dll',
+			'WebView2Loader.dll'
+		];
+		for (const tfm of tfms) {
+			try {
+				statSync(join(ghaReleaseDir, tfm, 'Selva.gha'));
+			} catch {
+				continue;
+			}
+			const appDir = join(ghaReleaseDir, tfm, 'app');
+			rmSync(appDir, { recursive: true, force: true });
+			mkdirSync(appDir, { recursive: true });
+			for (const file of appFiles) {
+				cpSync(join(appReleaseDir, file), join(appDir, file));
+			}
+			logSuccess(`${tfm}: SelvaApp.exe staged in app/`);
+		}
+
 		// Step 3: Verify the merged assemblies actually bind.
 		// Selva.PluginVerifier force-JITs every method of the merged output on each
 		// Rhino runtime family; a corrupted merge fails here instead of inside a
@@ -354,6 +389,25 @@ async function build() {
 				logError(`Yak build failed for ${pkg.label}`);
 				process.exit(1);
 			}
+		}
+
+		// The installer embeds the .yak files just built, so it installs exactly what the Yak
+		// registry serves. It must build after them, and from a clean obj: MSBuild doesn't
+		// notice a resource whose content changed under the same name.
+		log('Building SelvaSetup.exe...');
+		const setupProject = join(projectRoot, 'Plugin/Selva.Setup');
+		const setupPath = join(yakStagingRoot, `SelvaSetup-${pluginVersion}.exe`);
+		try {
+			rmSync(join(setupProject, 'obj/Release'), { recursive: true, force: true });
+			execSync('dotnet build Selva.Setup/Selva.Setup.csproj --configuration Release', {
+				cwd: join(projectRoot, 'Plugin'),
+				stdio: 'inherit'
+			});
+			cpSync(join(setupProject, 'bin/Release/net48/SelvaSetup.exe'), setupPath);
+			logSuccess(`Installer built: ${setupPath}`);
+		} catch {
+			logError('Selva.Setup build failed');
+			process.exit(1);
 		}
 		log('');
 

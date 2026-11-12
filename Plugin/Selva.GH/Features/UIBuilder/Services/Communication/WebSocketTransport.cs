@@ -166,6 +166,22 @@ public class WebSocketTransport : IDisposable
         public Func<object, Task> Reply { get; init; }
     }
 
+    /// <summary>
+    ///     `exportApp`, on the UI thread. The handler answers the socket that asked: the app file
+    ///     through <see cref="ExportAppRequest.SendFile" />, or why there is none through
+    ///     <see cref="ExportAppRequest.Reply" />.
+    /// </summary>
+    public event EventHandler<ExportAppRequest> OnExportAppRequested;
+
+    public sealed class ExportAppRequest
+    {
+        public InboundMessage Message { get; init; }
+        public Func<object, Task> Reply { get; init; }
+
+        /// <summary>Sends a header and the file after it as one <see cref="HostFileFrame" />.</summary>
+        public Func<object, byte[], Task> SendFile { get; init; }
+    }
+
     /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
     public event EventHandler<InboundMessage> OnPickGeometryRequested;
 
@@ -865,6 +881,19 @@ public class WebSocketTransport : IDisposable
                             Reply = new SocketReply(this, frame.Client).SendAsync
                         };
                         MarshalToMainThread(() => OnLayoutRequested?.Invoke(this, request));
+                        break;
+                    }
+
+                case InboundKind.ExportApp:
+                    {
+                        var reply = new SocketReply(this, frame.Client);
+                        var request = new ExportAppRequest
+                        {
+                            Message = inbound,
+                            Reply = reply.SendAsync,
+                            SendFile = reply.SendFileAsync
+                        };
+                        MarshalToMainThread(() => OnExportAppRequested?.Invoke(this, request));
                         break;
                     }
 

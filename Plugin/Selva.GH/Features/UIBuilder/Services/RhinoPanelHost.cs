@@ -37,6 +37,18 @@ internal static class RhinoPanelHost
         return null;
     }
 
+    /// <summary>
+    ///     The <c>host</c> a session URL for the panel declares: the panel's, unless the Selva app
+    ///     hosts this Rhino. Never loads the .rhp, which the app's Rhino always has loaded.
+    /// </summary>
+    public static string PageHost()
+    {
+        return LoadedContract()?.TryGetValue(PanelContract.PageHostKey, out var hostValue) == true &&
+               hostValue is Func<string> host
+            ? host()
+            : PanelContract.PanelPageHost;
+    }
+
     /// <summary>Retargets a panel already in use. Never loads the .rhp or opens the panel.</summary>
     public static void Follow(string url, string sessionId, GH_Document document)
     {

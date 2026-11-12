@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selva</title>
+<style>
+	/* Values copied from packages/ui/src/lib/styles/base.css: this page is shown before Rhino,
+	   and with it the plug-in's web server, has started, so it can't load the real stylesheet. */
+	:root {
+		color-scheme: light dark;
+		--background: oklch(0.985 0 0);
+		--card: oklch(1 0 0);
+		--raised: oklch(1 0 0);
+		--muted: oklch(0.97 0 0);
+		--foreground: oklch(0.145 0 0);
+		--muted-foreground: oklch(0.5 0 0);
+		--faint-foreground: oklch(0.6 0 0);
+		--hover: oklch(0 0 0 / 4%);
+		--selected: oklch(0 0 0 / 8%);
+		--secondary: oklch(0.97 0 0);
+		--border: oklch(0 0 0 / 8%);
+		--border-strong: oklch(0 0 0 / 14%);
+		--input: oklch(0 0 0 / 10%);
+		--ring: oklch(0.708 0 0);
+		--primary: oklch(0.205 0 0);
+		--primary-foreground: oklch(0.985 0 0);
+		--destructive: #c9302d;
+		--shadow-raised: 0 1px 2px oklch(0 0 0 / 6%);
+	}
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--background: oklch(0.145 0 0);
+			--card: oklch(0.205 0 0);
+			--raised: oklch(0.24 0 0);
+			--muted: oklch(0.269 0 0);
+			--foreground: oklch(0.985 0 0);
+			--muted-foreground: oklch(0.708 0 0);
+			--faint-foreground: oklch(0.556 0 0);
+			--hover: oklch(1 0 0 / 6%);
+			--selected: oklch(1 0 0 / 10%);
+			--secondary: oklch(0.269 0 0);
+			--border: oklch(1 0 0 / 10%);
+			--border-strong: oklch(1 0 0 / 18%);
+			--input: oklch(1 0 0 / 15%);
+			--ring: oklch(0.556 0 0);
+			--primary: oklch(0.922 0 0);
+			--primary-foreground: oklch(0.205 0 0);
+			--destructive: oklch(0.7 0.17 22);
+			--shadow-raised: none;
+		}
+	}
+	* { box-sizing: border-box; }
+	html, body { height: 100%; margin: 0; }
+	body {
+		background: var(--background);
+		color: var(--foreground);
+		font: 14px/1.45 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+		display: grid;
+		place-items: center;
+		padding: 16px;
+		user-select: none;
+	}
+	main { width: min(440px, 100%); }
+	[hidden] { display: none !important; }
+	.brand { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+	.brand img { width: 28px; height: 28px; border-radius: 6px; }
+	.brand span { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+	.card {
+		background: var(--card);
+		border: 1px solid var(--border);
+		border-radius: 14px;
+		padding: 24px;
+	}
+	h1 { font-size: 16px; font-weight: 600; margin: 0 0 6px; overflow-wrap: anywhere; }
+	p { margin: 0; color: var(--muted-foreground); overflow-wrap: anywhere; }
+	.actions { display: flex; gap: 8px; margin-top: 24px; }
+	button {
+		font: inherit;
+		font-weight: 500;
+		height: 36px;
+		padding: 0 14px;
+		border-radius: 8px;
+		border: 1px solid var(--border-strong);
+		background: var(--secondary);
+		color: var(--foreground);
+		cursor: pointer;
+	}
+	button:hover { background: var(--selected); }
+	button.primary { background: var(--primary); color: var(--primary-foreground); border-color: transparent; }
+	button.primary:hover { opacity: 0.9; }
+	button:focus-visible, input:focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
+	.label { font-size: 12px; font-weight: 500; color: var(--muted-foreground); margin: 24px 0 8px; }
+	.tray { background: var(--muted); border-radius: 10px; padding: 4px; display: grid; gap: 4px; }
+	.row {
+		display: grid;
+		gap: 0;
+		text-align: left;
+		height: auto;
+		padding: 8px 10px;
+		border-radius: 6px;
+		background: var(--raised);
+		border: 1px solid var(--border);
+		box-shadow: var(--shadow-raised);
+	}
+	.row:hover { background: var(--raised); border-color: var(--border-strong); }
+	.row b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.row small { color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.steps { list-style: none; margin: 24px 0 0; padding: 0; display: grid; gap: 8px; }
+	.steps li { display: flex; align-items: center; gap: 10px; color: var(--faint-foreground); }
+	.steps li.active { color: var(--foreground); }
+	.steps li.done { color: var(--muted-foreground); }
+	.dot { width: 14px; height: 14px; border-radius: 999px; border: 2px solid var(--border-strong); flex: none; }
+	li.active .dot { border-color: var(--primary); border-top-color: transparent; animation: spin 0.8s linear infinite; }
+	li.done .dot { border-color: var(--primary); background: var(--primary); }
+	@keyframes spin { to { transform: rotate(360deg); } }
+	@media (prefers-reduced-motion: reduce) { li.active .dot { animation: none; border-top-color: var(--primary); } }
+	input[type='password'], input[type='text'] {
+		font: inherit;
+		width: 100%;
+		height: 36px;
+		margin-top: 16px;
+		padding: 0 10px;
+		border-radius: 8px;
+		border: 1px solid var(--input);
+		background: var(--muted);
+		color: var(--foreground);
+		user-select: text;
+	}
+	.check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted-foreground); }
+	.error { color: var(--destructive); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+	<div class="brand" id="brand"><img src="%LOGO%" alt=""><span>Selva</span></div>
+
+	<section class="card" id="launcher" hidden>
+		<h1>Open an app</h1>
+		<p>Choose a Selva app or a Grasshopper definition with a Selva UI.</p>
+		<div class="actions"><button class="primary" id="choose">Choose file…</button></div>
+		<div id="recent" hidden>
+			<div class="label">Recent</div>
+			<div class="tray" id="recentList"></div>
+		</div>
+	</section>
+
+	<section class="card" id="opening" hidden>
+		<h1 id="openingName"></h1>
+		<p>Getting things ready. The first start takes a little longer.</p>
+		<ul class="steps">
+			<li data-step="StartingRhino"><span class="dot"></span>Starting Rhino</li>
+			<li data-step="LoadingGrasshopper"><span class="dot"></span>Loading Grasshopper</li>
+			<li data-step="Solving"><span class="dot"></span>Opening the definition</li>
+			<li data-step="StartingUI"><span class="dot"></span>Starting the app</li>
+		</ul>
+	</section>
+
+	<section class="card" id="key" hidden>
+		<h1 id="keyName"></h1>
+		<p>This app is protected. Enter the key you were given.</p>
+		<form id="keyForm">
+			<input type="password" id="keyInput" autocomplete="off" aria-label="Key">
+			<p class="error" id="keyError" hidden></p>
+			<label class="check"><input type="checkbox" id="keyRemember" checked>Remember on this computer</label>
+			<div class="actions">
+				<button class="primary" type="submit">Open</button>
+				<button type="button" id="keyCancel">Cancel</button>
+			</div>
+		</form>
+	</section>
+
+	<section class="card" id="error" hidden>
+		<h1 id="errorTitle">This didn't open</h1>
+		<p id="errorMessage"></p>
+		<div class="actions">
+			<button class="primary" id="retry">Try again</button>
+			<button id="back">Open something else</button>
+		</div>
+	</section>
+</main>
+<script>
+	const post = (message) => window.chrome.webview.postMessage(message);
+	const views = ['launcher', 'opening', 'key', 'error'];
+	const stepOrder = ['StartingRhino', 'LoadingGrasshopper', 'Solving', 'StartingUI'];
+	const el = (id) => document.getElementById(id);
+
+	function show(view) {
+		for (const id of views) el(id).hidden = id !== view;
+	}
+
+	// The host calls this with the whole state each time; nothing here remembers the last one.
+	window.selvaShell = (state) => {
+		show(state.view);
+		// A fixed app is its own thing: the window already carries its name.
+		el('brand').hidden = state.fixed === true;
+
+		if (state.view === 'launcher') {
+			const list = el('recentList');
+			list.replaceChildren();
+			for (const item of state.recent || []) {
+				const row = document.createElement('button');
+				row.className = 'row';
+				const name = document.createElement('b');
+				name.textContent = item.name;
+				const folder = document.createElement('small');
+				folder.textContent = item.folder;
+				row.append(name, folder);
+				row.addEventListener('click', () => post({ cmd: 'open', path: item.path }));
+				list.append(row);
+			}
+			el('recent').hidden = list.childElementCount === 0;
+		} else if (state.view === 'opening') {
+			el('openingName').textContent = state.name;
+			const at = stepOrder.indexOf(state.step);
+			for (const li of document.querySelectorAll('.steps li')) {
+				const index = stepOrder.indexOf(li.dataset.step);
+				li.className = index < at ? 'done' : index === at ? 'active' : '';
+			}
+		} else if (state.view === 'key') {
+			el('keyName').textContent = state.name;
+			el('keyError').textContent = state.error || '';
+			el('keyError').hidden = !state.error;
+			el('keyInput').value = '';
+			el('keyInput').focus();
+		} else if (state.view === 'error') {
+			el('errorMessage').textContent = state.message;
+			el('retry').hidden = !state.canRetry;
+			el('back').hidden = state.fixed === true;
+		}
+	};
+
+	el('choose').addEventListener('click', () => post({ cmd: 'choose' }));
+	el('retry').addEventListener('click', () => post({ cmd: 'retry' }));
+	el('back').addEventListener('click', () => post({ cmd: 'back' }));
+	el('keyCancel').addEventListener('click', () => post({ cmd: 'back' }));
+	el('keyForm').addEventListener('submit', (event) => {
+		event.preventDefault();
+		const key = el('keyInput').value;
+		if (key) post({ cmd: 'key', key, remember: el('keyRemember').checked });
+	});
+
+	post({ cmd: 'ready' });
+</script>
+</body>
+</html>

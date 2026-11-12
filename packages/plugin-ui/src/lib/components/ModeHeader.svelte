@@ -3,7 +3,7 @@
 	import { Button, DropdownMenu, ModeToggle } from '@selvajs/ui';
 	import { Ellipsis, FolderOpen, Play, SquarePen, Wrench, X } from '@lucide/svelte';
 	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
-	import { isRhinoPanel } from '#lib/utils/session.js';
+	import { isRhinoPanel, isSelvaApp } from '#lib/utils/session.js';
 	import { RHINO_OPEN_DEFINITION_URL } from '#lib/app.config.js';
 
 	interface Props {
@@ -44,8 +44,11 @@
 	] as const;
 
 	const showModeToggle = rhinoShellProps().showModeToggle !== false;
-	// The Open dialog is Rhino's own, reached through the host's selva-panel:// links.
-	const canOpenAnother = isRhinoPanel();
+	// The Open dialog is the host's own, reached through its selva-panel:// links. The Selva app's
+	// window intercepts them as the Rhino panel does.
+	const canOpenAnother = isRhinoPanel() || isSelvaApp();
+	// The Selva app's Rhino has no window, so there is no Grasshopper editor to show.
+	const canEdit = !isSelvaApp();
 </script>
 
 <!-- Builder and preview share this header so the mode switch sits in the same place on both:
@@ -120,9 +123,11 @@
 							<FolderOpen />Open another…
 						</DropdownMenu.Item>
 					{/if}
-					<DropdownMenu.Item onSelect={() => onEdit?.()}>
-						<SquarePen />Edit in Grasshopper
-					</DropdownMenu.Item>
+					{#if canEdit}
+						<DropdownMenu.Item onSelect={() => onEdit?.()}>
+							<SquarePen />Edit in Grasshopper
+						</DropdownMenu.Item>
+					{/if}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item onSelect={() => onClose?.()}>
 						<X />Close

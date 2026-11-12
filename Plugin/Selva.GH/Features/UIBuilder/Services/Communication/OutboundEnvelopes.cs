@@ -76,6 +76,16 @@ public static class OutboundEnvelopes
     public static object HostPickedFile(string sessionId, string requestId, string name) =>
         new { type = "hostPickedFile", sessionId, requestId, name };
 
+    // The export replies go only to the socket that asked, panel or browser tab.
+
+    /// <summary>The header of an exported app's <see cref="HostFileFrame" />; the Selva app file follows it in the same frame.</summary>
+    public static object ExportedApp(string sessionId, string requestId) =>
+        new { type = "exportedApp", sessionId, requestId };
+
+    /// <summary>The answer to an `exportApp` that produced no file. `error` is shown to the user.</summary>
+    public static object ExportAppFailed(string sessionId, string requestId, string error) =>
+        new { type = "exportAppFailed", sessionId, requestId, error };
+
     /// <summary>
     ///     The answer to a `pickGeometry`. `outcome` is `picked`, `cancelled` or `failed`; `summary`
     ///     ("2 curves") is set when picked, `error` when failed. The geometry itself never leaves

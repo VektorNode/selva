@@ -53,6 +53,9 @@
 		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14"/>
 		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
 
+		<!-- Selva.App only: the window the app shows its pages in. -->
+		<PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2903.40"/>
+
 		<PackageVersion Include="coverlet.collector" Version="10.1.0"/>
 		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0"/>
 		<PackageVersion Include="xunit" Version="2.9.3"/>

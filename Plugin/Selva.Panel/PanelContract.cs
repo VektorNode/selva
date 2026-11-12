@@ -16,7 +16,7 @@ internal static class PanelContract
     /// <summary>The .rhp's plug-in id (its assembly Guid).</summary>
     public const string PlugInId = "7649CEEB-F498-4E01-B967-7902C427FDD7";
 
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary><see cref="int" />: the .rhp's <see cref="Version" />.</summary>
     public const string VersionKey = "version";
@@ -48,19 +48,36 @@ internal static class PanelContract
     public const string NotifyKey = "notify";
 
     /// <summary>
+    ///     <c>Func&lt;string&gt;</c>: the <c>host</c> a session URL shown through this contract
+    ///     declares. <see cref="PanelPageHost" /> in a Rhino panel, <see cref="AppPageHost" /> when
+    ///     the Selva app shows the page in its own window.
+    /// </summary>
+    public const string PageHostKey = "pageHost";
+
+    public const string PanelPageHost = "rhino";
+
+    /// <summary>The page is outside Rhino: it has no viewport to preview in and no Rhino dialogs.</summary>
+    public const string AppPageHost = "app";
+
+    /// <summary>
     ///     The other direction. The .gha fills this AppDomain data slot when Grasshopper loads it,
-    ///     with a dictionary holding <see cref="VersionKey" /> and <see cref="OpenDefinitionKey" />.
+    ///     with a dictionary holding <see cref="VersionKey" />, <see cref="OpenDefinitionKey" /> and
+    ///     <see cref="CloseDefinitionKey" />.
     ///     A slot, because the .gha can't reach the .rhp without loading it, and either may load
     ///     first.
     /// </summary>
     public const string LauncherSlot = "Selva.Launcher";
 
     /// <summary>
-    ///     <c>Func&lt;string path, string refusal&gt;</c>: open a definition as a player session.
-    ///     Returns null when it opened, otherwise why not, for the user. Closes the current player
-    ///     definition first. UI thread only.
+    ///     <c>Func&lt;string path, string key, string refusal&gt;</c>: open a definition or a Selva
+    ///     app file as a player session. <c>key</c> is what the user typed for a protected app
+    ///     file, otherwise null. Returns null when it opened, otherwise why not, for the user.
+    ///     Closes the current player definition first. UI thread only.
     /// </summary>
     public const string OpenDefinitionKey = "openDefinition";
+
+    /// <summary><c>Action</c>: close the player definition, if one is open. UI thread only.</summary>
+    public const string CloseDefinitionKey = "closeDefinition";
 
     /// <summary>
     ///     AppDomain data slot: an <c>Action</c> the .gha leaves for <see cref="RunActionCommand" />

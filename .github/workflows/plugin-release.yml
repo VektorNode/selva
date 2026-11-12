@@ -139,9 +139,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $packages = Get-ChildItem -Path Plugin/Selva.GH/bin/Yak -Recurse -Filter *.yak | ForEach-Object { $_.FullName }
+          # The Windows installer, for people who don't use Rhino's package manager.
+          $installer = @(Get-ChildItem -Path Plugin/Selva.GH/bin/Yak -Filter SelvaSetup-*.exe | ForEach-Object { $_.FullName })
           $ghArgs = @(
             $env:GITHUB_REF_NAME
-          ) + $packages + @(
+          ) + $packages + $installer + @(
             '--title', "Selva Plugin $env:GITHUB_REF_NAME",
             '--notes-file', "$env:RUNNER_TEMP/notes.md"
           )

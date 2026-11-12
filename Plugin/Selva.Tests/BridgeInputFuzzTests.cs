@@ -25,13 +25,13 @@ public class BridgeInputFuzzTests
         "requestSyncPreview", "applySyncChanges", "selvaGetAccount", "selvaConnect", "selvaSignIn",
         "selvaUseApiKey", "selvaSignOut", "selvaListTargets", "selvaUpload", "selvaCancel", "hostSaveFile",
         "hostPickFile", "pickGeometry", "clearGeometry", "trigger", "closeDefinition", "editInGrasshopper",
-        "nope"
+        "exportApp", "nope"
     };
 
     private static readonly string[] Fields =
     {
-        "accept", "baseSchemaHash", "changes", "fileName", "origin", "paramId", "request", "requestId",
-        "schema", "schemaOnly", "values", "inputs", "id", "x"
+        "accept", "baseSchemaHash", "changes", "fileName", "key", "name", "origin", "paramId", "request",
+        "requestId", "schema", "schemaOnly", "values", "inputs", "id", "x"
     };
 
     [Fact]

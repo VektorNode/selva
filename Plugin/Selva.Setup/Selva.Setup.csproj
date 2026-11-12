@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- .NET Framework for the same reason as Selva.App: it is on every Windows 10 and 11, so
+		     the installer is one exe with nothing to install first. -->
+		<TargetFramework>net48</TargetFramework>
+		<OutputType>WinExe</OutputType>
+		<AssemblyName>SelvaSetup</AssemblyName>
+		<RootNamespace>Selva.Setup</RootNamespace>
+		<Nullable>enable</Nullable>
+		<ApplicationIcon>..\Selva.App\selva.ico</ApplicationIcon>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<Title>Selva Setup</Title>
+		<Description>Installs Selva for Rhino 8 and Rhino 9 for the current user</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="System.Windows.Forms"/>
+		<Reference Include="System.IO.Compression"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Include="..\Selva.App\RhinoInstalls.cs" Link="RhinoInstalls.cs"/>
+		<Compile Include="..\Selva.App\AppIcon.cs" Link="AppIcon.cs"/>
+		<Compile Include="..\Selva.App\WindowsTheme.cs" Link="WindowsTheme.cs"/>
+		<EmbeddedResource Include="..\Selva.App\selva.ico" LogicalName="Selva.selva.ico"/>
+	</ItemGroup>
+
+	<!-- The packages `pnpm run build:plugin` just built: the same .yak files that go to the Yak
+	     registry. A build before that has none, and the installer then says it is incomplete. -->
+	<ItemGroup>
+		<EmbeddedResource Include="..\Selva.GH\bin\Yak\rh-8\*.yak" LogicalName="Selva.Setup.payload.8.0.yak"/>
+		<EmbeddedResource Include="..\Selva.GH\bin\Yak\rh-9\*.yak" LogicalName="Selva.Setup.payload.9.0.yak"/>
+	</ItemGroup>
+
+</Project>

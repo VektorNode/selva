@@ -266,6 +266,12 @@ public class WireFixtureContractTests
 
             ["host-picked-file.json"] = ("HostPickedFile", HostFileFrameTests.SampleHeader()),
 
+            ["exported-app.json"] = ("ExportedApp",
+                OutboundEnvelopes.ExportedApp(Session, "5")),
+
+            ["export-app-failed.json"] = ("ExportAppFailed",
+                OutboundEnvelopes.ExportAppFailed(Session, "5", "Save a schema in the builder first: the app shows it.")),
+
             ["pick-geometry-result.json"] = ("PickGeometryResult",
                 OutboundEnvelopes.PickGeometryResult(Session, "3", ParamA, PromptOutcome.Picked, "2 curves", null)),
 

@@ -9,5 +9,6 @@ export { default as TabEditor } from './TabEditor.svelte';
 export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as LineBreakItem } from './LineBreakItem.svelte';
 export { default as SyncDialog } from './SyncDialog.svelte';
+export { default as AppExportDialog } from './AppExportDialog.svelte';
 export { default as GhGroupImportDialog } from './GhGroupImportDialog.svelte';
 export { default as TabSettingsBar } from './TabSettingsBar.svelte';

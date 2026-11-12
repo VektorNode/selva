@@ -298,6 +298,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             () => _selvaLinks,
             links => _selvaLinks = links
         );
+        _service.AppExport.Initialize(this, () => _embeddedSchema);
 
         _service.WebSocketTransport.BindRole(() => _role);
         _service.WebSocketTransport.OnPlayerCommand += HandlePlayerCommand;
@@ -679,7 +680,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     /// <summary>Null when the panel took the session; otherwise why not, for the user.</summary>
     private string ShowInPanel(bool raise)
     {
-        var url = TryBuildSessionUrl("rhino");
+        var url = TryBuildSessionUrl(RhinoPanelHost.PageHost());
         var document = OnPingDocument();
         if (url == null || document == null)
         {
@@ -698,7 +699,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     internal void FollowCanvas()
     {
-        var url = TryBuildSessionUrl("rhino");
+        var url = TryBuildSessionUrl(RhinoPanelHost.PageHost());
         var document = OnPingDocument();
         if (url != null && document != null)
         {

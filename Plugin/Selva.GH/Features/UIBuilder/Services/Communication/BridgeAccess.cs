@@ -167,7 +167,8 @@ internal static class BridgeAccess
     /// <summary>
     ///     The messages a role may not send. Only these write the schema (`requestSyncPreview` and
     ///     `readLayout` only read), `draftLayout` speaks for the builder's draft, and the Selva
-    ///     commands upload it.
+    ///     commands upload it. `exportApp` hands out the whole definition, which a player may have
+    ///     opened from a protected app file.
     ///     The player commands mean nothing to an author.
     /// </summary>
     public static bool IsRefused(InboundKind kind, BridgeRole role)
@@ -186,6 +187,7 @@ internal static class BridgeAccess
             case InboundKind.SelvaListTargets:
             case InboundKind.SelvaUpload:
             case InboundKind.SelvaCancel:
+            case InboundKind.ExportApp:
                 return role == BridgeRole.Player;
             case InboundKind.CloseDefinition:
             case InboundKind.EditInGrasshopper:
