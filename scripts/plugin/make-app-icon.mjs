@@ -8,28 +8,19 @@
 //
 //   node scripts/plugin/make-app-icon.mjs
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const projectRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
-// sharp is a dependency of the Selva app, not of the repo root.
-const sharp = createRequire(join(projectRoot, 'packages/selva/package.json'))('sharp');
+import { projectRoot, renderLogo } from './shared.mjs';
 
 const SIZES = [16, 20, 24, 32, 40, 48, 60, 64, 72, 96, 128, 256];
-const svg = readFileSync(join(projectRoot, 'packages/plugin-ui/static/favicon/favicon.svg'));
 
-const render = (size) =>
-	sharp(svg, { density: (72 * size) / 64 })
-		.resize(size, size)
-		.ensureAlpha();
+const render = async (size) => (await renderLogo(size)).ensureAlpha();
 
 // ICO frame as a device-independent bitmap: a 40-byte BITMAPINFOHEADER whose height counts the
 // colour rows and the mask rows, 32-bit BGRA rows bottom-up, then a 1-bit mask padded to 32 bits
 // per row. The mask is all zero: alpha carries the transparency.
 async function dibFrame(size) {
-	const rgba = await render(size).raw().toBuffer();
+	const rgba = await (await render(size)).raw().toBuffer();
 	const header = Buffer.alloc(40);
 	header.writeUInt32LE(40, 0);
 	header.writeInt32LE(size, 4);
@@ -58,7 +49,7 @@ async function dibFrame(size) {
 const frames = await Promise.all(
 	SIZES.map(async (size) => ({
 		size,
-		data: size === 256 ? await render(size).png().toBuffer() : await dibFrame(size)
+		data: size === 256 ? await (await render(size)).png().toBuffer() : await dibFrame(size)
 	}))
 );
 

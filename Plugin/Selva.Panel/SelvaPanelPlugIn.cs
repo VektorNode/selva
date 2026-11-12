@@ -133,15 +133,15 @@ public class SelvaPanelPlugIn : PlugIn
     // Hosted by the Selva app
     // ============================================================================
 
-    /// <returns>Null when this Rhino now serves the app on that pipe; otherwise why not.</returns>
-    internal string? ServeApp(string pipeName)
+    /// <returns>Null when this Rhino now serves the app listening there; otherwise why not.</returns>
+    internal string? ServeApp(string address)
     {
         if (_app != null)
         {
             return "This Rhino already serves a Selva app.";
         }
 
-        var link = AppHostLink.Connect(pipeName, out var error);
+        var link = AppHostLink.Connect(address, out var error);
         if (link == null)
         {
             // The app went away while this Rhino started. Nobody can see it to close it, and it
@@ -212,7 +212,8 @@ public class SelvaPanelPlugIn : PlugIn
             doc.Modified = false;
         }
 
-        RhinoApp.Exit();
+        // Forced: a hidden Rhino on a Mac ignores the Exit that lets the user cancel.
+        RhinoApp.Exit(false);
     }
 
     [DllImport("user32.dll")]

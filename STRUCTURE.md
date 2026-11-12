@@ -15,6 +15,7 @@ selva/
 │   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Slva + Selva.Drawing + Selva.FileIO)
 │   ├── Selva.Panel/                # .rhp hosting the UI in a Rhino panel, or serving the Selva app
 │   ├── Selva.App/                  # SelvaApp.exe: runs a definition as an app, Rhino out of sight (Windows)
+│   ├── Selva.App.Mac/              # Selva.app: the same app for macOS (Swift package, not in Selva.sln)
 │   ├── Selva.Setup/                # SelvaSetup.exe: per-user Windows installer carrying the .yak packages
 │   ├── Selva.PluginVerifier/       # Post-merge smoke test that loads the built .gha
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
@@ -89,6 +90,10 @@ namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `
 the exe could not start on. It shares no assembly with the plug-ins either: `AppHostProtocol.cs` (the
 pipe between the app and `Selva.Panel`) and `Format/` (the app file) are compiled into each side as
 links. The exe ships in an `app/` folder beside `Selva.gha`.
+
+`Selva.App.Mac` is a Swift package, built into `Selva.app` by `pnpm build:app:mac`. It shows
+`Selva.App/shell.html` and speaks the protocol of `AppHostProtocol.cs`, whose names it keeps a copy
+of in `AppHostProtocol.swift`: change one, change the other.
 
 ### NuGet versions live in one file
 

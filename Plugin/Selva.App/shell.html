@@ -182,7 +182,9 @@
 	</section>
 </main>
 <script>
-	const post = (message) => window.chrome.webview.postMessage(message);
+	// WebView2 on Windows, WKWebView on macOS.
+	const host = window.chrome?.webview ?? window.webkit.messageHandlers.selvaShell;
+	const post = (message) => host.postMessage(message);
 	const views = ['launcher', 'opening', 'key', 'error'];
 	const stepOrder = ['StartingRhino', 'LoadingGrasshopper', 'Solving', 'StartingUI'];
 	const el = (id) => document.getElementById(id);

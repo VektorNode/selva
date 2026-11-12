@@ -35,6 +35,7 @@
 		"check:website": "turbo run check --filter=@selvajs/website",
 		"lint:website": "turbo run lint --filter=@selvajs/website",
 		"build:plugin": "turbo run build --filter=@selvajs/plugin-ui && node scripts/plugin/build-production.js",
+		"build:app:mac": "node scripts/plugin/build-mac-app.mjs",
 		"install:plugin": "node scripts/plugin/install-local.js",
 		"install:plugin:dev": "node scripts/plugin/install-local.js --dev",
 		"plugin:logs": "node scripts/plugin/dev-logs.mjs",

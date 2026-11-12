@@ -2,16 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Rhino;
+using Rhino.Runtime;
 using Selva.AppHost;
 
 namespace Selva.RhinoPanel;
 
 /// <summary>
-///     This Rhino's end of the pipe to the Selva app that started it. Messages from the app are
+///     This Rhino's end of the channel to the Selva app that started it. Messages from the app are
 ///     raised on the UI thread; <see cref="Send" /> may be called from it at any time.
 /// </summary>
 internal sealed class AppHostLink
@@ -19,15 +21,15 @@ internal sealed class AppHostLink
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
     private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
 
-    private readonly NamedPipeClientStream _pipe;
+    private readonly Stream _channel;
     private readonly StreamWriter _writer;
     private readonly object _writeLock = new object();
     private int _ended;
 
-    private AppHostLink(NamedPipeClientStream pipe)
+    private AppHostLink(Stream channel)
     {
-        _pipe = pipe;
-        _writer = new StreamWriter(pipe, Utf8) { AutoFlush = true, NewLine = "\n" };
+        _channel = channel;
+        _writer = new StreamWriter(channel, Utf8) { AutoFlush = true, NewLine = "\n" };
     }
 
     public event Action<string, string?>? OpenRequested;
@@ -37,28 +39,60 @@ internal sealed class AppHostLink
     /// <summary>The app asked Rhino to quit, or is gone. Raised once.</summary>
     public event Action? Ended;
 
-    /// <returns>Null with <paramref name="error" /> set when the app isn't listening on that pipe.</returns>
-    public static AppHostLink? Connect(string pipeName, out string? error)
+    /// <param name="address"><see cref="AppHostProtocol" /> says what the app passes on each platform.</param>
+    /// <returns>Null with <paramref name="error" /> set when the app isn't listening there.</returns>
+    public static AppHostLink? Connect(string address, out string? error)
     {
         error = null;
-
-        // Asynchronous: a synchronous pipe handle serializes its I/O, so the reader's blocked
-        // read would hold up every Send.
-        var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        Stream channel;
         try
         {
-            pipe.Connect((int)ConnectTimeout.TotalMilliseconds);
+            channel = HostUtils.RunningOnWindows ? ConnectPipe(address) : ConnectSocket(address);
         }
-        catch (Exception ex) when (ex is TimeoutException || ex is IOException)
+        catch (Exception ex) when (ex is TimeoutException || ex is IOException || ex is SocketException ||
+                                   ex is ArgumentException)
         {
-            pipe.Dispose();
-            error = "The Selva app isn't listening on that pipe.";
+            error = "The Selva app isn't listening there.";
             return null;
         }
 
-        var link = new AppHostLink(pipe);
+        var link = new AppHostLink(channel);
         new Thread(link.ReadLoop) { IsBackground = true, Name = "Selva app host" }.Start();
         return link;
+    }
+
+    private static Stream ConnectPipe(string name)
+    {
+        // Asynchronous: a synchronous pipe handle serializes its I/O, so the reader's blocked
+        // read would hold up every Send.
+        var pipe = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+        try
+        {
+            pipe.Connect((int)ConnectTimeout.TotalMilliseconds);
+            return pipe;
+        }
+        catch
+        {
+            pipe.Dispose();
+            throw;
+        }
+    }
+
+    // Not a NamedPipeClientStream: off Windows .NET maps a pipe's name to a socket path of its
+    // own, which an app that isn't .NET would have to copy.
+    private static Stream ConnectSocket(string path)
+    {
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            socket.Connect(new UnixDomainSocketEndPoint(path));
+            return new NetworkStream(socket, true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     public void Send(string type, params (string Field, string? Value)[] fields)
@@ -86,7 +120,7 @@ internal sealed class AppHostLink
     {
         try
         {
-            using var reader = new StreamReader(_pipe, Utf8, false, 4096, true);
+            using var reader = new StreamReader(_channel, Utf8, false, 4096, true);
             while (reader.ReadLine() is { } line)
             {
                 Dispatch(line);

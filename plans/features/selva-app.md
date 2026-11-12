@@ -45,9 +45,46 @@ Rhino 9 without a licence: the "Licensing" window is visible 7 seconds after the
 
 `SelvaAppHost` hands the pipe's name to `Selva.Panel.rhp`, which then serves the app instead of
 its panel: the `show`, `clear` and `notify` the `.gha` sends through the panel contract go over
-the pipe. The `.gha` learns only one thing, through `PageHostKey`: the session URL says
-`host=app` instead of `host=rhino`. The pipe protocol is the header of
-`Plugin/Selva.App/AppHostProtocol.cs`.
+the pipe.
+
+Under the app the `.gha` reads the definition itself instead of through `GH_DocumentIO`, which
+asks "IO generated messages, would you like to see them?" in a dialog nobody can answer. It
+also takes the font out of every scribble and panel, inside clusters too, before Grasshopper
+reads them: a font the machine lacks (Segoe UI on a Mac) opens a substitution dialog. The
+`.gha` learns only one thing, through `PageHostKey`: the session URL says `host=app` instead
+of `host=rhino`. The pipe protocol is the header of `Plugin/Selva.App/AppHostProtocol.cs`.
+
+## On a Mac
+
+`Plugin/Selva.App.Mac` is the same app in Swift: a WKWebView window, the same `shell.html`, the
+same messages to Rhino. `pnpm build:app:mac` builds `Selva.app`. What differs from Windows:
+
+- **Starting Rhino hidden.** `NSWorkspace` opens Rhino hidden and without activating it, with
+  `-nosplash -runscript="_-SelvaAppHost <socket>"`. No Rhino window comes on screen at any
+  point, and that includes its dialogs: on a Mac the whole app is hidden, where on Windows only
+  the main window is. Rhino's icon stays in the Dock, and clicking it shows Rhino.
+- **A Unix socket, not a named pipe.** The app listens on a socket in the user's temporary
+  folder and passes its path. .NET's named pipes are Unix sockets too on a Mac, but at a path
+  .NET makes up, which a Swift app would have to copy.
+- **One Rhino, so one window.** Rhino for Mac refuses to run beside another Rhino: the second
+  one stops at an "already running" alert. The app therefore has one window, and a file opened
+  from Finder while it is up replaces what the window shows, in the Rhino that is already
+  running. A file that arrives while another is still opening gets a new Rhino, because Rhino
+  can't drop an open it has started. If the user has Rhino open, the app says so instead of
+  starting one. While the app is open, the user can't start Rhino either.
+- **Exiting.** `RhinoApp.Exit()` does nothing in a hidden Rhino on a Mac; `Exit(false)` does.
+  To kill a Rhino that hangs, the app sends SIGKILL to Rhino's crash monitor and then to Rhino.
+  SIGTERM makes Rhino abort, which leaves a crash report and a dialog about it.
+- **Keys** are in the login keychain (`Selva --add-key`), and the file type, with Open With for
+  `.gh` and `.ghx`, is declared in `Info.plist`.
+
+Checked live on Rhino 8: `open`, key from the keychain, a second file into the same window,
+quit, and a killed app (Rhino exits by itself).
+
+Rhino 9 behaves the same once it runs this plug-in, with one catch. After Selva is installed or
+updated, Rhino 9 shows "Preparing Plug-ins for First Use" at its next start. That dialog does
+its work only once it is on screen, so a hidden Rhino 9 waits at it for ever, and the app times
+out. Opening Rhino 9 once gets past it.
 
 ## The page in the app is a browser tab
 
@@ -133,12 +170,23 @@ of itself as the uninstaller.
 
 ## Not built (unfiled)
 
-- **macOS.** The format, the export, the plug-in side and the pipe (a Unix socket there) are
-  portable. Missing: a Mac app (WKWebView, Keychain, a declared file type), starting Rhino hidden
-  (`open -gj`, untested), and signing and notarization, which need a Mac.
+- **Shipping the Mac app.** `Selva.app` is built locally and signed ad hoc. It needs a Developer
+  ID signature, notarization and an installer (`.dmg` or `.pkg`), a macOS job in the release
+  workflow, and a place to live: beside the plug-in like `SelvaApp.exe`, or in `/Applications`.
+  Until then `SelvaApp` in Rhino for Mac still says the app is Windows only. An ad hoc signature
+  changes with every build, so the keychain asks before a new build may read a stored key.
+- **Rhino's Dock icon on a Mac.** Making Rhino an accessory app from the plug-in removes it, but
+  that change also unhides Rhino. Hiding it again straight away held on Rhino 8 and failed about
+  one start in four on Rhino 9, where Rhino's main window then stayed on screen.
+- **Rhino 9's first start after an install.** See "On a Mac". The app could show Rhino when it
+  hasn't connected after a few seconds, and the plug-in could hide it again once it has.
+- **Stray dialogs on a Mac.** The Mac app doesn't look for a dialog in the hidden Rhino as the
+  Windows app does. It times out, kills that Rhino and starts a new one on the next try, but
+  can't say which dialog it was.
 - **Remembering the icon.** The export dialog keeps a picked icon until the page reloads. The
   page's origin changes with the session's port, so browser storage can't carry it further; the
   definition could.
 - **A signed installer.** Unsigned, Windows SmartScreen warns before it runs. That needs a
   code-signing certificate in the release workflow.
-- **One Rhino per window.** Two apps open at once are two Rhinos.
+- **One Rhino per window.** On Windows two apps open at once are two Rhinos. On a Mac there is
+  one Rhino and so one app at a time.

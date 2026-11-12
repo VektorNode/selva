@@ -130,13 +130,13 @@ internal static class DefinitionLauncher
         }
         else
         {
-            var io = new GH_DocumentIO();
-            if (!io.Open(fullPath) || io.Document == null)
+            document = RhinoPanelHost.PageHost() == PanelContract.AppPageHost
+                ? ReadUnattended(fullPath)
+                : ReadWithGrasshopper(fullPath);
+            if (document == null)
             {
                 return $"Grasshopper couldn't read {Path.GetFileName(path)}.";
             }
-
-            document = io.Document;
         }
 
         var bridges = document!.Objects.OfType<GH_UIBuilderComponent>().ToList();
@@ -367,13 +367,50 @@ internal static class DefinitionLauncher
         var read = info.Kind == AppDefinitionKind.Xml
             ? archive.Deserialize_Xml(Encoding.UTF8.GetString(definition))
             : archive.Deserialize_Binary(definition);
-        var loaded = new GH_Document();
-        if (!read || !archive.ExtractObject(loaded, "Definition"))
+        document = read ? Extract(archive) : null;
+        return document == null ? $"Grasshopper couldn't read {Path.GetFileName(fullPath)}." : null;
+    }
+
+    private static GH_Document? ReadWithGrasshopper(string fullPath)
+    {
+        var io = new GH_DocumentIO();
+        return io.Open(fullPath) ? io.Document : null;
+    }
+
+    /// <summary>
+    ///     What <see cref="GH_DocumentIO.Open(string)" /> does, without its "IO generated
+    ///     messages" prompt: under the Selva app Rhino has no window, so a modal dialog blocks the
+    ///     open until the app gives up on this Rhino.
+    /// </summary>
+    private static GH_Document? ReadUnattended(string fullPath)
+    {
+        var archive = new GH_Archive();
+        var document = archive.ReadFromFile(fullPath) ? Extract(archive) : null;
+        if (document != null)
         {
-            return $"Grasshopper couldn't read {Path.GetFileName(fullPath)}.";
+            document.FilePath = fullPath;
         }
 
-        document = loaded;
+        return document;
+    }
+
+    private static GH_Document? Extract(GH_Archive archive)
+    {
+        if (RhinoPanelHost.PageHost() == PanelContract.AppPageHost &&
+            archive.GetRootNode?.FindChunk("Definition") is GH_Chunk definition)
+        {
+            DefinitionFonts.Drop(definition);
+        }
+
+        var document = new GH_Document();
+        if (archive.ExtractObject(document, "Definition"))
+        {
+            // A wire whose source didn't load would stay as a placeholder the solve collects from.
+            document.DestroyProxySources();
+            return document;
+        }
+
+        document.Dispose();
         return null;
     }
 

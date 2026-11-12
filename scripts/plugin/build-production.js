@@ -7,27 +7,9 @@
  */
 
 import { execSync } from 'child_process';
-import { rmSync, cpSync, mkdirSync, statSync, readFileSync, writeFileSync } from 'fs';
+import { rmSync, cpSync, existsSync, mkdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const projectRoot = join(__dirname, '..', '..');
-
-// Single source of truth for the plugin version: Selva.GH.csproj <Version>.
-// We substitute it into the yak manifest ourselves rather than leaving yak's
-// `$version` token to resolve — token resolution depends on yak inspecting an
-// assembly in the staging root, which is empty for multi-TFM packages (the
-// .gha lives in TFM subfolders), so it fails on clean CI runners.
-function readPluginVersion() {
-	const csprojPath = join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj');
-	const csproj = readFileSync(csprojPath, 'utf-8');
-	const match = csproj.match(/<Version>([^<]+)<\/Version>/);
-	if (!match) {
-		throw new Error(`Could not find <Version> in ${csprojPath}`);
-	}
-	return match[1].trim();
-}
+import { projectRoot, readPluginVersion } from './shared.mjs';
 
 // Rhino-coupled TFMs and the one Rhino 9 loads, read from Plugin/Directory.Build.props so a
 // Rhino/.NET bump stays a single edit there. Both OS conditions list the same TFMs; the regex reads the Windows one.
@@ -242,12 +224,13 @@ async function build() {
 			process.exit(1);
 		}
 		const appReleaseDir = join(projectRoot, 'Plugin/Selva.App/bin/Release/net48');
+		const nativeLoader = 'WebView2Loader.dll';
 		const appFiles = [
 			'SelvaApp.exe',
 			'SelvaApp.exe.config',
 			'Microsoft.Web.WebView2.Core.dll',
 			'Microsoft.Web.WebView2.WinForms.dll',
-			'WebView2Loader.dll'
+			nativeLoader
 		];
 		for (const tfm of tfms) {
 			try {
@@ -259,7 +242,13 @@ async function build() {
 			rmSync(appDir, { recursive: true, force: true });
 			mkdirSync(appDir, { recursive: true });
 			for (const file of appFiles) {
-				cpSync(join(appReleaseDir, file), join(appDir, file));
+				// Only a Windows build flattens the native loader into the output folder.
+				const flat = join(appReleaseDir, file);
+				const source =
+					file === nativeLoader && !existsSync(flat)
+						? join(appReleaseDir, 'runtimes/win-x64/native', file)
+						: flat;
+				cpSync(source, join(appDir, file));
 			}
 			logSuccess(`${tfm}: SelvaApp.exe staged in app/`);
 		}
@@ -336,6 +325,9 @@ async function build() {
 			}
 		];
 
+		// Substituted into the yak manifest here rather than left to yak's `$version` token:
+		// yak resolves it from an assembly in the staging root, which is empty for multi-TFM
+		// packages (the .gha lives in TFM subfolders), so it fails on clean CI runners.
 		const pluginVersion = readPluginVersion();
 		logSuccess(`Plugin version (from csproj): ${pluginVersion}`);
 
