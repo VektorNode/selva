@@ -11,12 +11,11 @@
  */
 
 import { execSync } from 'child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
+import { projectRoot, readPluginVersion } from './shared.mjs';
 
-const projectRoot = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const yakStagingRoot = join(projectRoot, 'Plugin/Selva.GH/bin/Yak');
 
 const packagesRoot =
@@ -53,9 +52,7 @@ function runningLockers() {
 	}
 }
 
-const csproj = readFileSync(join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj'), 'utf-8');
-const version = csproj.match(/<Version>([^<]+)<\/Version>/)?.[1].trim();
-if (!version) throw new Error('No <Version> in Selva.GH.csproj');
+const version = readPluginVersion();
 
 const dev = process.argv.includes('--dev');
 

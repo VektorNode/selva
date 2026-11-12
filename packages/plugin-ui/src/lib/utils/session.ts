@@ -6,6 +6,7 @@ import {
 	MODE_QUERY_PARAM,
 	PLAYER_MODE,
 	RHINO_PANEL_HOST,
+	SELVA_APP_HOST,
 	WEBSOCKET_PORT_QUERY_PARAM
 } from '#lib/app.config.js';
 
@@ -38,6 +39,14 @@ export function buildSessionParams(): string {
 
 export function isRhinoPanel(): boolean {
 	return page.url.searchParams.get(HOST_QUERY_PARAM) === RHINO_PANEL_HOST;
+}
+
+/**
+ * In the Selva app's window. To the plugin that page is a browser tab: it declares no host when
+ * it authenticates, and saves, picks and the theme work as they do in a browser.
+ */
+export function isSelvaApp(): boolean {
+	return page.url.searchParams.get(HOST_QUERY_PARAM) === SELVA_APP_HOST;
 }
 
 /** What the URL says; the socket's acknowledged role overrides it once connected. */

@@ -496,7 +496,7 @@ public class BridgeOrchestrator : IDisposable
             // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
             // alone leaves a display-only definition with an empty viewer.
             if (!request.SchemaOnly &&
-                (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false)))
+                (validatedSchema.Outputs?.Count > 0 || LocalViewer.IsOn(validatedSchema)))
             {
                 ScheduleOutputBroadcast(validatedSchema);
             }
@@ -817,7 +817,7 @@ public class BridgeOrchestrator : IDisposable
     /// </summary>
     private void RegenerateDisplayData(UISchema schema)
     {
-        if (!(schema?.ViewerOptions?.EnableLocal ?? false))
+        if (!LocalViewer.IsOn(schema))
         {
             return;
         }

@@ -5,8 +5,8 @@ using System.Text;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     A file and its envelope in one binary WebSocket frame, used both ways between the Rhino panel
-///     and the plugin:
+///     A file and its envelope in one binary WebSocket frame: both ways between the Rhino panel and
+///     the plugin for its saves and picks, and from the plugin to any page for an exported app:
 ///     <code>
 ///     offset  size      field
 ///     0       4         magic "SLHF" (ASCII)

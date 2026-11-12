@@ -49,6 +49,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [preview-solves](./features/preview-solves.md)                               | **unfiled** — design only; replaces parafa's own preview mode                   |
 | [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md) | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
 | [triggers](./features/triggers.md)                                           | **unfiled** — design only                                                       |
+| [selva-app](./features/selva-app.md)                                         | **unfiled** — built for Windows on `felix/selva-app`; macOS not started         |
 | [webhooks](./features/webhooks.md)                                           | **unfiled** — design only                                                       |
 | [service-accounts](./features/service-accounts.md)                           | **unfiled** — design only                                                       |
 | [notifications](./features/notifications.md)                                 | **unfiled** — package extracted; `notify()` and Selva-side magic links open     |

@@ -170,6 +170,7 @@ public class BridgeAccessTests
         [InboundKind.SelvaListTargets] = Gate.AuthorOnly,
         [InboundKind.SelvaUpload] = Gate.AuthorOnly,
         [InboundKind.SelvaCancel] = Gate.AuthorOnly,
+        [InboundKind.ExportApp] = Gate.AuthorOnly,
         [InboundKind.CloseDefinition] = Gate.PlayerOnly,
         [InboundKind.EditInGrasshopper] = Gate.PlayerOnly,
         [InboundKind.HostSaveFile] = Gate.RhinoPanelOnly,

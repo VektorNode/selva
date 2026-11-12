@@ -103,6 +103,28 @@ export async function drawThumbnail(
 	return { encode, opaque };
 }
 
+/**
+ * Fits the whole image into a transparent square PNG. An app icon is shown uncropped, unlike a
+ * thumbnail, so a wide logo keeps its ends.
+ */
+export async function drawIconPng(file: Blob, px: number): Promise<Blob> {
+	const bitmap = await decodeImage(file);
+	const scale = px / Math.max(bitmap.width, bitmap.height);
+	const width = bitmap.width * scale;
+	const height = bitmap.height * scale;
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = px;
+	const ctx = canvas.getContext('2d');
+	if (!ctx) throw new Error('This browser cannot draw images.');
+	ctx.imageSmoothingQuality = 'high';
+	ctx.drawImage(bitmap, (px - width) / 2, (px - height) / 2, width, height);
+	bitmap.close();
+
+	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+	if (!blob) throw new Error('This browser cannot write a PNG.');
+	return blob;
+}
+
 export function blobToDataUri(blob: Blob): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();

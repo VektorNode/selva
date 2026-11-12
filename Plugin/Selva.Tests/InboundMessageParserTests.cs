@@ -385,6 +385,84 @@ public class InboundMessageParserTests
     }
 
     // -------------------------------------------------------------------------
+    // exportApp
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ExportApp_BindsRequestIdNameAndKey()
+    {
+        var msg = Parse(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"",
+                           ""name"": ""  Tower massing "", ""key"": "" correct horse "" }");
+
+        Assert.Equal(InboundKind.ExportApp, msg.Kind);
+        Assert.Equal("5", msg.RequestId);
+        Assert.Equal("Tower massing", msg.AppName);
+        // Kept as typed: the person opening the app types the same characters.
+        Assert.Equal(" correct horse ", msg.AppKey);
+    }
+
+    [Fact]
+    public void ExportApp_BindsAPngIcon()
+    {
+        var png = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 };
+        var msg = Parse(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"",
+                           ""name"": ""Tower"", ""icon"": """ + Convert.ToBase64String(png) + @""" }");
+
+        Assert.Equal(InboundKind.ExportApp, msg.Kind);
+        Assert.Equal(png, msg.AppIcon);
+    }
+
+    [Theory]
+    [InlineData("42")]
+    [InlineData(@"""not base64!""")]
+    // Valid base64, but a JPEG's first bytes.
+    [InlineData(@"""/9j/4AAQSkZJRg==""")]
+    public void ExportApp_WithAnIconThatIsNotAPng_IsRefused(string icon)
+    {
+        var msg = Parse(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"",
+                           ""name"": ""Tower"", ""icon"": " + icon + " }");
+
+        Assert.Equal(InboundKind.MissingField, msg.Kind);
+    }
+
+    [Fact]
+    public void ExportApp_WithAnOversizedIcon_IsRefused()
+    {
+        var png = new byte[Selva.AppFormat.AppFile.MaxIconBytes + 1];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(png, 0);
+        var msg = Parse(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"",
+                           ""name"": ""Tower"", ""icon"": """ + Convert.ToBase64String(png) + @""" }");
+
+        Assert.Equal(InboundKind.MissingField, msg.Kind);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""Tower"" }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""Tower"", ""key"": null }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""Tower"", ""key"": """" }")]
+    public void ExportApp_WithoutAKey_IsUnprotected(string json)
+    {
+        var msg = Parse(json);
+
+        Assert.Equal(InboundKind.ExportApp, msg.Kind);
+        Assert.Null(msg.AppKey);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""name"": ""Tower"" }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": """", ""name"": ""Tower"" }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"" }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""   "" }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": 7 }")]
+    // A key that isn't text must not turn into an unprotected export.
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""Tower"", ""key"": 1234 }")]
+    [InlineData(@"{ ""type"": ""exportApp"", ""sessionId"": ""session-1"", ""requestId"": ""5"", ""name"": ""Tower"", ""key"": [""a""] }")]
+    public void ExportApp_WithoutItsFields_IsMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
+
+    // -------------------------------------------------------------------------
     // pickGeometry / clearGeometry / trigger / closeDefinition / editInGrasshopper
     // -------------------------------------------------------------------------
 

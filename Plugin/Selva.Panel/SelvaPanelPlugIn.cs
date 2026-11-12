@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Rhino;
 using Rhino.PlugIns;
 using Rhino.UI;
+using Selva.AppHost;
 using Selva.RhinoPanel;
 
 [assembly: Guid(PanelContract.PlugInId)]
@@ -17,6 +19,12 @@ namespace Selva.RhinoPanel;
 /// </summary>
 public class SelvaPanelPlugIn : PlugIn
 {
+    // While the Selva app hosts this Rhino, sessions go to the app's window instead of the panel.
+    private AppHostLink? _app;
+    private string? _appSessionId;
+    private OpenStep? _reportedStep;
+    private string? _reportedError;
+
     public SelvaPanelPlugIn()
     {
         Instance = this;
@@ -39,6 +47,7 @@ public class SelvaPanelPlugIn : PlugIn
         Launcher.IsInWindow = () => Host.InWindow;
         Launcher.Changed += CloseWindowAfterFailedOpen;
         Launcher.Changed += SelvaPanel.RenderAll;
+        Launcher.Changed += ReportToApp;
         Host.Changed += SelvaPanel.RenderAll;
         Host.PageLoaded += Launcher.SessionShown;
 
@@ -57,22 +66,52 @@ public class SelvaPanelPlugIn : PlugIn
             [PanelContract.ShowKey] = (Action<string, string, bool>)Show,
             [PanelContract.FollowKey] = (Action<string, string>)Follow,
             [PanelContract.ClearKey] = (Action<string>)Clear,
-            [PanelContract.NotifyKey] = (Action<string>)Launcher.Notify
+            [PanelContract.NotifyKey] = (Action<string>)Launcher.Notify,
+            [PanelContract.PageHostKey] = (Func<string>)(() =>
+                _app != null ? PanelContract.AppPageHost : PanelContract.PanelPageHost)
         };
     }
 
     private void Show(string url, string sessionId, bool raise)
     {
+        if (_app != null)
+        {
+            ShowInApp(url, sessionId);
+            return;
+        }
+
         Host.Show(new PanelTarget(new Uri(url), sessionId), raise);
     }
 
     private void Follow(string url, string sessionId)
     {
+        if (_app != null)
+        {
+            ShowInApp(url, sessionId);
+            return;
+        }
+
         Host.Retarget(new PanelTarget(new Uri(url), sessionId));
     }
 
     private void Clear(string sessionId)
     {
+        if (_app != null)
+        {
+            if (_appSessionId == sessionId)
+            {
+                _appSessionId = null;
+
+                // Opening another definition clears the old session first; the app waits for the new one.
+                if (!Launcher.IsOpening)
+                {
+                    _app.Send(AppHostProtocol.Clear);
+                }
+            }
+
+            return;
+        }
+
         if (Host.Shown?.SessionId == sessionId)
         {
             // Opening another definition clears the old session first; a pop-out waits for the new one.
@@ -89,6 +128,112 @@ public class SelvaPanelPlugIn : PlugIn
             Panels.OpenPanel(typeof(SelvaPanel).GUID);
         }
     }
+
+    // ============================================================================
+    // Hosted by the Selva app
+    // ============================================================================
+
+    /// <returns>Null when this Rhino now serves the app listening there; otherwise why not.</returns>
+    internal string? ServeApp(string address)
+    {
+        if (_app != null)
+        {
+            return "This Rhino already serves a Selva app.";
+        }
+
+        var link = AppHostLink.Connect(address, out var error);
+        if (link == null)
+        {
+            // The app went away while this Rhino started. Nobody can see it to close it, and it
+            // holds a licence. Queued from another thread so it runs after the command that
+            // called this has returned, as the link's Ended does.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
+                !IsWindowVisible(RhinoApp.MainWindowHandle()))
+            {
+                Task.Run(() => RhinoApp.InvokeOnUiThread(new Action(ExitRhino)));
+            }
+
+            return error;
+        }
+
+        _app = link;
+        Launcher.HostedByApp = true;
+
+        link.OpenRequested += (path, key) => Launcher.Open(path, key);
+        link.CloseRequested += Launcher.CloseDefinition;
+        link.Ended += ExitRhino;
+        link.Send(AppHostProtocol.Ready, (AppHostProtocol.RhinoField, RhinoApp.Version.ToString()));
+        return null;
+    }
+
+    private void ShowInApp(string url, string sessionId)
+    {
+        _appSessionId = sessionId;
+        _app!.Send(AppHostProtocol.Show,
+            (AppHostProtocol.UrlField, url),
+            (AppHostProtocol.SessionIdField, sessionId));
+        Launcher.SessionShown();
+        HideOnMac();
+    }
+
+    /// <summary>
+    ///     The Mac app starts Rhino on screen when a hidden one didn't connect, so that what it
+    ///     asks can be answered. Once an open has ended, Rhino goes out of sight again. Not
+    ///     sooner: loading Grasshopper shows Rhino's windows again.
+    /// </summary>
+    private static void HideOnMac()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            MacApp.Hide();
+        }
+    }
+
+    /// <summary>The app draws what the idle panel would: each step of an open, and why one failed.</summary>
+    private void ReportToApp()
+    {
+        if (_app == null)
+        {
+            return;
+        }
+
+        if (Launcher.Step != _reportedStep)
+        {
+            _reportedStep = Launcher.Step;
+            if (_reportedStep is OpenStep step)
+            {
+                _app.Send(AppHostProtocol.Step, (AppHostProtocol.StepField, step.ToString()));
+            }
+        }
+
+        if (Launcher.Error != _reportedError)
+        {
+            _reportedError = Launcher.Error;
+            if (_reportedError != null)
+            {
+                _app.Send(AppHostProtocol.Error, (AppHostProtocol.MessageField, _reportedError));
+                HideOnMac();
+            }
+        }
+    }
+
+    private void ExitRhino()
+    {
+        Launcher.CloseDefinition();
+
+        // A definition may have baked into the document, and nobody can answer Rhino's save
+        // prompt: its window was never shown.
+        foreach (var doc in RhinoDoc.OpenDocuments())
+        {
+            doc.Modified = false;
+        }
+
+        // Forced: a hidden Rhino on a Mac ignores the Exit that lets the user cancel.
+        RhinoApp.Exit(false);
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr window);
 }
 
 internal sealed record PanelTarget(Uri Url, string SessionId);

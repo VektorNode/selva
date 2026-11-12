@@ -21,6 +21,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- The pipe protocol shared with the Selva app, which can't reference this assembly. -->
+		<Compile Include="..\Selva.App\AppHostProtocol.cs" Link="AppHostProtocol.cs"/>
+	</ItemGroup>
+
+	<ItemGroup>
 		<EmbeddedResource Include="..\Selva.GH\Resources\Icons\UIBridge.png" LogicalName="Selva.Panel.Icon.png"/>
 	</ItemGroup>
 

@@ -15,7 +15,12 @@
 		setHostContext,
 		type ExternalInput
 	} from '@selvajs/ui';
-	import { buildSessionParams, getWebSocketPortFromUrl, isRhinoPanel } from '#lib/utils/session.js';
+	import {
+		buildSessionParams,
+		getWebSocketPortFromUrl,
+		isRhinoPanel,
+		isSelvaApp
+	} from '#lib/utils/session.js';
 	import { currentRole } from '#lib/utils/session-role.svelte.js';
 	import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
 	import { isInRhinoPanel, rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
@@ -93,6 +98,15 @@
 	const player = $derived(currentRole() === 'player');
 	const wsState = getWebSocketState(getWebSocketPortFromUrl());
 
+	// The Selva app has no Rhino viewport, so the viewer here is the only place geometry shows:
+	// there `enableRemote` turns it on too. The plugin decides the same in LocalViewer.cs, or the
+	// viewer would open with no meshes to draw.
+	const showViewer = $derived.by(() => {
+		const options = preview.state.schema?.viewerOptions;
+		if (isSelvaApp()) return !!options?.enableLocal || !!options?.enableRemote;
+		return !!options?.enableLocal && !isInRhinoPanel();
+	});
+
 	useFooterItem({
 		id: 'ws-status',
 		component: WsStatusFooter,
@@ -151,7 +165,7 @@
 			{#key preview.state.schema}
 				<AppLayout
 					schema={preview.state.schema}
-					showViewer={!!preview.state.schema.viewerOptions?.enableLocal && !isInRhinoPanel()}
+					{showViewer}
 					meshes={preview.displayMeshes}
 					isSolving={preview.isSolving}
 					showSolvingIndicator={solvingIndicator.show}

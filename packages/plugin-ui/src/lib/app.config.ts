@@ -7,6 +7,9 @@ export const WEBSOCKET_PORT_QUERY_PARAM = 'wsPort';
 // `host=rhino` when the plugin opened this page in its Rhino panel rather than a browser tab.
 export const HOST_QUERY_PARAM = 'host';
 export const RHINO_PANEL_HOST = 'rhino';
+// `host=app` when the Selva app shows this page in its own window. Rhino runs without a window
+// there, so the page is the only thing the user sees.
+export const SELVA_APP_HOST = 'app';
 // `mode=player` when the Selva panel opened the definition rather than the canvas. It only picks
 // the first paint; the role the plugin acknowledges the socket with is what counts.
 export const MODE_QUERY_PARAM = 'mode';

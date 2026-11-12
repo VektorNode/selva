@@ -29,6 +29,7 @@ public class UIBuilderService : IDisposable
     public BridgeOrchestrator BridgeService { get; private set; }
     public DocumentSynchronizationService DocumentSyncService { get; private set; }
     public SelvaUploadCoordinator SelvaUpload { get; private set; }
+    public AppExportCoordinator AppExport { get; private set; }
 
     public string SessionId { get; }
 
@@ -44,6 +45,7 @@ public class UIBuilderService : IDisposable
     {
         BridgeService?.Dispose();
         SelvaUpload?.Dispose();
+        AppExport?.Dispose();
         DocumentSyncService?.Dispose();
         ServerManager?.Dispose();
         WebSocketTransport?.Dispose();
@@ -83,6 +85,7 @@ public class UIBuilderService : IDisposable
             SessionId
         );
         SelvaUpload = new SelvaUploadCoordinator(WebSocketTransport);
+        AppExport = new AppExportCoordinator(WebSocketTransport, SessionId);
         DocumentSyncService = new DocumentSynchronizationService(
             EventManager,
             SchemaSynchronizer,

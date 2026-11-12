@@ -7,27 +7,9 @@
  */
 
 import { execSync } from 'child_process';
-import { rmSync, cpSync, mkdirSync, statSync, readFileSync, writeFileSync } from 'fs';
+import { rmSync, cpSync, existsSync, mkdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const projectRoot = join(__dirname, '..', '..');
-
-// Single source of truth for the plugin version: Selva.GH.csproj <Version>.
-// We substitute it into the yak manifest ourselves rather than leaving yak's
-// `$version` token to resolve — token resolution depends on yak inspecting an
-// assembly in the staging root, which is empty for multi-TFM packages (the
-// .gha lives in TFM subfolders), so it fails on clean CI runners.
-function readPluginVersion() {
-	const csprojPath = join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj');
-	const csproj = readFileSync(csprojPath, 'utf-8');
-	const match = csproj.match(/<Version>([^<]+)<\/Version>/);
-	if (!match) {
-		throw new Error(`Could not find <Version> in ${csprojPath}`);
-	}
-	return match[1].trim();
-}
+import { projectRoot, readPluginVersion } from './shared.mjs';
 
 // Rhino-coupled TFMs and the one Rhino 9 loads, read from Plugin/Directory.Build.props so a
 // Rhino/.NET bump stays a single edit there. Both OS conditions list the same TFMs; the regex reads the Windows one.
@@ -229,6 +211,48 @@ async function build() {
 			logSuccess(`${tfm}: Selva.Panel.rhp staged beside Selva.gha`);
 		}
 
+		// The Selva app is one .NET Framework exe for every Rhino. It ships in its own
+		// subfolder: its WebView2 assemblies must not sit where Rhino resolves the plug-in's.
+		log('Building SelvaApp.exe...');
+		try {
+			execSync('dotnet build Selva.App/Selva.App.csproj --configuration Release', {
+				cwd: join(projectRoot, 'Plugin'),
+				stdio: 'inherit'
+			});
+		} catch {
+			logError('Selva.App build failed');
+			process.exit(1);
+		}
+		const appReleaseDir = join(projectRoot, 'Plugin/Selva.App/bin/Release/net48');
+		const nativeLoader = 'WebView2Loader.dll';
+		const appFiles = [
+			'SelvaApp.exe',
+			'SelvaApp.exe.config',
+			'Microsoft.Web.WebView2.Core.dll',
+			'Microsoft.Web.WebView2.WinForms.dll',
+			nativeLoader
+		];
+		for (const tfm of tfms) {
+			try {
+				statSync(join(ghaReleaseDir, tfm, 'Selva.gha'));
+			} catch {
+				continue;
+			}
+			const appDir = join(ghaReleaseDir, tfm, 'app');
+			rmSync(appDir, { recursive: true, force: true });
+			mkdirSync(appDir, { recursive: true });
+			for (const file of appFiles) {
+				// Only a Windows build flattens the native loader into the output folder.
+				const flat = join(appReleaseDir, file);
+				const source =
+					file === nativeLoader && !existsSync(flat)
+						? join(appReleaseDir, 'runtimes/win-x64/native', file)
+						: flat;
+				cpSync(source, join(appDir, file));
+			}
+			logSuccess(`${tfm}: SelvaApp.exe staged in app/`);
+		}
+
 		// Step 3: Verify the merged assemblies actually bind.
 		// Selva.PluginVerifier force-JITs every method of the merged output on each
 		// Rhino runtime family; a corrupted merge fails here instead of inside a
@@ -301,6 +325,9 @@ async function build() {
 			}
 		];
 
+		// Substituted into the yak manifest here rather than left to yak's `$version` token:
+		// yak resolves it from an assembly in the staging root, which is empty for multi-TFM
+		// packages (the .gha lives in TFM subfolders), so it fails on clean CI runners.
 		const pluginVersion = readPluginVersion();
 		logSuccess(`Plugin version (from csproj): ${pluginVersion}`);
 
@@ -354,6 +381,25 @@ async function build() {
 				logError(`Yak build failed for ${pkg.label}`);
 				process.exit(1);
 			}
+		}
+
+		// The installer embeds the .yak files just built, so it installs exactly what the Yak
+		// registry serves. It must build after them, and from a clean obj: MSBuild doesn't
+		// notice a resource whose content changed under the same name.
+		log('Building SelvaSetup.exe...');
+		const setupProject = join(projectRoot, 'Plugin/Selva.Setup');
+		const setupPath = join(yakStagingRoot, `SelvaSetup-${pluginVersion}.exe`);
+		try {
+			rmSync(join(setupProject, 'obj/Release'), { recursive: true, force: true });
+			execSync('dotnet build Selva.Setup/Selva.Setup.csproj --configuration Release', {
+				cwd: join(projectRoot, 'Plugin'),
+				stdio: 'inherit'
+			});
+			cpSync(join(setupProject, 'bin/Release/net48/SelvaSetup.exe'), setupPath);
+			logSuccess(`Installer built: ${setupPath}`);
+		} catch {
+			logError('Selva.Setup build failed');
+			process.exit(1);
 		}
 		log('');
 

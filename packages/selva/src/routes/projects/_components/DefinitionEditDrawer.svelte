@@ -158,6 +158,9 @@
 				body: formData
 			});
 			if (res.ok) {
+				// Save sends coverImageUrl back; left stale, it overwrites the new cover's cache-busted URL.
+				const body: { coverImage?: string } = await res.json().catch(() => ({}));
+				if (body.coverImage) coverImageUrl = body.coverImage;
 				toast.success('Cover image updated');
 				await refreshAll();
 			} else {

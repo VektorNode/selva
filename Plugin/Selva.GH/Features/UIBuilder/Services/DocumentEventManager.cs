@@ -387,7 +387,7 @@ public class DocumentEventManager : IDisposable
             return true;
         }
 
-        var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
+        var includeDisplayData = LocalViewer.IsOn(schema);
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
         var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);

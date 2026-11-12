@@ -1,4 +1,5 @@
-// A file and its envelope in one binary frame, both ways between the Rhino panel and the plugin:
+// A file and its envelope in one binary frame: both ways between the Rhino panel and the plugin
+// for its saves and picks, and from the plugin to any page for an exported app.
 //
 //   offset  size      field
 //   0       4         magic "SLHF" (ASCII)

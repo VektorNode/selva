@@ -70,6 +70,8 @@
 		<Compile Include="..\Selva.GH\Config\AppConfig.cs" Link="Linked\AppConfig.cs"/>
 		<Compile Include="..\Selva.GH\Features\FileIO\Services\RasterSanitizer.cs" Link="Linked\RasterSanitizer.cs"/>
 		<Compile Include="..\Selva.Panel\NavigationPolicy.cs" Link="Linked\NavigationPolicy.cs"/>
+		<Compile Include="..\Selva.App\Format\*.cs" Link="Linked\AppFormat\%(Filename)%(Extension)"/>
+		<Compile Include="..\Selva.Setup\PackagePayload.cs" Link="Linked\PackagePayload.cs"/>
 		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>

@@ -92,6 +92,9 @@ public enum InboundKind
     /// <summary>`applyLayout` with a request id and a layout spec: lays the form out by nickname.</summary>
     ApplyLayout,
 
+    /// <summary>`exportApp` with a request id, the app's name and an optional key. Answered with one app file or `exportAppFailed`.</summary>
+    ExportApp,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -148,6 +151,15 @@ public sealed class InboundMessage
 
     /// <summary>`applyLayout`: the layout spec as JSON text, as SchemaLayout takes it.</summary>
     public string LayoutSpec { get; init; }
+
+    /// <summary>`exportApp`: the name the app shows as its window title. Never logged.</summary>
+    public string AppName { get; init; }
+
+    /// <summary>`exportApp`: the key that protects the app file; null leaves it unprotected. Never logged.</summary>
+    public string AppKey { get; init; }
+
+    /// <summary>`exportApp`: the app's window icon as PNG bytes; null for none.</summary>
+    public byte[] AppIcon { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

@@ -3,11 +3,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
+using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Plugin;
 using Rhino;
+using Selva.AppFormat;
 using Selva.GH.Features.UIBuilder.Components;
 using Selva.GH.Utilities.Helpers;
 using Selva.RhinoPanel;
@@ -29,15 +32,22 @@ internal static class DefinitionLauncher
     private sealed class PlayerSession
     {
         public PlayerSession(GH_Document document, GH_Document? previous, GH_UIBuilderComponent bridge,
-            List<GH_UIBuilderComponent> suppressed)
+            List<GH_UIBuilderComponent> suppressed, bool locked)
         {
             Document = document;
             Previous = previous;
             Bridge = bridge;
             Suppressed = suppressed;
+            Locked = locked;
         }
 
         public GH_Document Document { get; }
+
+        /// <summary>
+        ///     From a Selva app file: never handed over to the Grasshopper editor. The session
+        ///     closes instead, so the definition isn't there to read or change.
+        /// </summary>
+        public bool Locked { get; }
 
         /// <summary>The canvas's document before this one: only the canvas's document solves.</summary>
         public GH_Document? Previous { get; }
@@ -56,16 +66,18 @@ internal static class DefinitionLauncher
         AppDomain.CurrentDomain.SetData(PanelContract.LauncherSlot, new Dictionary<string, object>
         {
             [PanelContract.VersionKey] = PanelContract.Version,
-            [PanelContract.OpenDefinitionKey] = (Func<string, string?>)Open
+            [PanelContract.OpenDefinitionKey] = (Func<string, string?, string?>)Open,
+            [PanelContract.CloseDefinitionKey] = (Action)Close
         });
     }
 
+    /// <param name="key">What the user typed for a protected Selva app file; null otherwise.</param>
     /// <returns>Null when the definition opened; otherwise why not, for the user.</returns>
-    public static string? Open(string path)
+    public static string? Open(string path, string? key)
     {
         try
         {
-            return OpenCore(path);
+            return OpenCore(path, key);
         }
         catch (Exception ex)
         {
@@ -75,7 +87,7 @@ internal static class DefinitionLauncher
         }
     }
 
-    private static string? OpenCore(string path)
+    private static string? OpenCore(string path, string? key)
     {
         if (!File.Exists(path))
         {
@@ -93,18 +105,47 @@ internal static class DefinitionLauncher
         // Read without solving: the document isn't in the document server yet, so nothing runs
         // before the bridges are marked. A file saved with Enable on would otherwise cold-start
         // as an author session.
-        var io = new GH_DocumentIO();
-        if (!io.Open(fullPath) || io.Document == null)
+        var locked = AppFile.HasMagic(fullPath);
+        GH_Document? document;
+        if (locked)
         {
-            return $"Grasshopper couldn't read {Path.GetFileName(path)}.";
+            var refusal = ReadAppFile(fullPath, key, out document);
+            if (refusal != null)
+            {
+                return refusal;
+            }
+
+            // An app file has no path to compare, and it carries its source definition's id.
+            if (Instances.DocumentServer.Any(d =>
+                    d != _current?.Document && d.DocumentID == document!.DocumentID))
+            {
+                return $"{Path.GetFileName(path)} was made from a definition that is open in Grasshopper. " +
+                       "Close it there first.";
+            }
+
+            if (IsEditorVisible())
+            {
+                return "Close the Grasshopper window to open this app.";
+            }
+        }
+        else
+        {
+            document = RhinoPanelHost.PageHost() == PanelContract.AppPageHost
+                ? ReadUnattended(fullPath)
+                : ReadWithGrasshopper(fullPath);
+            if (document == null)
+            {
+                return $"Grasshopper couldn't read {Path.GetFileName(path)}.";
+            }
         }
 
-        var document = io.Document;
-        var bridges = document.Objects.OfType<GH_UIBuilderComponent>().ToList();
+        var bridges = document!.Objects.OfType<GH_UIBuilderComponent>().ToList();
         var player = bridges.FirstOrDefault(HasSelvaUI);
         if (player == null)
         {
-            return $"{Path.GetFileName(path)} has no Selva UI. Open it in Grasshopper to add one.";
+            return locked
+                ? $"{Path.GetFileName(path)} has no Selva UI. A plug-in it needs may be missing."
+                : $"{Path.GetFileName(path)} has no Selva UI. Open it in Grasshopper to add one.";
         }
 
         player.HostAsPlayer();
@@ -128,7 +169,7 @@ internal static class DefinitionLauncher
         // while its editor is hidden, unless it's forced.
         document.ForcePreview(true);
         document.ModifiedChanged += KeepUnmodified;
-        _current = new PlayerSession(document, previous, player, others);
+        _current = new PlayerSession(document, previous, player, others, locked);
 
         Instances.DocumentServer.AddDocument(document);
         if (canvas != null)
@@ -215,9 +256,18 @@ internal static class DefinitionLauncher
     /// </summary>
     public static void EditInGrasshopper()
     {
+        // Under the Selva app Rhino has no window: the editor would come up on its own, with
+        // nothing behind it and nobody expecting it.
         var session = _current;
-        if (session == null)
+        if (session == null || RhinoPanelHost.PageHost() == PanelContract.AppPageHost)
         {
+            return;
+        }
+
+        if (session.Locked)
+        {
+            // The panel's page offers the command for every player session.
+            RhinoPanelHost.Notify("This is a Selva app. It can't be edited in Grasshopper.");
             return;
         }
 
@@ -268,10 +318,100 @@ internal static class DefinitionLauncher
 
     private static void HandOverWhenShown(object? sender, EventArgs e)
     {
-        if (IsEditorVisible() && Instances.ActiveCanvas?.Document == _current?.Document)
+        var session = _current;
+        if (session == null || !IsEditorVisible())
+        {
+            return;
+        }
+
+        // Whatever the canvas shows: the editor lists every document in the document server,
+        // so a locked one left there could be switched to and saved.
+        if (session.Locked)
+        {
+            Close();
+        }
+        else if (Instances.ActiveCanvas?.Document == session.Document)
         {
             EditInGrasshopper();
         }
+    }
+
+    /// <summary>
+    ///     Loads an app file's definition from memory. It never exists as a file Grasshopper
+    ///     could open, and the document gets no path.
+    /// </summary>
+    /// <returns>Null when <paramref name="document" /> is loaded; otherwise why not, for the user.</returns>
+    private static string? ReadAppFile(string fullPath, string? key, out GH_Document? document)
+    {
+        document = null;
+        var refusal = AppFile.TryRead(File.ReadAllBytes(fullPath), out var info);
+        if (refusal != null)
+        {
+            return refusal;
+        }
+
+        // Only the Selva app asks for a key and remembers it.
+        if (info.Encrypted && string.IsNullOrEmpty(key) &&
+            RhinoPanelHost.PageHost() != PanelContract.AppPageHost)
+        {
+            return $"{Path.GetFileName(fullPath)} is protected. Open it in the Selva app, which asks for its key.";
+        }
+
+        refusal = AppFileCipher.TryUnpack(info, key, out var definition);
+        if (refusal != null)
+        {
+            return refusal;
+        }
+
+        var archive = new GH_Archive();
+        var read = info.Kind == AppDefinitionKind.Xml
+            ? archive.Deserialize_Xml(Encoding.UTF8.GetString(definition))
+            : archive.Deserialize_Binary(definition);
+        document = read ? Extract(archive) : null;
+        return document == null ? $"Grasshopper couldn't read {Path.GetFileName(fullPath)}." : null;
+    }
+
+    private static GH_Document? ReadWithGrasshopper(string fullPath)
+    {
+        var io = new GH_DocumentIO();
+        return io.Open(fullPath) ? io.Document : null;
+    }
+
+    /// <summary>
+    ///     What <see cref="GH_DocumentIO.Open(string)" /> does, without its "IO generated
+    ///     messages" prompt: under the Selva app Rhino has no window, so a modal dialog blocks the
+    ///     open until the app gives up on this Rhino.
+    /// </summary>
+    private static GH_Document? ReadUnattended(string fullPath)
+    {
+        var archive = new GH_Archive();
+        var document = archive.ReadFromFile(fullPath) ? Extract(archive) : null;
+        if (document != null)
+        {
+            document.FilePath = fullPath;
+        }
+
+        return document;
+    }
+
+    private static GH_Document? Extract(GH_Archive archive)
+    {
+        if (RhinoPanelHost.PageHost() == PanelContract.AppPageHost &&
+            archive.GetRootNode?.FindChunk("Definition") is GH_Chunk definition)
+        {
+            DefinitionFonts.Drop(definition);
+        }
+
+        var document = new GH_Document();
+        if (archive.ExtractObject(document, "Definition"))
+        {
+            // A wire whose source didn't load would stay as a placeholder the solve collects from.
+            document.DestroyProxySources();
+            return document;
+        }
+
+        document.Dispose();
+        return null;
     }
 
     internal static bool IsEditorVisible()

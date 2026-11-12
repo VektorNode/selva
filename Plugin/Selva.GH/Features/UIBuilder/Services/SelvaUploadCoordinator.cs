@@ -7,7 +7,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Rhino;
@@ -390,7 +389,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
             return capture;
         }
 
-        capture.Bytes = Serialize(document);
+        capture.Bytes = DefinitionArchive.Serialize(document);
         capture.SizeBytes = capture.Bytes.Length;
         _sizeCache = (key, capture.SizeBytes);
         return capture;
@@ -402,36 +401,6 @@ public sealed class SelvaUploadCoordinator : IDisposable
         var undo = document.UndoServer;
         return $"{document.DocumentID}|{document.ObjectCount}|{undo.UndoCount}|{undo.RedoCount}|" +
                $"{undo.FirstUndoName}|{undo.FirstRedoName}|{document.IsModified}";
-    }
-
-    /// <summary>
-    ///     The links are dropped from the copy that's uploaded: they name every instance this file
-    ///     went to, which users of this one have no need to see.
-    /// </summary>
-    private static byte[] Serialize(GH_Document document)
-    {
-        var archive = new GH_Archive();
-        archive.CreateNewRoot(true);
-        if (!archive.AppendObject(document, "Definition"))
-        {
-            throw new InvalidOperationException("Grasshopper couldn't serialise the definition.");
-        }
-
-        RemoveLinks(archive.GetRootNode);
-        return archive.Serialize_Binary();
-    }
-
-    private static void RemoveLinks(GH_Chunk chunk)
-    {
-        if (chunk.ItemExists(SelvaDefinitionLinks.ArchiveItem))
-        {
-            chunk.RemoveItem(SelvaDefinitionLinks.ArchiveItem);
-        }
-
-        foreach (var child in chunk.Chunks.OfType<GH_Chunk>())
-        {
-            RemoveLinks(child);
-        }
     }
 
     private static string FileName(GH_Document document)
