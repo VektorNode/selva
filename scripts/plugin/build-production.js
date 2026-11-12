@@ -4,6 +4,10 @@
  * Production build script for Selva
  * Builds web assets and embeds them into the Grasshopper plugin
  * Cross-platform compatible (Windows, macOS, Linux)
+ *
+ * `--with-app` also stages SelvaApp.exe in the packages and builds SelvaSetup. The Selva app is
+ * for development installs only (DevInstall.HasSelvaApp in the plug-in), so a release build
+ * leaves both out.
  */
 
 import { execSync } from 'child_process';
@@ -33,6 +37,8 @@ function readTargetFrameworks() {
 		.filter(Boolean);
 	return { tfms, rhino9Tfm };
 }
+
+const withApp = process.argv.includes('--with-app');
 
 // Colors for output
 const COLORS = {
@@ -213,15 +219,17 @@ async function build() {
 
 		// The Selva app is one .NET Framework exe for every Rhino. It ships in its own
 		// subfolder: its WebView2 assemblies must not sit where Rhino resolves the plug-in's.
-		log('Building SelvaApp.exe...');
-		try {
-			execSync('dotnet build Selva.App/Selva.App.csproj --configuration Release', {
-				cwd: join(projectRoot, 'Plugin'),
-				stdio: 'inherit'
-			});
-		} catch {
-			logError('Selva.App build failed');
-			process.exit(1);
+		if (withApp) {
+			log('Building SelvaApp.exe...');
+			try {
+				execSync('dotnet build Selva.App/Selva.App.csproj --configuration Release', {
+					cwd: join(projectRoot, 'Plugin'),
+					stdio: 'inherit'
+				});
+			} catch {
+				logError('Selva.App build failed');
+				process.exit(1);
+			}
 		}
 		const appReleaseDir = join(projectRoot, 'Plugin/Selva.App/bin/Release/net48');
 		const nativeLoader = 'WebView2Loader.dll';
@@ -238,8 +246,11 @@ async function build() {
 			} catch {
 				continue;
 			}
+			// Removed either way: the whole TFM folder goes into the package, and an app/ left by
+			// an earlier --with-app build would ship.
 			const appDir = join(ghaReleaseDir, tfm, 'app');
 			rmSync(appDir, { recursive: true, force: true });
+			if (!withApp) continue;
 			mkdirSync(appDir, { recursive: true });
 			for (const file of appFiles) {
 				// Only a Windows build flattens the native loader into the output folder.
@@ -386,20 +397,23 @@ async function build() {
 		// The installer embeds the .yak files just built, so it installs exactly what the Yak
 		// registry serves. It must build after them, and from a clean obj: MSBuild doesn't
 		// notice a resource whose content changed under the same name.
-		log('Building SelvaSetup.exe...');
-		const setupProject = join(projectRoot, 'Plugin/Selva.Setup');
-		const setupPath = join(yakStagingRoot, `SelvaSetup-${pluginVersion}.exe`);
-		try {
-			rmSync(join(setupProject, 'obj/Release'), { recursive: true, force: true });
-			execSync('dotnet build Selva.Setup/Selva.Setup.csproj --configuration Release', {
-				cwd: join(projectRoot, 'Plugin'),
-				stdio: 'inherit'
-			});
-			cpSync(join(setupProject, 'bin/Release/net48/SelvaSetup.exe'), setupPath);
-			logSuccess(`Installer built: ${setupPath}`);
-		} catch {
-			logError('Selva.Setup build failed');
-			process.exit(1);
+		// It registers the app it installs, so it is built only with the app.
+		if (withApp) {
+			log('Building SelvaSetup.exe...');
+			const setupProject = join(projectRoot, 'Plugin/Selva.Setup');
+			const setupPath = join(yakStagingRoot, `SelvaSetup-${pluginVersion}.exe`);
+			try {
+				rmSync(join(setupProject, 'obj/Release'), { recursive: true, force: true });
+				execSync('dotnet build Selva.Setup/Selva.Setup.csproj --configuration Release', {
+					cwd: join(projectRoot, 'Plugin'),
+					stdio: 'inherit'
+				});
+				cpSync(join(setupProject, 'bin/Release/net48/SelvaSetup.exe'), setupPath);
+				logSuccess(`Installer built: ${setupPath}`);
+			} catch {
+				logError('Selva.Setup build failed');
+				process.exit(1);
+			}
 		}
 		log('');
 

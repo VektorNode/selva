@@ -39,3 +39,8 @@ export type BridgeRole = 'author' | 'player';
 export function roleOf(message: unknown): BridgeRole {
 	return (message as { role?: unknown }).role === 'player' ? 'player' : 'author';
 }
+
+/** Whether the plugin answers `exportApp`. It says so only in a development install. */
+export function canExportAppOf(message: unknown): boolean {
+	return (message as { appExport?: unknown }).appExport === true;
+}

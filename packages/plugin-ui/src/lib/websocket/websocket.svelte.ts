@@ -17,6 +17,7 @@ import { validateInboundMessage } from './messageSchemas';
 import {
 	authenticateMessage,
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
+	canExportAppOf,
 	isAuthenticatedMessage,
 	roleOf,
 	type BridgeRole
@@ -224,6 +225,8 @@ export class WebSocketState {
 	authRejected = $state(false);
 	/** What the plugin acknowledged this socket as; null until it has. */
 	role = $state<BridgeRole | null>(null);
+	/** The plugin answers `exportApp`; false until it has said so. */
+	canExportApp = $state(false);
 
 	constructor(private url: string) {
 		this.on('solvingState', (data) => {
@@ -339,8 +342,9 @@ export class WebSocketState {
 					);
 				};
 
-				const onAuthenticated = (role: BridgeRole) => {
+				const onAuthenticated = (role: BridgeRole, canExportApp: boolean) => {
 					this.role = role;
+					this.canExportApp = canExportApp;
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
 					this.connected = true;
@@ -381,7 +385,7 @@ export class WebSocketState {
 
 						const message = JSON.parse(event.data);
 						if (isAuthenticatedMessage(message)) {
-							onAuthenticated(roleOf(message));
+							onAuthenticated(roleOf(message), canExportAppOf(message));
 							return;
 						}
 						this.handleMessage(message);

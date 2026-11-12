@@ -1254,7 +1254,7 @@ wss.on('connection', (ws) => {
 			}
 			authenticated.add(ws);
 			// `?mode=player` on the page URL only picks the first paint; this is the role that counts.
-			send(ws, { type: 'authenticated', role: PLAYER ? 'player' : 'author' });
+			send(ws, { type: 'authenticated', role: PLAYER ? 'player' : 'author', appExport: true });
 			return;
 		}
 

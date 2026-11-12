@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	authenticateMessage,
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
+	canExportAppOf,
 	isAuthenticatedMessage,
 	MAX_HOST_FILE_BYTES,
 	roleOf
@@ -41,6 +42,11 @@ describe('bridge handshake (cross-stack with BridgeAccessTests)', () => {
 		expect(roleOf(fixture.authenticated)).toBe('author');
 		expect(roleOf(fixture.authenticatedAsPlayer)).toBe('player');
 		expect(roleOf({ type: 'authenticated' })).toBe('author');
+	});
+
+	it('offers the app export only when the plugin says it answers it', () => {
+		expect(canExportAppOf(fixture.authenticatedWithAppExport)).toBe(true);
+		expect(canExportAppOf(fixture.authenticated)).toBe(false);
 	});
 
 	it('stops retrying on the close code the plugin refuses with', () => {

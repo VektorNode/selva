@@ -32,9 +32,10 @@ function clientFor(socket: WebSocketState): AppExportClient {
 
 export function useAppExport(options: Options) {
 	const state = $state(createInitialAppExportState());
+	const socket = getWebSocketState(getWebSocketPortFromUrl());
 
 	const deps: AppExportDeps = {
-		exporter: clientFor(getWebSocketState(getWebSocketPortFromUrl())),
+		exporter: clientFor(socket),
 		save: saveBlob,
 		notify: toast,
 		isSchemaDirty: options.isSchemaDirty
@@ -46,6 +47,10 @@ export function useAppExport(options: Options) {
 		},
 		get blocker() {
 			return exportBlocker(state, deps);
+		},
+		/** The plugin answers the export; without it the builder shows no Export as app. */
+		get available() {
+			return socket.canExportApp;
 		},
 		open: (defaultName: string) => openDialog(state, defaultName),
 		/** Asks for an image and keeps it as the app's icon. A cancelled pick changes nothing. */

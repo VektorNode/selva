@@ -4,10 +4,11 @@
  * Builds the production plugin and installs it into Rhino's yak package folders,
  * so Rhino loads it exactly like a released install. Restart Rhino afterwards.
  *
- * `--skip-build` reinstalls the last build. `--dev` also drops the marker that turns on the plugin's
- * dev mode: a log at <LocalAppData>/Selva/dev/selva.log (`pnpm plugin:logs`) and a file per live
- * session that `pnpm plugin:session`, `lab:record` and `bridge-drive` connect through. A plain
- * install wipes the version folder, so it turns dev mode off again.
+ * `--skip-build` reinstalls the last build. `--dev` also drops the marker that makes this a
+ * development install: a log at <LocalAppData>/Selva/dev/selva.log (`pnpm plugin:logs`), a file per
+ * live session that `pnpm plugin:session`, `lab:record` and `bridge-drive` connect through, and
+ * the Selva app, which `--dev` builds into the package. A plain install wipes the version folder,
+ * so it turns all of that off again.
  */
 
 import { execSync } from 'child_process';
@@ -63,7 +64,10 @@ if (lockers.length > 0) {
 }
 
 if (!process.argv.includes('--skip-build')) {
-	execSync('pnpm run build:plugin', { cwd: projectRoot, stdio: 'inherit' });
+	execSync(`pnpm run build:plugin${dev ? ' --with-app' : ''}`, {
+		cwd: projectRoot,
+		stdio: 'inherit'
+	});
 }
 
 for (const { staging, rhino } of targets) {

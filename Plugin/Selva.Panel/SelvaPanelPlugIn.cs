@@ -136,6 +136,11 @@ public class SelvaPanelPlugIn : PlugIn
     /// <returns>Null when this Rhino now serves the app listening there; otherwise why not.</returns>
     internal string? ServeApp(string address)
     {
+        if (!DevInstall.HasSelvaApp)
+        {
+            return "The Selva app isn't available in this version of Selva.";
+        }
+
         if (_app != null)
         {
             return "This Rhino already serves a Selva app.";

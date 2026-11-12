@@ -12,6 +12,7 @@ using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
+using Selva.RhinoPanel;
 using Selva.Slva;
 
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
@@ -222,7 +223,7 @@ public class WebSocketTransport : IDisposable
         try
         {
             _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port,
-                () => BridgeAccess.AuthenticatedMessage(_role()));
+                () => BridgeAccess.AuthenticatedMessage(_role(), DevInstall.HasSelvaApp));
             _webSocketServer.OnClientConnected += HandleClientConnected;
             _webSocketServer.OnClientDisconnected += HandleClientDisconnected;
             _webSocketServer.OnMessageReceived += HandleMessageReceived;

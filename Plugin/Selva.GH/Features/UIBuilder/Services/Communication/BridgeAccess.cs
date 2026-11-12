@@ -34,8 +34,12 @@ internal static class BridgeAccess
     ///     It carries the session's role, read when the socket authenticates, so a page reloaded
     ///     after Edit in Grasshopper learns it is now an author.
     /// </summary>
-    public static string AuthenticatedMessage(BridgeRole role) =>
-        "{\"type\":\"authenticated\",\"role\":\"" + RoleName(role) + "\"}";
+    /// <param name="appExport">
+    ///     The bridge answers `exportApp`, so the builder offers Export as app. Left out when false.
+    /// </param>
+    public static string AuthenticatedMessage(BridgeRole role, bool appExport = false) =>
+        "{\"type\":\"authenticated\",\"role\":\"" + RoleName(role) + "\"" +
+        (appExport ? ",\"appExport\":true" : "") + "}";
 
     public static string RoleName(BridgeRole role) => role == BridgeRole.Player ? "player" : "author";
 

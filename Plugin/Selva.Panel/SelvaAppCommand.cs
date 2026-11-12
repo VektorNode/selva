@@ -12,12 +12,20 @@ namespace Selva.RhinoPanel;
 ///     file type and a Start menu entry, so this is how a new install gets them.
 /// </summary>
 [Guid("5D2A9C41-7E63-4B0F-8C1D-3F6A0B9E2D74")]
+// Hidden while the app is for development installs only: a released install must not offer it.
+[CommandStyle(Style.Hidden)]
 public class SelvaAppCommand : Command
 {
     public override string EnglishName => "SelvaApp";
 
     protected override Result RunCommand(RhinoDoc doc, RunMode mode)
     {
+        if (!DevInstall.HasSelvaApp)
+        {
+            RhinoApp.WriteLine("The Selva app isn't available in this version of Selva.");
+            return Result.Nothing;
+        }
+
         if (!HostUtils.RunningOnWindows)
         {
             RhinoApp.WriteLine("The Selva app is available on Windows only. Use the Selva panel instead.");

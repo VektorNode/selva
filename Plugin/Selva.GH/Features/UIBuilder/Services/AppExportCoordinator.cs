@@ -4,6 +4,7 @@ using Grasshopper.Kernel;
 using Selva.AppFormat;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
+using Selva.RhinoPanel;
 using Selva.Schema.Models;
 
 namespace Selva.GH.Features.UIBuilder.Services;
@@ -49,6 +50,12 @@ public sealed class AppExportCoordinator : IDisposable
 
     private void HandleExport(object sender, WebSocketTransport.ExportAppRequest request)
     {
+        if (!DevInstall.HasSelvaApp)
+        {
+            Fail(request, "Export as app isn't available in this version of Selva.");
+            return;
+        }
+
         byte[] definition;
         try
         {

@@ -228,6 +228,7 @@ For debugging, install with `pnpm install:plugin:dev` instead. Then:
 - `pnpm plugin:logs` follows a JSON-lines log of every Logger call, every bridge message in and out, and unhandled exceptions with stacks. Filter with `--level warn`, `--grep <session>` or `--since 10m`; `--json` gives raw lines.
 - `pnpm plugin:session` lists live sessions with their full URL, secret included.
 - `lab:record` and `bridge-drive.mjs` connect to the newest live session when no URL is given.
+- The Selva app is on: Export as app in the builder, app files, and the `SelvaApp` command. A released install has none of it. Spec: [selva-app](./plans/features/selva-app.md).
 
 A plain `install:plugin` turns this off again.
 

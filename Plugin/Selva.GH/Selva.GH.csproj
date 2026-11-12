@@ -64,6 +64,7 @@
 	<!-- Compiled into both plug-ins rather than referenced: only BCL types may cross between them. -->
 	<ItemGroup>
 		<Compile Include="..\Selva.Panel\PanelContract.cs" Link="Features\UIBuilder\Services\PanelContract.cs"/>
+		<Compile Include="..\Selva.Panel\DevInstall.cs" Link="Utilities\Helpers\DevInstall.cs"/>
 	</ItemGroup>
 
 	<!-- The Selva app file format. The app compiles the same sources, minus the cipher. -->

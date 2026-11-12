@@ -261,6 +261,8 @@ public class BridgeAccessTests
             JObject.Parse(BridgeAccess.AuthenticatedMessage(BridgeRole.Author))));
         Assert.True(JToken.DeepEquals(fixture["authenticatedAsPlayer"],
             JObject.Parse(BridgeAccess.AuthenticatedMessage(BridgeRole.Player))));
+        Assert.True(JToken.DeepEquals(fixture["authenticatedWithAppExport"],
+            JObject.Parse(BridgeAccess.AuthenticatedMessage(BridgeRole.Author, appExport: true))));
         Assert.Equal((int)fixture["unauthorizedCloseCode"]!, BridgeAccess.UnauthorizedCloseCode);
         Assert.Equal((long)fixture["maxHostFileBytes"]!, Selva.GH.Config.AppConfig.ValueLimits.MaxFileSizeBytes);
     }

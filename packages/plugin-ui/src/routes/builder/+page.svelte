@@ -384,16 +384,18 @@
 			<PlugZap class="h-4 w-4" /><span class="max-lg:sr-only">Connect to Selva…</span>
 		</Button>
 	{/if}
-	<span title={exportNeedsSave ? 'Save the schema first' : undefined}>
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => appExport?.open(builderState?.state.draft?.name ?? '')}
-			disabled={!builderState?.state.draft || exportNeedsSave}
-		>
-			<AppWindow class="h-4 w-4" /><span class="max-lg:sr-only">Export as app</span>
-		</Button>
-	</span>
+	{#if appExport?.available}
+		<span title={exportNeedsSave ? 'Save the schema first' : undefined}>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => appExport?.open(builderState?.state.draft?.name ?? '')}
+				disabled={!builderState?.state.draft || exportNeedsSave}
+			>
+				<AppWindow class="h-4 w-4" /><span class="max-lg:sr-only">Export as app</span>
+			</Button>
+		</span>
+	{/if}
 {/snippet}
 
 <AppShell {...rhinoShellProps()} mode="fixed" showFooter>

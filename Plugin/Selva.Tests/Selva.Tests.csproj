@@ -76,6 +76,7 @@
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\DevMode.cs" Link="Linked\DevMode.cs"/>
+		<Compile Include="..\Selva.Panel\DevInstall.cs" Link="Linked\DevInstall.cs"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\DevLog.cs" Link="Linked\DevLog.cs"/>
 		<Compile Include="..\Selva.GH\Features\Display\Services\GrainUvMath.cs" Link="Linked\GrainUvMath.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionPairParser.cs"

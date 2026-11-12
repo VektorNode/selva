@@ -16,18 +16,18 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 
 ## `plugin/`
 
-| Script                           | Run                                                  | Does                                                                                          |
-| -------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs, the yak packages and `SelvaSetup`    |
-| `make-app-icon.mjs`              | `node scripts/plugin/make-app-icon.mjs`              | Draws `Plugin/Selva.App/selva.ico` from the SVG logo; rerun when the logo changes             |
-| `build-mac-app.mjs`              | `pnpm build:app:mac`                                 | Builds `Plugin/Selva.App.Mac/bin/Selva.app`, universal and signed ad hoc; macOS only          |
-| `install-local.js`               | `pnpm install:plugin`                                | Builds and installs into Rhino 8's and 9's package folders                                    |
-| `check-component-signatures.mjs` | CI; `--update` after a param change                  | Fails on a changed param list behind an existing component GUID, or any change in `OBSOLETE/` |
-| `bridge-drive.mjs`               | `node scripts/plugin/bridge-drive.mjs <url> <steps>` | Drives a running UI Bridge from outside Rhino and logs every frame with timings               |
-| `snap-preview.mjs`               | `node scripts/plugin/snap-preview.mjs --url <url>`   | Screenshots the preview page: each form tab, the 3D view per look, per set of input values    |
-| `perf-report.mjs`                | `node scripts/plugin/perf-report.mjs <log>`          | Summarises a `SELVA_PERF_LOG` file                                                            |
-| `example-definitions/`           | in Rhino, see its README                             | Builds the showcase and stress-test `.gh` files                                               |
-| `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                          |
+| Script                           | Run                                                  | Does                                                                                                                           |
+| -------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `build-production.js`            | `pnpm build:plugin`                                  | Embeds the plugin UI into `Selva.gha`, builds both TFMs and the yak packages; `--with-app` adds the Selva app and `SelvaSetup` |
+| `make-app-icon.mjs`              | `node scripts/plugin/make-app-icon.mjs`              | Draws `Plugin/Selva.App/selva.ico` from the SVG logo; rerun when the logo changes                                              |
+| `build-mac-app.mjs`              | `pnpm build:app:mac`                                 | Builds `Plugin/Selva.App.Mac/bin/Selva.app`, universal and signed ad hoc; macOS only                                           |
+| `install-local.js`               | `pnpm install:plugin`                                | Builds and installs into Rhino 8's and 9's package folders                                                                     |
+| `check-component-signatures.mjs` | CI; `--update` after a param change                  | Fails on a changed param list behind an existing component GUID, or any change in `OBSOLETE/`                                  |
+| `bridge-drive.mjs`               | `node scripts/plugin/bridge-drive.mjs <url> <steps>` | Drives a running UI Bridge from outside Rhino and logs every frame with timings                                                |
+| `snap-preview.mjs`               | `node scripts/plugin/snap-preview.mjs --url <url>`   | Screenshots the preview page: each form tab, the 3D view per look, per set of input values                                     |
+| `perf-report.mjs`                | `node scripts/plugin/perf-report.mjs <log>`          | Summarises a `SELVA_PERF_LOG` file                                                                                             |
+| `example-definitions/`           | in Rhino, see its README                             | Builds the showcase and stress-test `.gh` files                                                                                |
+| `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                                                           |
 
 ## `release/`
 

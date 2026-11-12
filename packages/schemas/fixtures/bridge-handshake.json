@@ -7,6 +7,7 @@
 	},
 	"authenticated": { "type": "authenticated", "role": "author" },
 	"authenticatedAsPlayer": { "type": "authenticated", "role": "player" },
+	"authenticatedWithAppExport": { "type": "authenticated", "role": "author", "appExport": true },
 	"unauthorizedCloseCode": 4401,
 	"maxHostFileBytes": 157286400
 }

@@ -109,6 +109,11 @@ internal static class DefinitionLauncher
         GH_Document? document;
         if (locked)
         {
+            if (!DevInstall.HasSelvaApp)
+            {
+                return $"{Path.GetFileName(path)} is a Selva app file, which this version of Selva can't open.";
+            }
+
             var refusal = ReadAppFile(fullPath, key, out document);
             if (refusal != null)
             {

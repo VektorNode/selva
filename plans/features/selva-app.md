@@ -8,6 +8,17 @@ a file that opens like a document, in a window that is only that tool. Rhino sti
 installed and licensed on the machine: the app explains that when it's missing, but can't
 remove it.
 
+## Development installs only
+
+The app is off in a released install. `DevInstall.HasSelvaApp` in the plug-in is the one switch:
+without it the builder shows no Export as app and the bridge refuses the export, an app file
+doesn't open, and `SelvaApp` and `SelvaAppHost` refuse. A release build leaves `SelvaApp.exe`
+and `SelvaSetup.exe` out; `pnpm install:plugin:dev` builds them in (`--with-app` in
+`scripts/plugin/build-production.js`) and drops the marker that turns the switch on.
+
+To release the app: return true from `HasSelvaApp`, pass `--with-app` in `build:plugin`, take
+`Style.Hidden` off `SelvaApp`, and add the changelog entries.
+
 ## The decision
 
 **Two processes.** `SelvaApp.exe` owns a window with a WebView. It starts a normal Rhino whose
