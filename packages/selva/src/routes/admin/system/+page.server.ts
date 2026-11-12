@@ -2,6 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { hasPermission } from '@selvajs/platform';
 import { flag } from '#lib/server/providers.server.js';
 import { checkForUpdate } from '#lib/server/updateCheck.server.js';
+import { DATA_FORMAT } from '#lib/server/dataFormat.server.js';
 import { readChannel, writeChannel } from '#lib/server/releaseChannel.server.js';
 import { asHttpError, requirePermission } from '#lib/server/access.server.js';
 import {
@@ -89,7 +90,8 @@ export const load: PageServerLoad = async ({ locals, fetch, request, url }) => {
 					compatible: null,
 					required: null,
 					running: process.versions.node
-				}
+				},
+				dataCompatibility: { compatible: null, installed: DATA_FORMAT, target: null }
 			};
 
 	return {

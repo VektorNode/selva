@@ -325,6 +325,9 @@ export function degradedReason(body) {
 		);
 	}
 	if (boot?.atRestSecrets?.ok === false) {
+		if (boot.atRestSecrets.failures?.some((f) => f.reason === 'unknown_envelope')) {
+			return 'stored compute API keys were sealed by a newer Selva version than the one installed';
+		}
 		return 'stored compute API keys cannot be decrypted under the current SELVA_AT_REST_KEY';
 	}
 	return 'see `pm2 logs selva-compute`';

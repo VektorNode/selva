@@ -158,6 +158,24 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			to
 		};
 	}
+	// Aborted at the data format check, before anything was stopped.
+	if (exitCode === 10 || has(logs, 'DATA_FORMAT:')) {
+		const target = firstMatch(logs, /reads data format (\d+),/);
+		const installed = firstMatch(logs, /this deployment is on format (\d+)\./);
+		return {
+			severity: 'warning',
+			title: `Update cancelled — ${to ?? 'the target version'} cannot read this deployment's data. The app is untouched.`,
+			detail:
+				(target && installed
+					? `It reads data format ${target}; this deployment is on format ${installed}. `
+					: '') +
+				'Installing it would leave stored data, such as Compute API keys, unreadable. ' +
+				'Switch the release channel back to stay on the installed version. To go back ' +
+				'anyway, follow "Going back to an older release" in the admin guide.',
+			from,
+			to
+		};
+	}
 	// Aborted at the pm2 skew check, before anything was stopped — nothing was
 	// installed and the app never went down.
 	if (exitCode === 8 || has(logs, 'PM2_SKEW')) {

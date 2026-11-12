@@ -166,7 +166,8 @@ function printHelp() {
 			'',
 			pc.dim('`npx selva` works in a deployment directory because @selvajs/cli is one of'),
 			pc.dim('its dependencies. The package.json scripts (`npm run doctor`, `npm start`)'),
-			pc.dim('are thin aliases for the same commands.')
+			pc.dim('are thin aliases for the same commands. Outside a deployment directory, npx'),
+			pc.dim('resolves `selva` to an unrelated npm package: do not let it install one.')
 		].join('\n')
 	);
 }

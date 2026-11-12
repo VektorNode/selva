@@ -108,10 +108,10 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 }
 
 /**
- * A key that failed to decrypt reads as `hasApiKey` with no `apiKey`. Saving with
- * the field omitted would write `undefined` over the ciphertext, destroying the
- * key the logs tell the operator to recover by restoring `SELVA_AT_REST_KEY`.
- * Replacing or clearing it is a decision, so those pass.
+ * A key the store could not open reads as `hasApiKey` with no `apiKey`. Saving with
+ * the field omitted would write `undefined` over it, destroying the key the logs
+ * tell the operator how to recover. Replacing or clearing it is a decision, so
+ * those pass.
  */
 export function assertStoredKeysReadable(
 	incoming: readonly Pick<IncomingServerBase, 'id' | 'apiKey'>[],
@@ -123,7 +123,7 @@ export function assertStoredKeysReadable(
 			apiError(
 				409,
 				ApiErrorCode.CONFLICT,
-				`The stored key for server ${s.id} cannot be decrypted. Restore the original SELVA_AT_REST_KEY, or re-enter the key.`
+				`The stored key for server ${s.id} cannot be read. Re-enter the key, or see the server log for how to recover it.`
 			);
 		}
 	}

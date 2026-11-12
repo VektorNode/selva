@@ -31,14 +31,15 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 
 ## `release/`
 
-| Script                                                     | Run                         | Does                                                                                     |
-| ---------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------- |
-| `publishable-packages.mjs`                                 | imported; CI                | The workspace packages that publish to npm                                               |
-| `validate-changesets.mjs`                                  | pre-commit hook; CI         | Rejects a changeset that names an unknown package, or mixes ignored and publishable ones |
-| `check-changesets.mjs`, `changed-publishable-packages.mjs` | CI                          | A change to a publishable package needs a changeset                                      |
-| `unconsumed-changesets.mjs`                                | release workflow            | Lists changesets the current pre-release has not consumed                                |
-| `verify-pack.mjs`                                          | `pnpm test:pack`; `release` | Packs every publishable package and checks what would ship                               |
-| `changeset-publish.mjs`                                    | `pnpm release`              | `changeset publish` that passes when npm already has every version                       |
-| `release-plugin.js`, `plugin-changelog.mjs`                | `pnpm release:plugin`; CI   | Cuts a plugin version and its `Plugin/CHANGELOG.md` section                              |
+| Script                                                     | Run                               | Does                                                                                                     |
+| ---------------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `publishable-packages.mjs`                                 | imported; CI                      | The workspace packages that publish to npm                                                               |
+| `validate-changesets.mjs`                                  | pre-commit hook; CI               | Rejects a changeset that names an unknown package, or mixes ignored and publishable ones                 |
+| `check-changesets.mjs`, `changed-publishable-packages.mjs` | CI                                | A change to a publishable package needs a changeset                                                      |
+| `unconsumed-changesets.mjs`                                | release workflow                  | Lists changesets the current pre-release has not consumed                                                |
+| `verify-pack.mjs`                                          | `pnpm test:pack`; `release`       | Packs every publishable package and checks what would ship                                               |
+| `downgrade-check.mjs`, `downgrade-check-worker.mjs`        | `pnpm check:downgrade`; `release` | Fails when the latest stable release cannot read this build's data and `selva.dataFormat` was not bumped |
+| `changeset-publish.mjs`                                    | `pnpm release`                    | `changeset publish` that passes when npm already has every version                                       |
+| `release-plugin.js`, `plugin-changelog.mjs`                | `pnpm release:plugin`; CI         | Cuts a plugin version and its `Plugin/CHANGELOG.md` section                                              |
 
 `release/` is an exception in `.gitignore`: the .NET rule `[Rr]elease/` would ignore it.

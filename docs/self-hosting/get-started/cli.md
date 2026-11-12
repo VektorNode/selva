@@ -8,7 +8,7 @@ description: 'Scaffold, configure, and operate a Selva deployment from the comma
 # Selva CLI
 
 - **`npx @selvajs/cli <dir>`** creates a deployment, once.
-- **`npx selva <cmd>`** operates it, from inside the deployment directory. `selva` is not on your `PATH`; the tables below drop the `npx`. `selva <cmd> --help` explains one command, `selva help` lists them, `selva --version` prints the version.
+- **`npx selva <cmd>`** operates it, from inside the deployment directory. Anywhere else, `npx` looks `selva` up on npm and finds an unrelated package: answer no if it offers to install one. `selva` is not on your `PATH`; the tables below drop the `npx`. `selva <cmd> --help` explains one command, `selva help` lists them, `selva --version` prints the version.
 
 ## Create a deployment
 

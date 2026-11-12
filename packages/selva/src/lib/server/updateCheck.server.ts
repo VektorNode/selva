@@ -14,6 +14,7 @@ import { join } from 'path';
 import { env } from '#lib/server/env.js';
 import { isNewer, satisfiesRange } from '@selvajs/server/ops';
 import { channelRegistryUrl, type ReleaseChannel } from './releaseChannel.server';
+import { DATA_FORMAT, declaredDataFormat } from './dataFormat.server';
 
 export { isNewer };
 
@@ -34,6 +35,19 @@ export interface NodeCompatibility {
 	running: string;
 }
 
+/**
+ * Whether the target release can read what this deployment has stored. Only a
+ * lower target format blocks; `compatible: null` means the registry gave no
+ * answer, which the UI treats as "proceed" (the runner checks again).
+ */
+export interface DataCompatibility {
+	compatible: boolean | null;
+	/** This build's data format. */
+	installed: number;
+	/** The target's, or null when the registry was unreachable. */
+	target: number | null;
+}
+
 export interface UpdateAvailability {
 	channel: ReleaseChannel;
 	/** Installed @selvajs/selva version, or null if it couldn't be read. */
@@ -43,6 +57,7 @@ export interface UpdateAvailability {
 	/** True when both versions are known and differ — a forward update OR a stable revert target. */
 	updateAvailable: boolean;
 	nodeCompatibility: NodeCompatibility;
+	dataCompatibility: DataCompatibility;
 }
 
 // Probes cwd upward (and an explicit INSTALL_DIR) the same way the update
@@ -78,7 +93,11 @@ export function readInstalledVersion(): string | null {
 export interface PublishedManifest {
 	version: string | null;
 	enginesNode: string | null;
+	/** Null when the manifest could not be read; a manifest that declares none is format 1. */
+	dataFormat: number | null;
 }
+
+const UNREADABLE: PublishedManifest = { version: null, enginesNode: null, dataFormat: null };
 
 export async function fetchLatestManifest(
 	fetchImpl: typeof fetch,
@@ -91,14 +110,16 @@ export async function fetchLatestManifest(
 			headers: { Accept: 'application/json' },
 			signal: ctrl.signal
 		});
-		if (!res.ok) return { version: null, enginesNode: null };
+		if (!res.ok) return UNREADABLE;
 		const body = (await res.json()) as { version?: unknown; engines?: { node?: unknown } };
+		const version = typeof body.version === 'string' ? body.version : null;
 		return {
-			version: typeof body.version === 'string' ? body.version : null,
-			enginesNode: typeof body.engines?.node === 'string' ? body.engines.node : null
+			version,
+			enginesNode: typeof body.engines?.node === 'string' ? body.engines.node : null,
+			dataFormat: version ? declaredDataFormat(body) : null
 		};
 	} catch {
-		return { version: null, enginesNode: null };
+		return UNREADABLE;
 	} finally {
 		clearTimeout(timer);
 	}
@@ -117,7 +138,11 @@ export async function checkForUpdate(
 	runningNode: string = process.versions.node
 ): Promise<UpdateAvailability> {
 	const current = readInstalledVersion();
-	const { version: latest, enginesNode } = await fetchLatestManifest(fetchImpl, channel);
+	const {
+		version: latest,
+		enginesNode,
+		dataFormat
+	} = await fetchLatestManifest(fetchImpl, channel);
 	// Any difference between installed and the channel's published version is
 	// actionable: a forward update (stable→newer, beta→newer beta) OR a revert
 	// (beta→stable lands on an OLDER stable version, but switching channel is
@@ -132,6 +157,11 @@ export async function checkForUpdate(
 			compatible: enginesNode ? satisfiesRange(runningNode, enginesNode) : null,
 			required: enginesNode,
 			running: runningNode
+		},
+		dataCompatibility: {
+			compatible: dataFormat === null ? null : dataFormat >= DATA_FORMAT,
+			installed: DATA_FORMAT,
+			target: dataFormat
 		}
 	};
 }

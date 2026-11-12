@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -181,6 +181,15 @@ describe('generated runner script', () => {
 		expect(warn).toBeLessThan(stop);
 	});
 
+	it('refuses a target that cannot read the stored data before stopping the app', () => {
+		const script = runner();
+		const refuse = script.indexOf('DATA_FORMAT:');
+		const stop = script.indexOf('Stopping selva-compute');
+		expect(refuse).toBeGreaterThan(-1);
+		expect(refuse).toBeLessThan(stop);
+		expect(script.slice(refuse, stop)).toContain('exit 10');
+	});
+
 	it('aborts on pm2 skew before stopping the app (issue #118)', () => {
 		const script = runner();
 		const skew = script.indexOf('PM2_SKEW');
@@ -241,6 +250,57 @@ describe('generated runner script', () => {
 			.map((l) => l.replace(/#.*$/, '').trim())
 			.filter((l) => /^(?:if\s+!?\s*)?pm2\s/.test(l));
 		expect(invocations).toEqual([]);
+	});
+});
+
+describe('data format pre-flight, run for real', () => {
+	// The pre-flight cut from the generated script, with `node` (the installed
+	// format) and `npm view` (the target's) stubbed. `target: null` is a registry
+	// that did not answer.
+	function preflight(installed: string, target: string | null) {
+		const script = runner('4.21.0');
+		const fragment = script.slice(
+			script.indexOf('INSTALLED_FORMAT=$(node'),
+			script.indexOf('# 2. Resync PM2 daemon')
+		);
+		const dir = mkdtempSync(join(tmpdir(), 'selva-runner-'));
+		const file = join(dir, 'preflight.sh');
+		try {
+			writeFileSync(
+				file,
+				[
+					`node() { echo ${shellQuote(installed)}; }`,
+					target === null ? 'npm() { return 1; }' : `npm() { echo ${shellQuote(target)}; }`,
+					'LATEST=4.20.0',
+					'TAG=latest',
+					fragment,
+					'echo CONTINUED'
+				].join('\n')
+			);
+			const run = spawnSync(BASH!, [file], { encoding: 'utf8' });
+			return { status: run.status, out: run.stdout };
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+
+	itParses('refuses a target that declares no format when the deployment is on 2', () => {
+		const { status, out } = preflight('2', '');
+		expect(status).toBe(10);
+		expect(out).toContain('reads data format 1, but this deployment is on format 2');
+		expect(out).not.toContain('CONTINUED');
+	});
+
+	itParses('lets a target on the same or a later format through', () => {
+		expect(preflight('2', '2').out).toContain('CONTINUED');
+		expect(preflight('2', '3').out).toContain('CONTINUED');
+		expect(preflight('1', '').out).toContain('CONTINUED');
+	});
+
+	itParses('does not refuse when the registry gave no answer', () => {
+		const { status, out } = preflight('2', null);
+		expect(status).toBe(0);
+		expect(out).toContain('CONTINUED');
 	});
 });
 
@@ -336,6 +396,12 @@ describe('exit-code contract', () => {
 			logs: "[FATAL] SYSTEMD_PM2: this deployment's PM2 is supervised by systemd, and the daemon\n",
 			severity: 'warning',
 			why: 'systemd guard, app untouched'
+		},
+		{
+			code: 10,
+			logs: '[FATAL] DATA_FORMAT: @selvajs/selva@4.20.0 reads data format 1, but this deployment is on format 2.\n',
+			severity: 'warning',
+			why: 'data format guard, app untouched'
 		}
 	];
 

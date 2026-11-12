@@ -30,6 +30,15 @@ export function isLegacyEnvelope(value: string): boolean {
 	return value.startsWith(PREFIX_V1) || value.startsWith(PREFIX_V2);
 }
 
+/**
+ * An `enc:v<n>:` envelope this build cannot open: a newer Selva sealed it, and this
+ * one runs after a downgrade. It is ciphertext, so it must never be reported or
+ * used as a plaintext key.
+ */
+export function isUnknownEnvelope(value: string): boolean {
+	return /^enc:v\d+:/.test(value) && !isEncryptedSecret(value);
+}
+
 // JSON, so no two id/url pairs encode alike: `["a:b","c"]` is not `["a","b:c"]`.
 function bindingAad({ id, url }: SecretBinding): Buffer {
 	return Buffer.from(JSON.stringify([id, url]), 'utf8');
@@ -157,14 +166,17 @@ export function readAtRestKeys(env: EnvRecord): { current: Buffer; previous?: Bu
  *  - `key_mismatch` — envelope is valid but GCM auth-tag verification fails
  *    under the current `SELVA_AT_REST_KEY`: the key was rotated, or the data
  *    came from another deployment.
+ *  - `unknown_envelope` — an `enc:v<n>:` envelope from a newer Selva than the
+ *    one running ({@link isUnknownEnvelope}): the app was downgraded.
  */
-export type SecretVerificationFailureReason = 'key_mismatch' | 'plaintext_on_disk';
+export type SecretVerificationFailureReason =
+	'key_mismatch' | 'plaintext_on_disk' | 'unknown_envelope';
 
 export interface SecretVerificationFailure {
 	serverId: string;
 	serverLabel: string;
 	reason: SecretVerificationFailureReason;
-	/** Underlying error message for `key_mismatch`. Absent for plaintext. */
+	/** Underlying error message for `key_mismatch`. Absent otherwise. */
 	cause?: string;
 }
 

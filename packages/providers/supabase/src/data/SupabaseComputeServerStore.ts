@@ -18,6 +18,7 @@ import {
 	encryptSecret,
 	isEncryptedSecret,
 	isLegacyEnvelope,
+	isUnknownEnvelope,
 	type SecretBinding
 } from '@selvajs/platform/computeServer';
 import type { ClientBundle } from './client.js';
@@ -262,6 +263,15 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	 */
 	private decryptRowApiKey<R extends KeyRow>(row: R): R {
 		if (!row.api_key) return row;
+		if (isUnknownEnvelope(row.api_key)) {
+			this.logger.warn(
+				`Could not read api_key: it is sealed as ${row.api_key.slice(0, 6)}, a format this Selva version does not know. ` +
+					'A newer version wrote it. This server is returned without an apiKey and solves against it will fail. ' +
+					'Upgrade Selva again, or re-enter the key via /admin/compute',
+				{ component: 'selva', serverLabel: row.label, serverId: row.id }
+			);
+			return { ...row, api_key: null };
+		}
 		if (!isEncryptedSecret(row.api_key)) {
 			this.logger.warn(
 				'Compute server row has a plaintext api_key; re-save it via /admin/compute so it is stored encrypted',
@@ -314,6 +324,10 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		for (const row of (data ?? []) as KeyRow[]) {
 			const { api_key: apiKey, id, label } = row;
 			if (!apiKey) continue;
+			if (isUnknownEnvelope(apiKey)) {
+				failures.push({ serverId: id, serverLabel: label, reason: 'unknown_envelope' });
+				continue;
+			}
 			if (!isEncryptedSecret(apiKey)) {
 				plaintextFound = true;
 				failures.push({ serverId: id, serverLabel: label, reason: 'plaintext_on_disk' });

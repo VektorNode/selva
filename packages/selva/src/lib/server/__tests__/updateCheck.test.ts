@@ -65,14 +65,18 @@ describe('fetchLatestManifest', () => {
 			calls++;
 			return { ok: true, json: async () => ({ version: '4.8.0', engines: { node: '>=22.0.0' } }) };
 		}) as unknown as typeof fetch;
-		expect(await fetchLatestManifest(f)).toEqual({ version: '4.8.0', enginesNode: '>=22.0.0' });
+		expect(await fetchLatestManifest(f)).toEqual({
+			version: '4.8.0',
+			enginesNode: '>=22.0.0',
+			dataFormat: 1
+		});
 		expect(calls).toBe(1);
 	});
 
 	it('reports a null range when the manifest has no engines field', async () => {
 		const { fetchLatestManifest } = await import('../updateCheck.server');
 		const m = await fetchLatestManifest(registry({ version: '4.8.0' }));
-		expect(m).toEqual({ version: '4.8.0', enginesNode: null });
+		expect(m).toEqual({ version: '4.8.0', enginesNode: null, dataFormat: 1 });
 	});
 
 	it('degrades to nulls when the registry is unreachable', async () => {
@@ -80,7 +84,41 @@ describe('fetchLatestManifest', () => {
 		const f = (async () => {
 			throw new Error('network down');
 		}) as unknown as typeof fetch;
-		expect(await fetchLatestManifest(f)).toEqual({ version: null, enginesNode: null });
+		expect(await fetchLatestManifest(f)).toEqual({
+			version: null,
+			enginesNode: null,
+			dataFormat: null
+		});
+	});
+});
+
+describe('checkForUpdate dataCompatibility', () => {
+	it('blocks a release that declares no data format: it is format 1', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const { DATA_FORMAT } = await import('../dataFormat.server');
+		const r = await checkForUpdate(registry({ version: '4.20.0' }), 'stable');
+		expect(r.dataCompatibility).toEqual({ compatible: false, installed: DATA_FORMAT, target: 1 });
+	});
+
+	it('passes a release on this format or a later one', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const { DATA_FORMAT } = await import('../dataFormat.server');
+		for (const dataFormat of [DATA_FORMAT, DATA_FORMAT + 1]) {
+			const r = await checkForUpdate(registry({ version: '9.0.0', selva: { dataFormat } }), 'beta');
+			expect(r.dataCompatibility.compatible).toBe(true);
+		}
+	});
+
+	it('is null (not false) when the registry is unreachable', async () => {
+		const { checkForUpdate } = await import('../updateCheck.server');
+		const f = (async () => ({ ok: false })) as unknown as typeof fetch;
+		expect((await checkForUpdate(f, 'stable')).dataCompatibility.compatible).toBeNull();
+	});
+
+	it('package.json declares the format the code is on', async () => {
+		const { DATA_FORMAT, declaredDataFormat } = await import('../dataFormat.server');
+		const pkg = (await import('../../../../package.json')).default;
+		expect(declaredDataFormat(pkg)).toBe(DATA_FORMAT);
 	});
 });
 

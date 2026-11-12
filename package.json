@@ -31,6 +31,7 @@
 		"build:selva": "turbo run build --filter=@selvajs/selva",
 		"build:website": "turbo run build --filter=@selvajs/website",
 		"check:fixtures": "node scripts/develop/check-fixtures.mjs",
+		"check:downgrade": "node scripts/release/downgrade-check.mjs",
 		"check:generated": "turbo run generate && git diff --exit-code -- packages/schemas/src/generated Plugin/Selva.Schema/Models/UISchema.Generated.cs Plugin/Selva.Schema/Models/Wire.Generated.cs Plugin/Selva.Schema/Constants/SchemaVersion.cs",
 		"check:website": "turbo run check --filter=@selvajs/website",
 		"lint:website": "turbo run lint --filter=@selvajs/website",
@@ -56,7 +57,7 @@
 		"clean": "node scripts/develop/clean.js",
 		"rebuild": "pnpm clean && pnpm install && pnpm build",
 		"changeset": "changeset",
-		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/release/verify-pack.mjs && node scripts/release/changeset-publish.mjs",
+		"release": "turbo run build --concurrency=20 --filter=!@selvajs/website && node scripts/release/verify-pack.mjs && node scripts/release/downgrade-check.mjs && node scripts/release/changeset-publish.mjs",
 		"prepare": "husky",
 		"test:pack": "node scripts/release/verify-pack.mjs"
 	},

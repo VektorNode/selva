@@ -19,6 +19,7 @@ import {
 	encryptSecret,
 	isEncryptedSecret,
 	isLegacyEnvelope,
+	isUnknownEnvelope,
 	readAtRestKeys,
 	type SecretBinding
 } from '@selvajs/platform/computeServer';
@@ -107,25 +108,42 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	}
 
 	/**
-	 * Tolerant per-row decrypt: a row that fails to authenticate under the
-	 * current `SELVA_AT_REST_KEY` comes back with `apiKey: undefined` and a
-	 * logged warning, rather than failing the whole read — the page keeps
-	 * rendering, and a solve against that server fails later when
-	 * Rhino.Compute rejects the missing key. `verifySecrets()` is the strict
-	 * counterpart for boot time.
+	 * Tolerant per-row decrypt: a row whose key cannot be opened comes back with
+	 * `apiKey: undefined` and a logged warning, rather than failing the whole read.
+	 * The page keeps rendering, and a solve against that server fails later when
+	 * Rhino.Compute rejects the missing key. That covers ciphertext that does not
+	 * authenticate under the current `SELVA_AT_REST_KEY`, and an envelope from a
+	 * newer Selva. `verifySecrets()` is the strict counterpart for boot time.
 	 *
-	 * Plaintext-on-disk still hard-fails: the store never writes plaintext
-	 * (every write goes through `encryptApiKeys`), so seeing it means someone
-	 * hand-edited the file with a real secret exposed — surface that loudly.
+	 * Plaintext is the exception. The store never writes it (every write goes
+	 * through `encryptApiKeys`), so seeing it means someone hand-edited the file
+	 * with a real secret exposed: a read that would use the key throws.
+	 * `plaintext: 'unreadable'` returns the row keyless instead, for the save
+	 * path: a throw there would block the save that replaces the key.
 	 */
-	private decryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
+	private decryptApiKeys(
+		servers: ComputeServerConfig[],
+		{ plaintext = 'throw' }: { plaintext?: 'throw' | 'unreadable' } = {}
+	): ComputeServerConfig[] {
 		return servers.map((s) => {
 			if (!s.apiKey) return s;
-			if (!isEncryptedSecret(s.apiKey)) {
-				throw new Error(
-					`compute.config.json contains an unencrypted apiKey for server "${s.label}" (${s.id}). ` +
-						'Re-enter the key via /admin/compute so it is stored encrypted.'
+			const fields = { component: 'selva', serverLabel: s.label, serverId: s.id };
+			if (isUnknownEnvelope(s.apiKey)) {
+				this.logger.warn(
+					`Could not read apiKey: it is sealed as ${s.apiKey.slice(0, 6)}, a format this Selva version does not know. ` +
+						'A newer version wrote it. This server is returned without an apiKey and solves against it will fail. ' +
+						'Upgrade Selva again, or re-enter the key via /admin/compute.',
+					fields
 				);
+				return { ...s, apiKey: undefined };
+			}
+			if (!isEncryptedSecret(s.apiKey)) {
+				const message =
+					`compute.config.json contains an unencrypted apiKey for server "${s.label}" (${s.id}). ` +
+					'Re-enter the key via /admin/compute so it is stored encrypted.';
+				if (plaintext === 'throw') throw new Error(message);
+				this.logger.error(message, fields);
+				return { ...s, apiKey: undefined };
 			}
 			try {
 				return { ...s, apiKey: decryptWithKeys(s.apiKey, this.keys, bindingOf(s)).plaintext };
@@ -135,9 +153,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 						'This server is returned without an apiKey and solves against it will fail. ' +
 						'Re-enter the key via /admin/compute, or restore the original SELVA_AT_REST_KEY.',
 					{
-						component: 'selva',
-						serverLabel: s.label,
-						serverId: s.id,
+						...fields,
 						err: cause instanceof Error ? (cause.stack ?? cause.message) : String(cause)
 					}
 				);
@@ -162,6 +178,10 @@ export class LocalComputeServerStore implements IComputeServerStore {
 
 		for (const s of all.servers) {
 			if (!s.apiKey) continue;
+			if (isUnknownEnvelope(s.apiKey)) {
+				failures.push({ serverId: s.id, serverLabel: s.label, reason: 'unknown_envelope' });
+				continue;
+			}
 			if (!isEncryptedSecret(s.apiKey)) {
 				plaintextFound = true;
 				failures.push({
@@ -227,8 +247,10 @@ export class LocalComputeServerStore implements IComputeServerStore {
 
 	async getConfig(_ctx: RequestContext, opts: GetConfigOptions = {}): Promise<ComputeConfig> {
 		const all = await this.readAll();
+		// Keys are read through here only to merge a save, which must be able to
+		// replace a plaintext one.
 		const servers = opts.includeApiKeys
-			? this.decryptApiKeys(all.servers)
+			? this.decryptApiKeys(all.servers, { plaintext: 'unreadable' })
 			: all.servers.map((s) => ({ ...s, apiKey: undefined }));
 		const config: ComputeConfig = {
 			// `hasApiKey` reads the stored (still-encrypted) value, so presence is

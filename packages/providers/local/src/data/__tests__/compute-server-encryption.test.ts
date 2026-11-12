@@ -289,12 +289,45 @@ describe('LocalComputeServerStore — apiKey encryption at rest', () => {
 		);
 
 		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
-		await expect(store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true })).rejects.toThrow(
-			/unencrypted apiKey/
-		);
+		await expect(store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).rejects.toThrow(/unencrypted apiKey/);
 		// The key-free read never touches the secret, so it cannot detect this —
 		// `verifySecrets` is the boot-time guard that does.
 		await expect(store.getConfig(SYSTEM_CONTEXT)).resolves.toBeDefined();
+	});
+
+	it('reads a plaintext apiKey as unreadable on the save path, so it can be replaced', async () => {
+		await fs.mkdir(path.dirname(configPath), { recursive: true });
+		await fs.writeFile(
+			configPath,
+			JSON.stringify({ servers: [makePlatformServer({ apiKey: 'plaintext-leftover' })] }),
+			'utf-8'
+		);
+
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		const keyed = await store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true });
+		expect(keyed.servers[0]).toMatchObject({ hasApiKey: true });
+		expect(keyed.servers[0].apiKey).toBeUndefined();
+	});
+
+	it('reads a newer-format envelope as unreadable instead of as plaintext', async () => {
+		await fs.mkdir(path.dirname(configPath), { recursive: true });
+		await fs.writeFile(
+			configPath,
+			JSON.stringify({ servers: [makePlatformServer({ apiKey: 'enc:v9:AAAA' })] }),
+			'utf-8'
+		);
+
+		const store = new LocalComputeServerStore(configPath, TEST_SECRET_KEY);
+		await expect(store.getServerApiKey(SYSTEM_CONTEXT, 'a1')).resolves.toBeUndefined();
+		const keyed = await store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true });
+		expect(keyed.servers[0]).toMatchObject({ hasApiKey: true });
+		expect(keyed.servers[0].apiKey).toBeUndefined();
+
+		const report = await store.verifySecrets();
+		expect(report.plaintextFound).toBe(false);
+		expect(report.failures).toEqual([
+			{ serverId: 'a1', serverLabel: 'Test', reason: 'unknown_envelope' }
+		]);
 	});
 
 	it('preserves servers with no apiKey', async () => {

@@ -89,7 +89,8 @@ exit 0
 // Bash script the daemonized runner executes. Flow:
 //
 //   1. pre-flight    — query the registry; if already on latest, exit clean
-//                      WITHOUT touching the running app.
+//                      WITHOUT touching the running app. Refuse a target
+//                      that cannot read this deployment's data.
 //   2. pm2 sync      — `pm2 update` if the daemon and CLI versions drifted.
 //   3. pm2 stop      — stop selva-compute before npm overwrites build/, so
 //                      in-flight requests can't hit ERR_MODULE_NOT_FOUND
@@ -287,6 +288,28 @@ if [ -n "$REQUIRED_NODE" ] && [ -n "$RUNNING_NODE" ]; then
     echo "[WARN] ENGINE_MISMATCH: @selvajs/selva@$LATEST requires Node $REQUIRED_NODE but this host runs v$RUNNING_NODE"
     echo "[WARN] npm will install it anyway (engine-strict is off) and the health probe will pass,"
     echo "[WARN] but routes using newer Node APIs will fail at request time. Upgrade Node on this host."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 1c. Data format pre-flight — BEFORE any downtime.
+# ---------------------------------------------------------------------------
+# A release with a lower data format than the installed one cannot read what
+# this deployment has already stored (dataFormat.server.ts). It would boot, fail
+# its health check and roll back: two outages for nothing. Installed by hand it
+# leaves stored Compute API keys unreadable. A release that declares no format
+# is format 1. Skipped when the registry gave no answer: the target is unknown.
+INSTALLED_FORMAT=$(node -p "require('./node_modules/@selvajs/selva/package.json').selva?.dataFormat ?? 1" 2>/dev/null)
+case "$INSTALLED_FORMAT" in ''|*[!0-9]*) INSTALLED_FORMAT=1 ;; esac
+if [ -n "$LATEST" ] && TARGET_FORMAT=$(npm view "@selvajs/selva@$TAG" selva.dataFormat --silent 2>/dev/null); then
+  TARGET_FORMAT=$(echo "$TARGET_FORMAT" | tr -d '"' | tr -d "'" | tr -d '[:space:]')
+  case "$TARGET_FORMAT" in ''|*[!0-9]*) TARGET_FORMAT=1 ;; esac
+  if [ "$TARGET_FORMAT" -lt "$INSTALLED_FORMAT" ]; then
+    echo "[FATAL] DATA_FORMAT: @selvajs/selva@$LATEST reads data format $TARGET_FORMAT, but this deployment is on format $INSTALLED_FORMAT."
+    echo "[FATAL] It could not read what the installed version has stored, such as Compute API keys."
+    echo "[FATAL] Aborting WITHOUT stopping the app — it is still running."
+    echo "[FATAL] To go back anyway: docs/self-hosting/deployment/admin.md, 'Going back to an older release'."
+    exit 10
   fi
 fi
 
@@ -511,6 +534,15 @@ if [ -z "$BEFORE" ]; then
   echo "[FATAL] No prior version recorded — cannot roll back automatically."
   echo "[FATAL] EXIT trap will attempt to restart the current build anyway."
   exit 3
+fi
+
+# The failed version has already booted, so it may have rewritten stored data in
+# a format $BEFORE cannot read. Rolling back is still the better outcome; say so.
+AFTER_FORMAT=$(node -p "require('./node_modules/@selvajs/selva/package.json').selva?.dataFormat ?? 1" 2>/dev/null)
+case "$AFTER_FORMAT" in ''|*[!0-9]*) AFTER_FORMAT=1 ;; esac
+if [ "$AFTER_FORMAT" -gt "$INSTALLED_FORMAT" ]; then
+  echo "[WARN] DATA_FORMAT_ROLLBACK: the failed version stores data format $AFTER_FORMAT; $BEFORE reads format $INSTALLED_FORMAT."
+  echo "[WARN] If Compute API keys fail to load after this rollback, re-enter them at /admin/compute."
 fi
 
 echo "[STEP] Rolling back @selvajs/selva to $BEFORE"

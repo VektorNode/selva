@@ -36,6 +36,35 @@ let cached: BootHealth | null = null;
 let inflight: Promise<BootHealth> | null = null;
 
 async function run(): Promise<BootHealth> {
+	let schemaVersion: SchemaVersionReport | null = null;
+	const data = providers.data;
+	if (typeof data.verifySchemaVersion === 'function') {
+		try {
+			schemaVersion = await data.verifySchemaVersion();
+		} catch (err) {
+			// verifySchemaVersion must not throw by contract; treat a throw as failure.
+			getLogger().error('verifySchemaVersion threw — treating as failure', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
+			schemaVersion = {
+				ok: false,
+				expected: '(unknown)',
+				actual: null,
+				message: err instanceof Error ? err.message : String(err)
+			};
+		}
+	}
+
+	if (schemaVersion && !schemaVersion.ok) {
+		getLogger().error('Database schema handshake failed. /api/health will return 503.', {
+			component: 'boot',
+			expected: schemaVersion.expected,
+			actual: schemaVersion.actual ?? 'unavailable',
+			detail: schemaVersion.message
+		});
+	}
+
 	let atRestSecrets: SecretVerificationReport | null = null;
 
 	const store = providers.data.computeServer;
@@ -43,7 +72,10 @@ async function run(): Promise<BootHealth> {
 	// older envelope move to the current key and envelope, so the previous key
 	// can be dropped. Once per process, here,
 	// because verifySecrets also serves an admin GET and must not write.
-	if (typeof store.reencryptSecrets === 'function') {
+	// Skipped when the schema handshake failed: the update runner answers that 503 by
+	// reinstalling the previous version, which could not read keys already re-sealed
+	// in this version's envelope.
+	if (schemaVersion?.ok !== false && typeof store.reencryptSecrets === 'function') {
 		try {
 			const resealed = await store.reencryptSecrets();
 			if (resealed > 0) {
@@ -98,35 +130,6 @@ async function run(): Promise<BootHealth> {
 				'restoring the original SELVA_AT_REST_KEY. See docs/Troubleshooting.md.',
 			{ component: 'boot' }
 		);
-	}
-
-	let schemaVersion: SchemaVersionReport | null = null;
-	const data = providers.data;
-	if (typeof data.verifySchemaVersion === 'function') {
-		try {
-			schemaVersion = await data.verifySchemaVersion();
-		} catch (err) {
-			// verifySchemaVersion must not throw by contract; treat a throw as failure.
-			getLogger().error('verifySchemaVersion threw — treating as failure', {
-				component: 'boot',
-				err: renderThrown(err)
-			});
-			schemaVersion = {
-				ok: false,
-				expected: '(unknown)',
-				actual: null,
-				message: err instanceof Error ? err.message : String(err)
-			};
-		}
-	}
-
-	if (schemaVersion && !schemaVersion.ok) {
-		getLogger().error('Database schema handshake failed. /api/health will return 503.', {
-			component: 'boot',
-			expected: schemaVersion.expected,
-			actual: schemaVersion.actual ?? 'unavailable',
-			detail: schemaVersion.message
-		});
 	}
 
 	return {

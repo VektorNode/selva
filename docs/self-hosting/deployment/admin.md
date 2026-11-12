@@ -55,10 +55,22 @@ On save, an omitted API key is kept, `null` clears it, a new value replaces it. 
 ### System
 
 - **Channel** (`stable` or `beta`): saves the choice only; it does not update.
-- **Update:** runs the package update and restarts. The new process has about 30 s to pass its health check (15 probes, 2 s apart), else it rolls back. To leave beta, switch channel and update again. Only `instance_admin` can run it, though the page shows the button to `manage_updates` holders too.
+- **Update:** runs the package update and restarts. The new process has about 30 s to pass its health check (15 probes, 2 s apart), else it rolls back. To leave beta, switch channel and update again; the update is refused when the stable release cannot read your data ([Going back to an older release](#going-back-to-an-older-release)). Only `instance_admin` can run it, though the page shows the button to `manage_updates` holders too.
 - **Supabase:** apply migrations **before** updating ([Upgrading later](../providers/supabase.md#upgrading-later)). Updates never run migrations, so a release missing them fails the health check and rolls back every time.
 - **Health check:** at-rest decryption, DB schema version, default compute reachability, writable `DATA_PATH`, the proxy and body-limit variables, and (Supabase) the API-token signing key.
 - **Throughput probe:** measures bandwidth with incompressible bytes, not reachability.
+
+#### Going back to an older release
+
+Each release declares a data format. A release on a lower format than the installed one cannot read what the deployment has stored, so the update is refused before the app stops. This happens when the stable release is older than the beta you are on. Staying on the beta until the next stable release needs no action: switch the channel back to `beta`.
+
+To go back anyway, from data format 2 (4.21.0) to format 1 (4.20.0 and older):
+
+1. On the installed version, clear every Compute API key at `/admin/compute`. Format 1 cannot read keys format 2 has stored.
+2. In the deployment directory: `npm install --save @selvajs/cli@<version> @selvajs/selva@<version>`, then `npx selva restart`.
+3. Re-enter the keys at `/admin/compute`.
+
+Database migrations are never reversed, on any provider.
 
 ### Audit
 

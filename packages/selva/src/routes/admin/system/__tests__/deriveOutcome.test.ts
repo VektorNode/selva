@@ -38,6 +38,16 @@ describe('deriveOutcome', () => {
 		expect(o.title).toMatch(/up to date/i);
 	});
 
+	it('names both data formats when the update was refused before it started', () => {
+		const logs =
+			'[INFO] Target (latest): 4.21.0-beta.8 → 4.20.0\n' +
+			'[FATAL] DATA_FORMAT: @selvajs/selva@4.20.0 reads data format 1, but this deployment is on format 2.\n';
+		const o = deriveOutcome(10, logs);
+		expect(o.severity).toBe('warning');
+		expect(o.title).toContain('The app is untouched');
+		expect(o.detail).toContain('reads data format 1; this deployment is on format 2');
+	});
+
 	it('treats a safe rollback as a warning, NOT a failure — the app is online', () => {
 		const logs = [
 			'[INFO] Available: 4.2.1 → 4.3.0',

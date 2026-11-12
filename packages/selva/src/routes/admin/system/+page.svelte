@@ -21,6 +21,7 @@
 			latest: string | null;
 			updateAvailable: boolean;
 			nodeCompatibility: { compatible: boolean | null; required: string | null; running: string };
+			dataCompatibility: { compatible: boolean | null; installed: number; target: number | null };
 		};
 		config: {
 			report: ConfigReport;
@@ -394,6 +395,7 @@
 					logs={updateLogs}
 					exitCode={updateExitCode}
 					nodeCompatibility={data.update.nodeCompatibility}
+					dataCompatibility={data.update.dataCompatibility}
 					onRun={runUpdate}
 				/>
 				{#key data.channel}

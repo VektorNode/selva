@@ -89,15 +89,19 @@ function atRestSecretsCheck(report: SecretVerificationReport | null): HealthChec
 		.map((f) => `"${f.serverLabel}" (${f.reason}${f.cause ? `: ${f.cause}` : ''})`)
 		.join(', ');
 	const plaintext = report.plaintextFound;
+	const newerFormat = report.failures.some((f) => f.reason === 'unknown_envelope');
 	return {
 		...base,
 		status: 'degraded',
 		summary: `${report.failures.length} compute server key(s) could not be loaded: ${failed}.`,
 		remediation: plaintext
 			? 'A key is stored in plaintext on disk — re-enter it via /admin/compute so it is encrypted.'
-			: 'The stored ciphertext does not match the current SELVA_AT_REST_KEY (rotated key or ' +
-				'restored backup). Re-enter the affected keys via /admin/compute, or restore the ' +
-				'original SELVA_AT_REST_KEY, then run this check again.'
+			: newerFormat
+				? 'A key was sealed by a newer Selva version than the one running. Upgrade Selva ' +
+					'again, or re-enter the affected keys via /admin/compute, then run this check again.'
+				: 'The stored ciphertext does not match the current SELVA_AT_REST_KEY (rotated key or ' +
+					'restored backup). Re-enter the affected keys via /admin/compute, or restore the ' +
+					'original SELVA_AT_REST_KEY, then run this check again.'
 	};
 }
 

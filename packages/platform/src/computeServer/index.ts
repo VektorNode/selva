@@ -3,6 +3,7 @@ export * from './public.js';
 export {
 	isEncryptedSecret,
 	isLegacyEnvelope,
+	isUnknownEnvelope,
 	encryptSecret,
 	decryptSecret,
 	decryptWithKeys,

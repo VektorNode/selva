@@ -9,6 +9,7 @@ describe('the root barrel', () => {
 		'decryptWithKeys',
 		'decodeSecretKey',
 		'isEncryptedSecret',
+		'isUnknownEnvelope',
 		'readAtRestKeys'
 	])('leaves out %s, which needs node:crypto', (name) => {
 		expect(root).not.toHaveProperty(name);

@@ -5,7 +5,8 @@ import {
 	decryptWithKeys,
 	encryptSecret,
 	isEncryptedSecret,
-	isLegacyEnvelope
+	isLegacyEnvelope,
+	isUnknownEnvelope
 } from '../secrets.js';
 
 const KEY = randomBytes(32);
@@ -61,6 +62,16 @@ describe('truncated envelopes', () => {
 		const full = Buffer.from(encryptSecret('', KEY, 'server-a').slice('enc:v2:'.length), 'base64');
 		const fourByteTag = 'enc:v2:' + full.subarray(0, 16).toString('base64');
 		expect(() => decryptSecret(fourByteTag, KEY, 'server-a')).toThrow(/IV and tag/);
+	});
+});
+
+describe('an envelope from a newer format', () => {
+	it('is told apart from plaintext and from envelopes this build opens', () => {
+		expect(isUnknownEnvelope('enc:v4:AAAA')).toBe(true);
+		expect(isUnknownEnvelope('enc:v12:AAAA')).toBe(true);
+		expect(isUnknownEnvelope('plaintext-key')).toBe(false);
+		expect(isUnknownEnvelope(encryptSecret('k', KEY))).toBe(false);
+		expect(isUnknownEnvelope(encryptSecret('k', KEY, { id: 'a', url: 'http://h' }))).toBe(false);
 	});
 });
 

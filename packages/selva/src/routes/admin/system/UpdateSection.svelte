@@ -26,6 +26,7 @@
 		logs?: string;
 		exitCode?: number | null;
 		nodeCompatibility?: NodeCompatibility;
+		dataCompatibility?: { compatible: boolean | null; installed: number; target: number | null };
 		onRun?: () => void;
 	}
 
@@ -39,6 +40,7 @@
 		logs = '',
 		exitCode = null,
 		nodeCompatibility = { compatible: null, required: null, running: '' },
+		dataCompatibility = { compatible: null, installed: 1, target: null },
 		onRun
 	}: Props = $props();
 
@@ -55,7 +57,9 @@
 	const overrideSatisfied = $derived(
 		overrideArmed && !!latestVersion && overrideInput.trim() === latestVersion
 	);
-	const runDisabled = $derived(isRunning || (nodeBlocked && !overrideSatisfied));
+	// No override: the runner refuses the same install before it stops the app.
+	const dataBlocked = $derived(dataCompatibility.compatible === false);
+	const runDisabled = $derived(isRunning || dataBlocked || (nodeBlocked && !overrideSatisfied));
 
 	const channelLabel = $derived(channel === 'beta' ? 'beta' : 'stable');
 
@@ -162,6 +166,26 @@
 				You're on the latest {channelLabel} release (<span class="font-mono">v{currentVersion}</span
 				>).
 			</p>
+		{/if}
+		{#if dataBlocked}
+			<div
+				class="border-destructive/40 bg-destructive/10 text-destructive flex items-start gap-2 rounded-md border px-3 py-3 text-sm"
+				role="alert"
+			>
+				<TriangleAlert class="mt-0.5 h-4 w-4 shrink-0" />
+				<div class="space-y-1">
+					<p class="font-medium">
+						Update blocked — <span class="font-mono">v{latestVersion}</span> cannot read this deployment's
+						data
+					</p>
+					<p class="text-muted-foreground text-xs">
+						It reads data format {dataCompatibility.target}; this deployment is on format
+						{dataCompatibility.installed}. Installing it would leave stored data, such as Compute
+						API keys, unreadable. Switch the release channel back to stay on this version. To go
+						back anyway, follow "Going back to an older release" in the admin guide.
+					</p>
+				</div>
+			</div>
 		{/if}
 		{#if nodeBlocked}
 			<div
