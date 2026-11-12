@@ -5,9 +5,9 @@ using System.Text;
 namespace Selva.App;
 
 /// <summary>
-///     Keys of protected apps, in Windows Credential Manager under the key's id. An administrator
-///     can put one there ahead of time (<c>SelvaApp.exe --add-key</c>), and then nobody on that
-///     machine is asked for it.
+///     Keys of protected apps, in Windows Credential Manager under the key's id. Stored per
+///     Windows user: <c>SelvaApp.exe --add-key</c> puts one there ahead of time for the account
+///     that runs it, and that user is never asked for it.
 /// </summary>
 internal static class KeyStore
 {

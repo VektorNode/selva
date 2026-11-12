@@ -35,6 +35,8 @@ internal sealed class RhinoHost
     private Process? _rhino;
     private volatile bool _quitting;
     private int _failed;
+    private IntPtr _sighted;
+    private bool _raised;
 
     public RhinoHost()
     {
@@ -109,6 +111,38 @@ internal sealed class RhinoHost
         _pipe?.Dispose();
     }
 
+    /// <summary>
+    ///     A dialog the hidden Rhino is showing. One that stays up is put in front of the other
+    ///     windows, once: it has no taskbar button to find it by. Call from one thread.
+    /// </summary>
+    /// <returns>The dialog's title, empty if it has none; null while Rhino shows nothing that stays.</returns>
+    public string? FindDialog()
+    {
+        var rhino = _rhino;
+        var window = rhino == null || rhino.HasExited ? null : RhinoWindows.FindVisible(rhino.Id);
+        if (window == null)
+        {
+            _sighted = IntPtr.Zero;
+            return null;
+        }
+
+        // Seen for the first time: a window that only flashes by isn't a question.
+        if (window.Handle != _sighted)
+        {
+            _sighted = window.Handle;
+            _raised = false;
+            return null;
+        }
+
+        if (!_raised)
+        {
+            _raised = true;
+            RhinoWindows.BringToFront(window.Handle);
+        }
+
+        return window.Title;
+    }
+
     private void Run()
     {
         var installed = InstalledRhinos();
@@ -118,8 +152,16 @@ internal sealed class RhinoHost
             return;
         }
 
-        string? problem = null;
-        foreach (var rhino in installed)
+        // A Rhino without Selva never connects: starting it would only spend the timeout and a licence.
+        var usable = installed.Where(rhino => rhino.HasSelva).ToList();
+        if (usable.Count == 0)
+        {
+            Fail("Selva isn't installed in Rhino. Install it from Rhino's package manager " +
+                 "(type PackageManager in Rhino), then try again.");
+            return;
+        }
+
+        foreach (var rhino in usable)
         {
             if (_quitting)
             {
@@ -130,14 +172,9 @@ internal sealed class RhinoHost
             {
                 return;
             }
-
-            problem = rhino.HasSelva
-                ? "Rhino didn't start. Open Rhino once to check that it runs and has a licence, then try again."
-                : "Selva isn't installed in Rhino. Install it from Rhino's package manager " +
-                  "(type PackageManager in Rhino), then try again.";
         }
 
-        Fail(problem!);
+        Fail("Rhino didn't start. Open Rhino once to check that it runs and has a licence, then try again.");
     }
 
     private bool TryStart(string exePath)
@@ -170,9 +207,11 @@ internal sealed class RhinoHost
         var deadline = DateTime.UtcNow + StartTimeout;
         while (!connected.AsyncWaitHandle.WaitOne(250))
         {
-            if (_quitting || process.HasExited || DateTime.UtcNow > deadline)
+            // A dialog holds the deadline off: Rhino is waiting for the user, not stuck, and
+            // the app's page says which window to answer.
+            if (_quitting || process.HasExited ||
+                (DateTime.UtcNow > deadline && RhinoWindows.FindVisible(process.Id) == null))
             {
-                // Still running means it may be sitting on a dialog nobody can see.
                 Kill(process);
                 pipe.Dispose();
                 _rhino = null;
@@ -253,8 +292,8 @@ internal sealed class RhinoHost
     }
 
     /// <summary>
-    ///     Rhinos that have Selva first, and among those the one this exe was installed into:
-    ///     Selva's package folder is per Rhino version, and the exe sits in it.
+    ///     The Rhino this exe was installed into first: Selva's package folder is per Rhino
+    ///     version, and the exe sits in it.
     /// </summary>
     private static List<RhinoInstall> InstalledRhinos()
     {
@@ -262,7 +301,6 @@ internal sealed class RhinoHost
         return RhinoInstalls.Find()
             .OrderByDescending(rhino => ownFolder.StartsWith(rhino.SelvaFolder + Path.DirectorySeparatorChar,
                 StringComparison.OrdinalIgnoreCase))
-            .ThenByDescending(rhino => rhino.HasSelva)
             .ToList();
     }
 

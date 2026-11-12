@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
@@ -37,15 +38,23 @@ internal sealed class MainForm : Form
     private readonly JavaScriptSerializer _json = new JavaScriptSerializer();
     private readonly AppSettings _settings = AppSettings.Load();
     private readonly Timer _openTimer = new Timer();
+    private readonly Timer _dialogTimer = new Timer { Interval = 2000 };
 
     /// <summary>Started with a file: the window is that app, and closing the app closes the window.</summary>
     private readonly bool _fixed;
 
     private readonly bool _dark = WindowsTheme.IsDark();
     private readonly string? _startPath;
+    private readonly Icon _selvaIcon = AppIcon.Load();
+    private Icon? _appIcon;
 
     private RhinoHost? _rhino;
     private bool _rhinoReady;
+    // From StartOpen until the session shows or the open fails.
+    private bool _opening;
+    private string _step = StartingRhino;
+    // What the progress page says about a dialog the hidden Rhino is showing; null when none is up.
+    private string? _dialog;
     // The app's page is loaded and takes state; or it was asked for and hasn't said "ready" yet.
     private bool _shellLoaded;
     private bool _shellNavigating;
@@ -63,7 +72,7 @@ internal sealed class MainForm : Form
         _fixed = startPath != null;
 
         Text = "Selva";
-        Icon = AppIcon.Load();
+        Icon = _selvaIcon;
         BackColor = _dark ? Color.FromArgb(10, 10, 10) : Color.FromArgb(250, 250, 250);
         MinimumSize = new Size(420, 480);
         PlaceWindow();
@@ -73,6 +82,7 @@ internal sealed class MainForm : Form
 
         _openTimer.Interval = (int)OpenTimeout.TotalMilliseconds;
         _openTimer.Tick += (_, _) => OnOpenTimedOut();
+        _dialogTimer.Tick += (_, _) => CheckForDialog();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -133,6 +143,7 @@ internal sealed class MainForm : Form
         _key = null;
         _appFile = null;
         _name = Path.GetFileNameWithoutExtension(_path);
+        ApplyAppIcon(null);
 
         if (!File.Exists(_path))
         {
@@ -142,10 +153,13 @@ internal sealed class MainForm : Form
 
         if (AppFile.HasMagic(_path))
         {
-            byte[] bytes;
+            // Only what the key prompt and the title need; the definition stays on disk.
+            AppFileInfo info;
+            string? refusal;
             try
             {
-                bytes = File.ReadAllBytes(_path);
+                using var stream = File.OpenRead(_path);
+                refusal = AppFile.TryReadHeader(stream, out info);
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
@@ -153,15 +167,12 @@ internal sealed class MainForm : Form
                 return;
             }
 
-            var refusal = AppFile.TryRead(bytes, out var info);
             if (refusal != null)
             {
                 ShowError(refusal, false);
                 return;
             }
 
-            // Only what the key prompt and the title need; the definition stays on disk.
-            info.Body = Array.Empty<byte>();
             _appFile = info;
             _name = info.Name;
             ApplyAppIcon(info.IconPng);
@@ -215,7 +226,9 @@ internal sealed class MainForm : Form
     private void StartOpen()
     {
         _openTimer.Stop();
-        _openTimer.Start();
+        _opening = true;
+        _dialog = null;
+        _dialogTimer.Start();
 
         if (_rhino == null)
         {
@@ -232,13 +245,41 @@ internal sealed class MainForm : Form
         }
         else
         {
-            SetShell("opening", ("name", _name), ("step", StartingRhino));
+            ShowOpening(StartingRhino);
+        }
+    }
+
+    private void ShowOpening(string step)
+    {
+        _step = step;
+        SetShell("opening", ("name", _name), ("step", step), ("dialog", _dialog));
+    }
+
+    /// <summary>
+    ///     Rhino's main window is hidden, but a dialog it opens is not. While one is up it is
+    ///     what the open waits for, so the page names it.
+    /// </summary>
+    private void CheckForDialog()
+    {
+        var title = _rhino?.FindDialog();
+        var dialog = title == null
+            ? null
+            : title.Length > 0
+                ? $"Rhino is asking something in its \"{title}\" window. Answer it to go on."
+                : "Rhino is asking something in a window of its own. Answer it to go on.";
+        if (dialog != _dialog)
+        {
+            _dialog = dialog;
+            ShowOpening(_step);
         }
     }
 
     private void SendOpen()
     {
-        SetShell("opening", ("name", _name), ("step", LoadingGrasshopper));
+        // Timed from here: starting Rhino has RhinoHost's own limit, and the two must not race.
+        _openTimer.Stop();
+        _openTimer.Start();
+        ShowOpening(LoadingGrasshopper);
         _rhino!.Send(AppHostProtocol.Open,
             new KeyValuePair<string, string?>(AppHostProtocol.PathField, _path),
             new KeyValuePair<string, string?>(AppHostProtocol.KeyField, _key));
@@ -251,7 +292,7 @@ internal sealed class MainForm : Form
         {
             case AppHostProtocol.Ready:
                 _rhinoReady = true;
-                if (_openTimer.Enabled)
+                if (_opening)
                 {
                     SendOpen();
                 }
@@ -259,9 +300,9 @@ internal sealed class MainForm : Form
                 break;
 
             case AppHostProtocol.Step:
-                if (message.TryGetValue(AppHostProtocol.StepField, out var step) && _sessionUrl == null)
+                if (message.TryGetValue(AppHostProtocol.StepField, out var step) && step != null && _opening)
                 {
-                    SetShell("opening", ("name", _name), ("step", step));
+                    ShowOpening(step);
                 }
 
                 break;
@@ -276,7 +317,13 @@ internal sealed class MainForm : Form
                 break;
 
             case AppHostProtocol.Clear:
-                // The definition closed from inside its page.
+                // The definition closed from inside its page. One closed from here, or one whose
+                // page already gave way to an error, has nothing on screen to clear.
+                if (_sessionUrl == null)
+                {
+                    break;
+                }
+
                 if (_fixed)
                 {
                     Close();
@@ -298,7 +345,7 @@ internal sealed class MainForm : Form
 
     private void ShowSession(Uri url)
     {
-        _openTimer.Stop();
+        EndOpen();
         _sessionUrl = url;
         _shellLoaded = false;
         _shellNavigating = false;
@@ -310,27 +357,40 @@ internal sealed class MainForm : Form
         _webView.CoreWebView2.Navigate(url.AbsoluteUri);
     }
 
+    private void EndOpen()
+    {
+        _opening = false;
+        _openTimer.Stop();
+        _dialogTimer.Stop();
+    }
+
     private void OnOpenFailed(string message)
     {
-        _openTimer.Stop();
+        EndOpen();
         ShowError(message, true);
     }
 
     private void OnRhinoFailed(string message)
     {
-        _openTimer.Stop();
+        EndOpen();
         _rhino = null;
         _rhinoReady = false;
         ShowError(message, _path != null);
     }
 
     /// <summary>
-    ///     Rhino went quiet: most likely a dialog opened where nobody can see it. That Rhino is
-    ///     no use any more, so the next attempt starts a new one.
+    ///     Rhino went quiet without asking anything. That Rhino is no use any more, so the next
+    ///     attempt starts a new one.
     /// </summary>
     private void OnOpenTimedOut()
     {
-        _openTimer.Stop();
+        // A dialog is up: Rhino is waiting for the user, and the page says so. The timer runs on.
+        if (_rhino?.FindDialog() != null)
+        {
+            return;
+        }
+
+        EndOpen();
         var rhino = _rhino;
         _rhino = null;
         _rhinoReady = false;
@@ -365,6 +425,7 @@ internal sealed class MainForm : Form
     private void ShowLauncher()
     {
         _path = null;
+        ApplyAppIcon(null);
         var recent = _settings.ExistingRecent.Select(path => new Dictionary<string, object?>
         {
             ["path"] = path,
@@ -473,6 +534,9 @@ internal sealed class MainForm : Form
                 }
                 else
                 {
+                    // A definition whose page gave way to a key prompt or an error is still
+                    // open in Rhino.
+                    _rhino?.Send(AppHostProtocol.Close);
                     Text = "Selva";
                     ShowLauncher();
                 }
@@ -643,23 +707,41 @@ internal sealed class MainForm : Form
         }
     }
 
+    /// <summary>The app file's own icon; Selva's when <paramref name="png" /> is null or unreadable.</summary>
     private void ApplyAppIcon(byte[]? png)
     {
-        if (png == null)
-        {
-            return;
-        }
+        var previous = _appIcon;
+        _appIcon = png == null ? null : IconFromPng(png);
+        Icon = _appIcon ?? _selvaIcon;
+        previous?.Dispose();
+    }
 
+    private static Icon? IconFromPng(byte[] png)
+    {
         try
         {
             using var stream = new MemoryStream(png);
             using var bitmap = new Bitmap(stream);
-            Icon = Icon.FromHandle(bitmap.GetHicon());
+            var handle = bitmap.GetHicon();
+            try
+            {
+                // FromHandle never frees the handle. The clone owns its copy, so the icon can
+                // be disposed like any other.
+                using var borrowed = Icon.FromHandle(handle);
+                return (Icon)borrowed.Clone();
+            }
+            finally
+            {
+                DestroyIcon(handle);
+            }
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is ArgumentException || ex is ExternalException)
         {
-            // Not an image Windows can read; the app keeps Selva's icon.
+            // Not an image Windows can read.
+            return null;
         }
     }
 
+    [DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr handle);
 }

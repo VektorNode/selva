@@ -158,8 +158,9 @@ internal sealed class SetupForm : Form
     {
         if (Installation.RhinoIsRunning())
         {
-            ShowMessage("Close Rhino first", null,
-                "Rhino is running and holds Selva's files. Close it, then continue.", "Continue", Run);
+            ShowMessage("Close Rhino and Selva first", null,
+                "Rhino or the Selva app is running and holds Selva's files. Close them, then continue.",
+                "Continue", Run);
             return;
         }
 
@@ -190,7 +191,8 @@ internal sealed class SetupForm : Form
                                    ex is System.Security.SecurityException)
         {
             ShowMessage(_uninstall ? "Selva couldn't be removed" : "Selva couldn't be installed", null,
-                $"{ex.Message} Close Rhino if it is running, then try again.", "Try again", Run);
+                $"{ex.Message} Close Rhino and the Selva app if they are running, then try again.",
+                "Try again", Run);
             return;
         }
 

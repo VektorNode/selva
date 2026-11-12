@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Rhino;
 using Rhino.PlugIns;
 using Rhino.UI;
@@ -143,6 +144,15 @@ public class SelvaPanelPlugIn : PlugIn
         var link = AppHostLink.Connect(pipeName, out var error);
         if (link == null)
         {
+            // The app went away while this Rhino started. Nobody can see it to close it, and it
+            // holds a licence. Queued from another thread so it runs after the command that
+            // called this has returned, as the link's Ended does.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) &&
+                !IsWindowVisible(RhinoApp.MainWindowHandle()))
+            {
+                Task.Run(() => RhinoApp.InvokeOnUiThread(new Action(ExitRhino)));
+            }
+
             return error;
         }
 
@@ -204,6 +214,9 @@ public class SelvaPanelPlugIn : PlugIn
 
         RhinoApp.Exit();
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr window);
 }
 
 internal sealed record PanelTarget(Uri Url, string SessionId);

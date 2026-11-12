@@ -106,6 +106,30 @@ public class AppFileTests
     }
 
     [Fact]
+    public void The_header_reads_without_the_definition()
+    {
+        var file = AppFileCipher.Pack("Facade studio", Icon, AppDefinitionKind.Xml, Definition, "open sesame");
+        using var stream = new MemoryStream(file);
+
+        Assert.Null(AppFile.TryReadHeader(stream, out var info));
+        Assert.Equal("Facade studio", info.Name);
+        Assert.Equal(Icon, info.IconPng);
+        Assert.Equal(AppFileKey.Hex(AppFileKey.IdOf("open sesame")), info.KeyId);
+        Assert.Empty(info.Body);
+        Assert.True(stream.Position < file.Length - Definition.Length);
+    }
+
+    [Fact]
+    public void An_iteration_count_past_the_limit_is_refused()
+    {
+        var file = AppFileCipher.Pack("Facade studio", null, AppDefinitionKind.Binary, Definition, "open sesame");
+        var kdfAt = Encoding.ASCII.GetString(file).IndexOf("KDF ", StringComparison.Ordinal);
+        BitConverter.GetBytes((uint)int.MaxValue).CopyTo(file, kdfAt + 8);
+
+        Assert.NotNull(AppFile.TryRead(file, out _));
+    }
+
+    [Fact]
     public void A_grasshopper_definition_is_not_an_app_file()
     {
         Assert.False(AppFile.HasMagic(Definition));

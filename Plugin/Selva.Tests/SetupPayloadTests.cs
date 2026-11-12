@@ -81,6 +81,44 @@ public sealed class SetupPayloadTests : IDisposable
     }
 
     [Fact]
+    public void An_older_version_that_is_in_use_does_not_fail_the_install()
+    {
+        PackagePayload.Install(SelvaPackage("0.24.0"), _selvaFolder, "0.24.0");
+
+        using (File.Open(Path.Combine(_selvaFolder, "0.24.0", "app", "SelvaApp.exe"), FileMode.Open,
+                   FileAccess.Read, FileShare.None))
+        {
+            PackagePayload.Install(SelvaPackage("0.25.0"), _selvaFolder, "0.25.0");
+        }
+
+        Assert.Equal("0.25.0", File.ReadAllText(Path.Combine(_selvaFolder, "manifest.txt")));
+        Assert.Equal("plug-in", File.ReadAllText(Path.Combine(_selvaFolder, "0.25.0", "Selva.gha")));
+    }
+
+    [Fact]
+    public void A_version_that_is_in_use_refuses_its_reinstall_and_stays_whole()
+    {
+        // Only Windows refuses to rename a folder while a file in it is open.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        PackagePayload.Install(SelvaPackage("0.25.0"), _selvaFolder, "0.25.0");
+
+        using (File.Open(Path.Combine(_selvaFolder, "0.25.0", "app", "SelvaApp.exe"), FileMode.Open,
+                   FileAccess.Read, FileShare.None))
+        {
+            Assert.ThrowsAny<IOException>(() =>
+                PackagePayload.Install(SelvaPackage("0.25.0"), _selvaFolder, "0.25.0"));
+        }
+
+        Assert.Equal(new[] { "0.25.0" }, Directory.GetDirectories(_selvaFolder).Select(Path.GetFileName));
+        Assert.Equal("plug-in", File.ReadAllText(Path.Combine(_selvaFolder, "0.25.0", "Selva.gha")));
+        Assert.Equal("0.25.0", File.ReadAllText(Path.Combine(_selvaFolder, "manifest.txt")));
+    }
+
+    [Fact]
     public void A_package_that_writes_outside_its_folder_is_refused_and_leaves_the_install_alone()
     {
         PackagePayload.Install(SelvaPackage("0.25.0"), _selvaFolder, "0.25.0");

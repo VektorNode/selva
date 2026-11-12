@@ -146,44 +146,71 @@ internal static class AppFile
     /// <returns>Null when <paramref name="bytes" /> is a readable app file; otherwise why not, for the user.</returns>
     public static string? TryRead(byte[] bytes, out AppFileInfo info)
     {
+        using var stream = new MemoryStream(bytes, false);
+        var refusal = TryReadHeader(stream, out info, out var bodyStart);
+        if (refusal != null)
+        {
+            return refusal;
+        }
+
+        info.Preamble = Slice(bytes, 0, (int)bodyStart);
+        info.Body = Slice(bytes, (int)bodyStart, bytes.Length);
+        return null;
+    }
+
+    /// <summary>
+    ///     Reads up to the definition's body and stops, so a caller that only needs the name,
+    ///     icon and key id never loads the definition. <see cref="AppFileInfo.Body" /> and
+    ///     <see cref="AppFileInfo.Preamble" /> stay empty.
+    /// </summary>
+    /// <param name="stream">Seekable, at the start of the file.</param>
+    /// <returns>Null when the stream is a readable app file; otherwise why not, for the user.</returns>
+    public static string? TryReadHeader(Stream stream, out AppFileInfo info)
+    {
+        return TryReadHeader(stream, out info, out _);
+    }
+
+    private static string? TryReadHeader(Stream stream, out AppFileInfo info, out long bodyStart)
+    {
         info = new AppFileInfo();
-        if (!HasMagic(bytes) || bytes.Length < HeaderLength)
+        bodyStart = 0;
+        var header = new byte[HeaderLength];
+        if (!Fill(stream, header) || !HasMagic(header))
         {
             return "This isn't a Selva app file.";
         }
 
-        if (bytes[4] != Version)
+        if (header[4] != Version)
         {
             return "This app was made with a newer Selva. Update Selva to open it.";
         }
 
-        info.Encrypted = (bytes[5] & EncryptedFlag) != 0;
+        info.Encrypted = (header[5] & EncryptedFlag) != 0;
         var hasKdf = false;
-        var offset = HeaderLength;
-        while (offset < bytes.Length)
+        var chunkHeader = new byte[8];
+        while (stream.Position < stream.Length)
         {
-            if (bytes.Length - offset < 8)
+            if (!Fill(stream, chunkHeader))
             {
                 return Damaged;
             }
 
-            var tag = Encoding.ASCII.GetString(bytes, offset, 4);
-            var length = BitConverter.ToUInt32(bytes, offset + 4);
-            var start = offset + 8;
-            if (length > (uint)(bytes.Length - start))
+            var tag = Encoding.ASCII.GetString(chunkHeader, 0, 4);
+            var length = BitConverter.ToUInt32(chunkHeader, 4);
+            var remaining = stream.Length - stream.Position;
+            if (length > remaining)
             {
                 return Damaged;
             }
 
-            var end = start + (int)length;
             switch (tag)
             {
                 case "NAME":
-                    info.Name = Encoding.UTF8.GetString(bytes, start, (int)length);
+                    info.Name = Encoding.UTF8.GetString(ReadPayload(stream, length));
                     break;
 
                 case "ICON":
-                    info.IconPng = Slice(bytes, start, end);
+                    info.IconPng = ReadPayload(stream, length);
                     break;
 
                 case "KDF ":
@@ -192,30 +219,39 @@ internal static class AppFile
                         return Damaged;
                     }
 
-                    info.Iterations = (int)BitConverter.ToUInt32(bytes, start);
-                    info.Salt = Slice(bytes, start + 4, start + 4 + SaltLength);
-                    info.KeyId = AppFileKey.Hex(Slice(bytes, start + 4 + SaltLength, end));
+                    var kdf = ReadPayload(stream, length);
+                    info.Iterations = (int)BitConverter.ToUInt32(kdf, 0);
+                    info.Salt = Slice(kdf, 4, 4 + SaltLength);
+                    info.KeyId = AppFileKey.Hex(Slice(kdf, 4 + SaltLength, kdf.Length));
                     hasKdf = true;
                     break;
 
                 case "DEFN":
-                    if (length < 1 || end != bytes.Length || bytes[start] > (byte)AppDefinitionKind.Xml)
+                    if (length < 1 || length != remaining)
                     {
                         return Damaged;
                     }
 
-                    if (info.Encrypted && (!hasKdf || info.Iterations <= 0))
+                    var kind = stream.ReadByte();
+                    if (kind > (byte)AppDefinitionKind.Xml)
                     {
                         return Damaged;
                     }
 
-                    info.Kind = (AppDefinitionKind)bytes[start];
-                    info.Preamble = Slice(bytes, 0, start + 1);
-                    info.Body = Slice(bytes, start + 1, end);
+                    if (info.Encrypted &&
+                        (!hasKdf || info.Iterations <= 0 || info.Iterations > AppFileKey.MaxIterations))
+                    {
+                        return Damaged;
+                    }
+
+                    info.Kind = (AppDefinitionKind)kind;
+                    bodyStart = stream.Position;
                     return null;
-            }
 
-            offset = end;
+                default:
+                    stream.Seek(length, SeekOrigin.Current);
+                    break;
+            }
         }
 
         return Damaged;
@@ -274,6 +310,32 @@ internal static class AppFile
         writer.Write(Encoding.ASCII.GetBytes(tag));
         writer.Write((uint)payload.Length);
         writer.Write(payload);
+    }
+
+    /// <returns>False when the stream ends before <paramref name="buffer" /> is full.</returns>
+    private static bool Fill(Stream stream, byte[] buffer)
+    {
+        var filled = 0;
+        while (filled < buffer.Length)
+        {
+            var read = stream.Read(buffer, filled, buffer.Length - filled);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            filled += read;
+        }
+
+        return true;
+    }
+
+    /// <summary>The caller has checked that <paramref name="length" /> bytes are left.</summary>
+    private static byte[] ReadPayload(Stream stream, uint length)
+    {
+        var payload = new byte[length];
+        Fill(stream, payload);
+        return payload;
     }
 
     private static byte[] Slice(byte[] bytes, int start, int end)

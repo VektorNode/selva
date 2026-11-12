@@ -37,6 +37,12 @@ Checked live on Rhino 9.1 and 8.36: no visible window for the life of the proces
 runs, Grasshopper loads, the player session solves and its servers start. A cold open takes 10
 to 20 seconds on a development machine.
 
+**Dialogs are not hidden.** A dialog Rhino opens (a licence prompt, crash recovery, a missing
+plug-in) is a visible window of its process, but it has no taskbar button and can sit behind
+everything. While an open waits, the app looks for one every two seconds, puts it in front
+once, names it on the progress page, and holds its timeouts off while it is up. Checked on
+Rhino 9 without a licence: the "Licensing" window is visible 7 seconds after the start.
+
 `SelvaAppHost` hands the pipe's name to `Selva.Panel.rhp`, which then serves the app instead of
 its panel: the `show`, `clear` and `notify` the `.gha` sends through the panel contract go over
 the pipe. The `.gha` learns only one thing, through `PageHostKey`: the session URL says
@@ -55,7 +61,8 @@ Two things differ from a tab:
   geometry shows. It is on when the schema has `enableLocal` or `enableRemote`, on both sides
   (`LocalViewer.IsOn` in the plug-in, `showViewer` on the preview page).
 - **No Edit in Grasshopper.** The editor would come up with nothing behind it. The page hides
-  the item and the launcher ignores the command.
+  the item and the launcher ignores the command. An app file opened in the Rhino panel still
+  shows the item; there the launcher answers with a message.
 
 ## Selva app files
 
@@ -79,9 +86,10 @@ The author types a key at export. PBKDF2-HMAC-SHA256 derives the file key (per-f
 AES-256-GCM encrypts the definition with the rest of the file as associated data.
 
 The file also stores a **key id**: a second PBKDF2 of the key with a fixed salt, truncated to 8
-bytes. The app looks the id up in Windows Credential Manager, so a machine that has the key
-opens every file protected with it without asking. An administrator can store it ahead of time
-(`SelvaApp.exe --add-key`). The fixed salt means one precomputed dictionary works against every
+bytes. The app looks the id up in Windows Credential Manager, so a user who has the key stored
+opens every file protected with it without being asked. `SelvaApp.exe --add-key` stores it
+ahead of time, for the Windows account that runs it only: a deployment runs it once per user,
+for example from a logon script. The fixed salt means one precomputed dictionary works against every
 Selva file; the per-guess cost is still one PBKDF2 run, the same as attacking the file itself.
 
 The key keeps a file from people who don't have it. It does not hide the definition from
@@ -93,7 +101,9 @@ nothing, because the source is public.
 `SelvaSetup.exe` (`Plugin/Selva.Setup`) is for people who never open Rhino's package manager.
 It embeds the two `.yak` files of the same build and unpacks each into
 `packages<8.0|9.0>Selva<version>` with the `manifest.txt` the package manager writes, so
-Rhino and the package manager see a normal install. It then runs the installed
+Rhino and the package manager see a normal install. A version is swapped in by renaming
+folders: Windows refuses the rename while a file in the old one is open, so a reinstall over a
+running Selva fails before it has changed anything. It then runs the installed
 `SelvaApp.exe --register`, which owns the file type and the Start menu entry, and keeps a copy
 of itself as the uninstaller.
 
@@ -126,9 +136,6 @@ of itself as the uninstaller.
 - **macOS.** The format, the export, the plug-in side and the pipe (a Unix socket there) are
   portable. Missing: a Mac app (WKWebView, Keychain, a declared file type), starting Rhino hidden
   (`open -gj`, untested), and signing and notarization, which need a Mac.
-- **Stray dialogs.** A dialog in the hidden Rhino (licence, crash recovery, a missing plug-in
-  reported by `GH_DocumentIO`) can't be answered. The app times out, kills that Rhino and starts
-  a new one on the next try, but can't say which dialog it was.
 - **Remembering the icon.** The export dialog keeps a picked icon until the page reloads. The
   page's origin changes with the session's port, so browser storage can't carry it further; the
   definition could.

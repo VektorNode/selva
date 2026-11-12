@@ -259,8 +259,15 @@ internal static class DefinitionLauncher
         // Under the Selva app Rhino has no window: the editor would come up on its own, with
         // nothing behind it and nobody expecting it.
         var session = _current;
-        if (session == null || session.Locked || RhinoPanelHost.PageHost() == PanelContract.AppPageHost)
+        if (session == null || RhinoPanelHost.PageHost() == PanelContract.AppPageHost)
         {
+            return;
+        }
+
+        if (session.Locked)
+        {
+            // The panel's page offers the command for every player session.
+            RhinoPanelHost.Notify("This is a Selva app. It can't be edited in Grasshopper.");
             return;
         }
 
@@ -311,16 +318,19 @@ internal static class DefinitionLauncher
 
     private static void HandOverWhenShown(object? sender, EventArgs e)
     {
-        if (!IsEditorVisible() || Instances.ActiveCanvas?.Document != _current?.Document)
+        var session = _current;
+        if (session == null || !IsEditorVisible())
         {
             return;
         }
 
-        if (_current?.Locked == true)
+        // Whatever the canvas shows: the editor lists every document in the document server,
+        // so a locked one left there could be switched to and saved.
+        if (session.Locked)
         {
             Close();
         }
-        else
+        else if (Instances.ActiveCanvas?.Document == session.Document)
         {
             EditInGrasshopper();
         }
@@ -338,6 +348,13 @@ internal static class DefinitionLauncher
         if (refusal != null)
         {
             return refusal;
+        }
+
+        // Only the Selva app asks for a key and remembers it.
+        if (info.Encrypted && string.IsNullOrEmpty(key) &&
+            RhinoPanelHost.PageHost() != PanelContract.AppPageHost)
+        {
+            return $"{Path.GetFileName(fullPath)} is protected. Open it in the Selva app, which asks for its key.";
         }
 
         refusal = AppFileCipher.TryUnpack(info, key, out var definition);

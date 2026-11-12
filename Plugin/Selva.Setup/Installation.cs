@@ -20,8 +20,10 @@ internal static class Installation
     private const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Selva";
     private const string SetupExeName = "SelvaSetup.exe";
 
-    // Hosts that load Selva.gha and so lock its folder.
-    private static readonly string[] LockingProcesses = { "Rhino", "compute.geometry", "rhino.compute" };
+    // Hosts that load Selva.gha, and the Selva app, which runs from inside the package folder:
+    // each locks files the install replaces.
+    private static readonly string[] LockingProcesses =
+        { "Rhino", "compute.geometry", "rhino.compute", "SelvaApp" };
 
     private static readonly TimeSpan RegisterTimeout = TimeSpan.FromSeconds(20);
 
@@ -66,7 +68,7 @@ internal static class Installation
         });
     }
 
-    /// <exception cref="IOException">A file is in use: Rhino started in the meantime.</exception>
+    /// <exception cref="IOException">A file is in use: Rhino or the Selva app started in the meantime.</exception>
     public static void Install(string version, IReadOnlyList<RhinoInstall> targets)
     {
         foreach (var rhino in targets)

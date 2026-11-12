@@ -39,14 +39,16 @@ internal static class PackagePayload
     ///     and makes it the one Rhino loads. Other versions there are removed, as the package
     ///     manager does on an update.
     /// </summary>
-    /// <exception cref="IOException">A file is in use: Rhino is running.</exception>
+    /// <exception cref="IOException">A file of the same version is in use: Rhino or the Selva app is running.</exception>
     public static void Install(Stream yak, string selvaFolder, string version)
     {
         var target = Path.Combine(selvaFolder, version);
 
-        // Unpacked beside its final place and swapped in: a failure halfway leaves the old
-        // install working.
+        // Unpacked beside its final place and swapped in by renaming, so a failure halfway leaves
+        // the old install working. Windows refuses to rename a folder while a file in it is
+        // open, where deleting it would remove every file up to the locked one.
         var staging = target + ".installing";
+        var retired = target + ".removing";
         DeleteFolder(staging);
         Directory.CreateDirectory(staging);
         try
@@ -56,8 +58,25 @@ internal static class PackagePayload
                 Extract(archive, staging);
             }
 
-            DeleteFolder(target);
-            Directory.Move(staging, target);
+            DeleteFolder(retired);
+            if (Directory.Exists(target))
+            {
+                Directory.Move(target, retired);
+            }
+
+            try
+            {
+                Directory.Move(staging, target);
+            }
+            catch
+            {
+                if (Directory.Exists(retired) && !Directory.Exists(target))
+                {
+                    Directory.Move(retired, target);
+                }
+
+                throw;
+            }
         }
         catch
         {
@@ -65,13 +84,22 @@ internal static class PackagePayload
             throw;
         }
 
+        // Before the old versions go: if one of them can't be removed, Rhino still loads this one.
+        File.WriteAllText(Path.Combine(selvaFolder, VersionPointer), version);
+
         foreach (var other in Directory.GetDirectories(selvaFolder)
                      .Where(folder => !string.Equals(Path.GetFileName(folder), version, StringComparison.OrdinalIgnoreCase)))
         {
-            DeleteFolder(other);
+            try
+            {
+                DeleteFolder(other);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // Something still runs from it. Rhino ignores a folder the pointer doesn't name,
+                // and the next install removes it.
+            }
         }
-
-        File.WriteAllText(Path.Combine(selvaFolder, VersionPointer), version);
     }
 
     private static void Extract(ZipArchive archive, string folder)

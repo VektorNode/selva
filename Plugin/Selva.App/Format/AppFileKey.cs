@@ -14,6 +14,12 @@ internal static class AppFileKey
     /// <summary>What new files are written with; a reader uses the count stored in the file.</summary>
     public const int Iterations = 210_000;
 
+    /// <summary>
+    ///     A reader refuses a file that asks for more. The count comes from the file and the
+    ///     derivation runs on Rhino's UI thread, so an unbounded one hangs Rhino.
+    /// </summary>
+    public const int MaxIterations = 10_000_000;
+
     public const int FileKeyLength = 32;
 
     // Fixed, unlike the file key's salt: the id has to come out the same on every machine and for
