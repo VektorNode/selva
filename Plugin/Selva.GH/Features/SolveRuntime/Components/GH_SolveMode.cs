@@ -27,8 +27,7 @@ public class GH_SolveMode : GH_Component
 
     public override Guid ComponentGuid => new Guid("78B50B54-AB29-49BC-A6AB-902531C15AA6");
 
-    // Placeholder: Environment's icon until Solve Mode has its own.
-    protected override Bitmap Icon => Resources.Environment;
+    protected override Bitmap Icon => Resources.SolveMode;
 
     public override GH_Exposure Exposure => GH_Exposure.primary;
 

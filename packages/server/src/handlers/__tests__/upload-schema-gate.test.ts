@@ -43,14 +43,16 @@ async function seedComputeServer(): Promise<void> {
 /**
  * Compute returns `[{ fileName, schemas: [<schema>] }]`. The wrapper keys arrive
  * camelCase from our fork and PascalCase from mcneel branches; `readSchemaResults`
- * reads them case-insensitively, so either shape works here.
+ * reads them case-insensitively, so either shape works here. Each call gets its own
+ * Response: an upload also calls `/io`, and a body reads only once.
  */
 function mockComputeSchemaOk(schema: Record<string, unknown>): void {
-	vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-		new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [schema] }]), {
-			status: 200,
-			headers: { 'Content-Type': 'application/json' }
-		})
+	vi.spyOn(globalThis, 'fetch').mockImplementation(
+		async () =>
+			new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [schema] }]), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
 	);
 }
 
@@ -59,11 +61,12 @@ function mockComputeUnreachable(): void {
 }
 
 function mockComputeNoSchema(): void {
-	vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-		new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [] }]), {
-			status: 200,
-			headers: { 'Content-Type': 'application/json' }
-		})
+	vi.spyOn(globalThis, 'fetch').mockImplementation(
+		async () =>
+			new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [] }]), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' }
+			})
 	);
 }
 

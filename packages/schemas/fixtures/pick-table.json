@@ -1,0 +1,104 @@
+{
+	"$comment": "Options Table: a table of valid combinations read by a chain of inputs. `table` is what the author writes, `inputs` the chained inputs' names in wire order, `rows` what goes to the browser (the chain's columns only, each combination once). Each case gives one pick per input (null for none) and expects the options each input offers and the pick it resolves to. Grasshopper narrows in the solve (PickTableLogic), the browser the same way (@selvajs/ui dynamic-value-list.ts); both test suites load this file.",
+	"table": [
+		"Style, Front, Handle, Price",
+		"Shaker, Shaker door, Knob, 180",
+		"Shaker, Shaker door, Bar, 195",
+		"Shaker, Shaker drawers, Cup pull, 240",
+		"Slab, Slab door, Edge pull, 150",
+		"Slab, Slab door, Bar, 160",
+		"Slab, Slab door, Bar, 175",
+		"Handleless, Push door, None, 170"
+	],
+	"inputs": ["Style", "Front", "Handle"],
+	"rows": [
+		["Shaker", "Shaker door", "Knob"],
+		["Shaker", "Shaker door", "Bar"],
+		["Shaker", "Shaker drawers", "Cup pull"],
+		["Slab", "Slab door", "Edge pull"],
+		["Slab", "Slab door", "Bar"],
+		["Handleless", "Push door", "None"]
+	],
+	"cases": [
+		{
+			"name": "with no picks every input takes its first option",
+			"picks": [null, null, null],
+			"options": [
+				["Shaker", "Slab", "Handleless"],
+				["Shaker door", "Shaker drawers"],
+				["Knob", "Bar"]
+			],
+			"shown": ["Shaker", "Shaker door", "Knob"]
+		},
+		{
+			"name": "a pick narrows every input after it",
+			"picks": ["Slab", "Slab door", "Bar"],
+			"options": [["Shaker", "Slab", "Handleless"], ["Slab door"], ["Edge pull", "Bar"]],
+			"shown": ["Slab", "Slab door", "Bar"]
+		},
+		{
+			"name": "a pick the earlier picks rule out takes the first option left",
+			"picks": ["Handleless", "Shaker drawers", "Cup pull"],
+			"options": [["Shaker", "Slab", "Handleless"], ["Push door"], ["None"]],
+			"shown": ["Handleless", "Push door", "None"]
+		},
+		{
+			"name": "a later pick never changes an earlier input",
+			"picks": ["Shaker", null, "Edge pull"],
+			"options": [
+				["Shaker", "Slab", "Handleless"],
+				["Shaker door", "Shaker drawers"],
+				["Knob", "Bar"]
+			],
+			"shown": ["Shaker", "Shaker door", "Knob"]
+		},
+		{
+			"name": "matching ignores case",
+			"picks": ["slab", null, "bar"],
+			"options": [["Shaker", "Slab", "Handleless"], ["Slab door"], ["Edge pull", "Bar"]],
+			"shown": ["Slab", "Slab door", "Bar"]
+		}
+	],
+	"driven": {
+		"$comment": "Style is wired into By: it narrows the rows with the value it holds and is not filled from them. `rows` is unchanged, its first cell now Style's. A By value matches its cell ignoring case.",
+		"by": ["Style"],
+		"inputs": ["Front", "Handle"],
+		"parents": [-1, 0],
+		"held": ["slab"],
+		"picks": [null, "Bar"],
+		"options": [["Slab door"], ["Edge pull", "Bar"]],
+		"shown": ["Slab door", "Bar"]
+	},
+	"branching": {
+		"$comment": "Style feeds both Front and Handle, so Handle narrows on Style alone: a front never changes the handles offered.",
+		"inputs": ["Style", "Front", "Handle"],
+		"parents": [-1, 0, 0],
+		"picks": ["Shaker", "Shaker drawers", "Bar"],
+		"options": [
+			["Shaker", "Slab", "Handleless"],
+			["Shaker door", "Shaker drawers"],
+			["Knob", "Bar", "Cup pull"]
+		],
+		"shown": ["Shaker", "Shaker drawers", "Bar"]
+	},
+	"repeated": {
+		"$comment": "The same chain with a Repeat wired into Front and Handle: each shows once per row of `rowKeys` and every row narrows on its own, starting from what Style left. picks, options and shown hold one list per input, with one entry per row the input shows.",
+		"rowKeys": ["back/sink", "back/drawers", "back/hob"],
+		"members": ["Front", "Handle"],
+		"picks": [["Shaker"], ["Shaker drawers", "Slab door", null], ["Bar", "Bar", null]],
+		"options": [
+			[["Shaker", "Slab", "Handleless"]],
+			[
+				["Shaker door", "Shaker drawers"],
+				["Shaker door", "Shaker drawers"],
+				["Shaker door", "Shaker drawers"]
+			],
+			[["Cup pull"], ["Knob", "Bar"], ["Knob", "Bar"]]
+		],
+		"shown": [
+			["Shaker"],
+			["Shaker drawers", "Shaker door", "Shaker door"],
+			["Cup pull", "Bar", "Knob"]
+		]
+	}
+}

@@ -10,7 +10,7 @@ import {
 import { isApiError } from '@selvajs/server/api';
 import { asHttpError, requireCanSolve, scoped } from '#lib/server/access.server.js';
 import { readShareToken, tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
-import { getClient } from '#lib/server/compute/engine.server.js';
+import { solveDeadlineFor } from '#lib/server/compute/engine.server.js';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
@@ -71,8 +71,7 @@ export const load = (async ({ params, locals, request, url }) => {
 			resolveOrgLogo(ctx, record.projectId, locals.log)
 		]);
 
-		// Warm already: loading the definition read its inputs through this client.
-		const { limits } = await getClient(loaded.computeServer);
+		const solveDeadlineMs = await solveDeadlineFor(loaded.computeServer);
 
 		return {
 			schema: loaded.schema,
@@ -90,7 +89,7 @@ export const load = (async ({ params, locals, request, url }) => {
 			shareToken,
 			// The deadline this definition's compute server sets, so the browser's
 			// AbortController doesn't stop a solve the server would still finish.
-			solveDeadlineMs: limits.solveDeadlineMs
+			solveDeadlineMs
 		};
 	} catch (err) {
 		// Let HttpError (from error() calls) bubble up.

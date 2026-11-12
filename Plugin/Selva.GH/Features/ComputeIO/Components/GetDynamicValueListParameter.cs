@@ -18,7 +18,7 @@ namespace Selva.GH.Features.ComputeIO.Components;
 ///     GH_ValueList. The options are computed by a <see cref="GH_DynamicValueListOutput" /> that targets
 ///     this parameter.
 ///     <para>
-///         Wired from that output (Set Dynamic Value List, Options By, Repeat), the param knows its
+///         Wired from that output (Set Dynamic Value List, Options Table, Repeat), the param knows its
 ///         options inside the solve that computes them and resolves the pick there: one solve per
 ///         change, however long the chain. Unwired, it passes the pick through and the web UI corrects
 ///         it one solve later.
@@ -32,6 +32,12 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
 
     // Row keys from a wired Repeat; null when this input isn't repeated.
     private List<string> _rowKeys;
+
+    /// <summary>
+    ///     Set while this input reads a column of an Options Table: the rows its pick leaves for the
+    ///     input wired after it. Null otherwise.
+    /// </summary>
+    internal PickTableStep TableStep { get; private set; }
 
     public GetDynamicValueListParameter()
         : base("Get Dynamic Value List", "Get DynVL", "Get a value from a runtime-computed value list",
@@ -133,6 +139,26 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
         _storedItems = options.Select(kvp => (kvp.Key, kvp.Value)).ToList();
     }
 
+    /// <summary>True while a Repeat shows this input once per row.</summary>
+    public bool IsRepeated => _rowKeys != null;
+
+    /// <summary>
+    ///     What the rows hold after the last solve, as the JSON object of row key to pick the web UI
+    ///     keeps for a repeated input. Read from the output, not from the assigned value: the UI Bridge
+    ///     clears assigned values after every solve.
+    /// </summary>
+    public string CurrentRowPicks()
+    {
+        var picks = new JObject();
+        var resolved = m_data.AllData(true).Select(ExtractStringValue).ToList();
+        for (var i = 0; _rowKeys != null && i < _rowKeys.Count && i < resolved.Count; i++)
+        {
+            picks[_rowKeys[i] ?? string.Empty] = resolved[i];
+        }
+
+        return JsonConvert.SerializeObject(picks);
+    }
+
     /// <summary>Returns the currently-selected value, or the first known option, or empty.</summary>
     public string GetDefaultValue()
     {
@@ -149,6 +175,13 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
 
     protected override void CollectVolatileData_FromSources()
     {
+        TableStep = ReadTableStep();
+        if (TableStep != null)
+        {
+            CollectTableColumn();
+            return;
+        }
+
         var wired = ReadWiredOptions();
         if (!wired.Found)
         {
@@ -202,16 +235,87 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
         }
     }
 
+    // ============================================================================
+    // Options Table
+    // ============================================================================
+
     /// <summary>
-    ///     The options and rows wired in from Selva's option components. Found is false when none is
-    ///     wired: a Panel of "key" = value pairs only seeds options, and resolves nothing.
+    ///     This input's place in an Options Table: it starts from the table when that is wired in, else
+    ///     from the rows the Get Dynamic Value List wired in left. Null when no table reaches it.
     /// </summary>
-    private (bool Found, List<string> RowKeys, List<List<(string Name, string Expression)>> OptionSets)
-        ReadWiredOptions()
+    private PickTableStep ReadTableStep()
     {
-        var found = false;
-        List<string> rowKeys = null;
-        var optionSets = new List<List<(string Name, string Expression)>>();
+        var id = InstanceGuid.ToString();
+        foreach (var upstream in WiredInputs.Find(this).OfType<GetDynamicValueListParameter>())
+        {
+            if (upstream.TableStep is not { } before)
+            {
+                continue;
+            }
+
+            var index = before.Table.Inputs.IndexOf(id);
+            if (index >= 0 && before.Table.Parents[index] == before.Index)
+            {
+                return new PickTableStep(before.Table, index, before.Remaining);
+            }
+        }
+
+        foreach (var table in WiredPayloads().Select(payload => payload.PickTable).Where(table => table != null))
+        {
+            var index = table.Inputs.IndexOf(id);
+            if (index >= 0 && table.Parents[index] < 0)
+            {
+                return new PickTableStep(table, index, table.Start ?? new List<List<List<string>>> { table.Rows });
+            }
+        }
+
+        return null;
+    }
+
+    private void CollectTableColumn()
+    {
+        m_data.Clear();
+
+        // A Repeat wired in as well shows this input once per row, each row narrowing on its own.
+        _rowKeys = WiredPayloads().FirstOrDefault(payload => payload.Rows != null && IsFor(payload))
+            ?.Rows.Select(row => row.Key).ToList();
+        var selected = SelectedValues()?.FirstOrDefault();
+        List<string> picks;
+        if (_rowKeys != null)
+        {
+            var byRow = DynamicValueListLogic.ParseRowPicks(selected);
+            picks = _rowKeys.Select(key => byRow.TryGetValue(key ?? string.Empty, out var pick) ? pick : null).ToList();
+        }
+        else
+        {
+            picks = new List<string> { selected };
+        }
+
+        var step = TableStep;
+        var column = PickTableLogic.Step(step.Remaining, step.Table.By.Count + step.Index, picks);
+        TableStep = step with { Remaining = column.After };
+        if (column.Options.Count > 0)
+        {
+            _storedItems = column.Options[0];
+        }
+
+        var path = new GH_Path(0);
+        for (var i = 0; i < column.Picks.Count; i++)
+        {
+            m_data.Append(new GH_ValueListDataGoo(column.Picks[i].Expression, column.Options[i], column.Picks[i].Index,
+                allowEmpty: true), path);
+        }
+
+        var replaced = column.Picks.Count(pick => pick.Replaced);
+        if (replaced > 0)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                $"{replaced} pick(s) aren't offered now, so they take the first option. They come back when offered again.");
+        }
+    }
+
+    private IEnumerable<DynamicValueListPayload> WiredPayloads()
+    {
         foreach (var source in Sources)
         {
             var data = source?.VolatileData;
@@ -223,26 +327,43 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
             foreach (var goo in data.AllData(true))
             {
                 var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value : goo;
-                if (inner is not DynamicValueListGoo dvl || !IsFor(dvl.Payload))
+                if (inner is DynamicValueListGoo dvl)
                 {
-                    continue;
-                }
-
-                found = true;
-                var payload = dvl.Payload;
-                if (payload.Rows != null)
-                {
-                    rowKeys = payload.Rows.Select(row => row.Key).ToList();
-                }
-                else if (payload.ItemOptions is { Count: > 0 })
-                {
-                    optionSets.AddRange(payload.ItemOptions.Select(ToItems));
-                }
-                else
-                {
-                    optionSets.Add(ToItems(payload.Options));
+                    yield return dvl.Payload;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    ///     The options and rows wired in from Selva's option components. Found is false when none is
+    ///     wired: a Panel of "key" = value pairs only seeds options, and resolves nothing.
+    /// </summary>
+    private (bool Found, List<string> RowKeys, List<List<(string Name, string Expression)>> OptionSets)
+        ReadWiredOptions()
+    {
+        var found = false;
+        List<string> rowKeys = null;
+        var optionSets = new List<List<(string Name, string Expression)>>();
+        List<(string Name, string Expression)> repeatOptions = null;
+        foreach (var payload in WiredPayloads().Where(IsFor))
+        {
+            found = true;
+            if (payload.Rows != null)
+            {
+                rowKeys = payload.Rows.Select(row => row.Key).ToList();
+                repeatOptions = ToItems(payload.Options);
+            }
+            else
+            {
+                optionSets.Add(ToItems(payload.Options));
+            }
+        }
+
+        // Repeat's own options are for an input nothing else fills.
+        if (optionSets.Count == 0 && repeatOptions is { Count: > 0 })
+        {
+            optionSets.Add(repeatOptions);
         }
 
         return (found, rowKeys, optionSets);
@@ -278,6 +399,7 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
     // this solve resolves against an empty option set and emits the raw name instead of its expression.
     protected override void BeforeCollect()
     {
+        TableStep = null;
         var initialOptions = ReadInitialOptionsFromSources();
         if (initialOptions.Count > 0)
         {
@@ -361,6 +483,13 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
 
         return options;
     }
+
+    /// <summary>
+    ///     Where an input stands in an Options Table: its index among the table's inputs, and the rows
+    ///     still matching the picks up to and, once it has resolved its own, including this input's.
+    ///     One set of rows, or one per row of a Repeat.
+    /// </summary>
+    internal sealed record PickTableStep(PickTable Table, int Index, List<List<List<string>>> Remaining);
 
     private static string ExtractStringValue(object item)
     {

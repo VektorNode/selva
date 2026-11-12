@@ -1,5 +1,10 @@
 <script lang="ts">
-	import type { DropdownWidgetConfig, SupportedTypes, UISchema } from '@selvajs/schemas';
+	import type {
+		DropdownWidgetConfig,
+		OptionMedia,
+		SupportedTypes,
+		UISchema
+	} from '@selvajs/schemas';
 	import type { RepeatSpec } from '#lib/schema/dynamic-value-list.js';
 	import DropdownInput from './inputs/DropdownInput.svelte';
 
@@ -7,6 +12,8 @@
 		repeat: RepeatSpec;
 		/** Display name of each member input, keyed by input id. */
 		memberLabels: Record<string, string>;
+		/** Option pictures of each member input, keyed by input id. */
+		memberMedia?: Record<string, Record<string, OptionMedia>>;
 		/** Each member's resolved picks, one per row in row order. */
 		shown: Record<string, unknown>;
 		rowOptions: Record<string, Record<string, string>[]>;
@@ -18,6 +25,7 @@
 	let {
 		repeat,
 		memberLabels,
+		memberMedia = {},
 		shown,
 		rowOptions,
 		onPick,
@@ -47,7 +55,10 @@
 	}
 
 	const configFor = (memberId: string, index: number) =>
-		({ options: rowOptions[memberId]?.[index] ?? {} }) as DropdownWidgetConfig;
+		({
+			options: rowOptions[memberId]?.[index] ?? {},
+			optionMedia: memberMedia[memberId]
+		}) as DropdownWidgetConfig;
 
 	// One column per member, written out so Tailwind sees each class; past four they wrap.
 	const COLUMNS = ['grid-cols-1', 'grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4'];

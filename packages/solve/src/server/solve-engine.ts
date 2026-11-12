@@ -192,6 +192,14 @@ export class SolveEngine {
 	}
 
 	/**
+	 * The largest request body a warm client's server reports accepting
+	 * (`RHINO_COMPUTE_MAX_REQUEST_SIZE`). Null until a server that reports one has been reached.
+	 */
+	largestReportedRequestBytes(): number | null {
+		return this.clientCache.largestReportedRequestBytes();
+	}
+
+	/**
 	 * Drop every retained `.gh` byte entry. Safe at any time: entries key on an
 	 * immutable version id, so clearing costs a storage re-read and nothing else.
 	 */

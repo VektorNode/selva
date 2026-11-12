@@ -517,3 +517,53 @@ describe('createComputeFetchSolveFn — blocked solves', () => {
 		expect(result.errors).toEqual(['1. Solution exception: division by zero']);
 	});
 });
+
+describe('createComputeFetchSolveFn — keep-alive', () => {
+	/** The wire a keep-alive server sends: spaces, a meta line, then the real body. */
+	function keepaliveResponse(status: number, body: unknown, headers: [string, string][] = []) {
+		const meta = JSON.stringify({
+			status,
+			headers: [['content-type', 'application/json'], ...headers]
+		});
+		return new Response(`   ${meta}\n${JSON.stringify(body)}`, {
+			headers: { 'Preference-Applied': 'selva-keepalive' }
+		});
+	}
+
+	it('asks for keep-alive only when the option is on', async () => {
+		fetchMock.mockImplementation(async () => jsonResponse({ values: [] }));
+		await createComputeFetchSolveFn(baseOpts())({}, new AbortController().signal);
+		await createComputeFetchSolveFn(baseOpts({ keepalive: true }))(
+			{},
+			new AbortController().signal
+		);
+
+		const prefer = fetchMock.mock.calls.map(([, init]) => new Headers(init.headers).get('prefer'));
+		expect(prefer).toEqual([null, 'selva-keepalive']);
+	});
+
+	it('reads the result from inside the keep-alive stream', async () => {
+		fetchMock.mockResolvedValue(
+			keepaliveResponse(200, {
+				values: [{ ParamName: 'Out', InnerTree: { '{0}': [{ data: '5' }] } }]
+			})
+		);
+
+		const result = await createComputeFetchSolveFn(baseOpts({ keepalive: true }))(
+			{},
+			new AbortController().signal
+		);
+
+		expect(result.outputs).toEqual({ 'out-1': '5' });
+	});
+
+	it('keeps the real status of a failure sent inside the 200', async () => {
+		fetchMock.mockResolvedValue(
+			keepaliveResponse(503, { message: 'Compute server is unreachable' })
+		);
+
+		await expect(
+			createComputeFetchSolveFn(baseOpts({ keepalive: true }))({}, new AbortController().signal)
+		).rejects.toThrow('Compute server is unreachable');
+	});
+});

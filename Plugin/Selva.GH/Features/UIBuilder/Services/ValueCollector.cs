@@ -351,6 +351,12 @@ public class ValueCollector
             return ExtractValueListValue(valueListParam);
         }
 
+        // A repeated input's value is its row picks; its volatile data holds one resolved pick per row.
+        if (ghParam is GetDynamicValueListParameter { IsRepeated: true } repeated)
+        {
+            return repeated.CurrentRowPicks();
+        }
+
         // The param's own volatile data is populated after solve for both wired and
         // persistent-data-backed params — the most reliable source, so try it first.
         var fromOwnVolatile = ExtractDataFromVolatileData(ghParam.VolatileData);

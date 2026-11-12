@@ -12,7 +12,8 @@ namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
 ///     "Repeat": shows the Get Dynamic Value Lists its output is wired into once per row. Rows come
-///     from Keys (with optional Labels and Section), so their number can depend on the definition. Each
+///     from Keys (with optional Labels and Section), so their number can depend on the definition.
+///     Options gives every row the same list, for an input no other options component fills. Each
 ///     repeated input outputs one item per row, in row order, and finds its pick by row key in the same
 ///     solve, so a pick stays with its row when rows come and go.
 /// </summary>
@@ -21,6 +22,7 @@ public class GH_RepeatComponent : GH_DynamicValueListOutput
     private const int KeysIndex = 0;
     private const int LabelsIndex = 1;
     private const int SectionIndex = 2;
+    private const int OptionsIndex = 3;
 
     public GH_RepeatComponent()
         : base("Repeat", "Repeat",
@@ -40,8 +42,12 @@ public class GH_RepeatComponent : GH_DynamicValueListOutput
         pManager.AddTextParameter("Labels", "L", "Optional. The name shown on each row", GH_ParamAccess.tree);
         pManager.AddTextParameter("Section", "S",
             "Optional. Rows with the same section are listed under one heading", GH_ParamAccess.tree);
+        pManager.AddTextParameter("Options", "O",
+            "Optional. What every row offers, one name per line (or \"name\" = value). Leave empty for inputs " +
+            "that Set Dynamic Value List or Options Table fills", GH_ParamAccess.tree);
         pManager[LabelsIndex].Optional = true;
         pManager[SectionIndex].Optional = true;
+        pManager[OptionsIndex].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -56,9 +62,10 @@ public class GH_RepeatComponent : GH_DynamicValueListOutput
         da.GetDataTree(KeysIndex, out GH_Structure<GH_String> keys);
         da.GetDataTree(LabelsIndex, out GH_Structure<GH_String> labels);
         da.GetDataTree(SectionIndex, out GH_Structure<GH_String> sections);
+        da.GetDataTree(OptionsIndex, out GH_Structure<GH_String> options);
 
         var problems = new List<string>();
-        var rows = OptionTableLogic.BuildRows(WiredInputs.Strings(keys), WiredInputs.Strings(labels),
+        var rows = RepeatLogic.BuildRows(WiredInputs.Strings(keys), WiredInputs.Strings(labels),
             WiredInputs.Strings(sections), problems);
         foreach (var problem in problems)
         {
@@ -76,7 +83,11 @@ public class GH_RepeatComponent : GH_DynamicValueListOutput
         Message = $"{rows.Count} row(s)";
         da.SetData(0, new DynamicValueListGoo(new DynamicValueListPayload
         {
-            Rows = rows, Members = members, ResolvedInSolve = true
+            Rows = rows,
+            Members = members,
+            ResolvedInSolve = true,
+            // A Panel with multiline data off holds all its lines as one item.
+            Options = RepeatLogic.BuildOptions(WiredInputs.Strings(options).SelectMany(text => text.Split('\n')))
         }));
     }
 }

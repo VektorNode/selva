@@ -24,6 +24,7 @@ export {
 } from './solve-engine.js';
 
 export type { SolveEngineOutcome } from './solve-pipeline.js';
+export { wantsKeepalive, respondWithKeepalive } from './keepalive.js';
 export { solveInputsFromSchema, postedServerSourcedIds } from './transform-input.js';
 
 export {

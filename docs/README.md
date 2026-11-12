@@ -16,7 +16,7 @@ For operators deploying `@selvajs/selva`. One folder per sidebar group:
 - [get-started/](./self-hosting/get-started/): the path from nothing to a running deployment (overview, quick-start, CLI, Rhino.Compute)
 - [deployment/](./self-hosting/deployment/): prerequisites, reverse proxy, security and limits, scaling, admin
 - [providers/](./self-hosting/providers/): the auth, data and storage backends (local, Supabase, header-auth) and how to write one
-- [concepts/](./self-hosting/concepts/): permissions, caching, data privacy
+- [concepts/](./self-hosting/concepts/): permissions, caching, preview solves, data privacy
 
 ## [packages/build/](./packages/build/): build on `@selvajs/*`
 

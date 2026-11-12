@@ -6,6 +6,7 @@
 		UISchema,
 		SupportedTypes,
 		InputLayoutItem,
+		OptionMedia,
 		OutputLayoutItem
 	} from '@selvajs/schemas';
 	import * as Tabs from '#lib/components/primitives/tabs/index.js';
@@ -41,6 +42,8 @@
 		/** The member input each repeat is drawn at, keyed by repeat id. */
 		repeatLeads?: Record<string, string>;
 		memberLabels?: Record<string, string>;
+		/** Option pictures of each repeated input, keyed by input id. */
+		memberMedia?: Record<string, Record<string, OptionMedia>>;
 		/** The schema's icons and thumbnails, which value-list options point into. */
 		assets?: UISchema['assets'];
 		/** No tinted backdrop and no scroll area of its own: the container scrolls. */
@@ -60,6 +63,7 @@
 		onRowPick,
 		repeatLeads = {},
 		memberLabels = {},
+		memberMedia = {},
 		assets,
 		bare = false
 	}: Props = $props();
@@ -101,6 +105,7 @@
 			<RepeatBlock
 				{repeat}
 				{memberLabels}
+				{memberMedia}
 				shown={formModel.shown}
 				rowOptions={formModel.rowOptions}
 				onPick={onRowPick}

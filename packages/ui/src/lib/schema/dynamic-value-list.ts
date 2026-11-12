@@ -7,11 +7,8 @@ import { getLayoutItems } from '@selvajs/schemas';
  */
 export interface DynamicValueListPayload {
 	targetInputId?: string | null;
+	/** On a Repeat: what every row of a member offers, unless another payload fills that member. */
 	options?: Record<string, string>;
-	/** Options By: the input whose value picks a branch of `table`. */
-	by?: string | null;
-	/** Options By: option sets keyed by the `by` input's value, `*` as the fallback. */
-	table?: Record<string, Record<string, string>> | null;
 	/** Repeat: one entry per row, in order. */
 	rows?: RepeatRow[] | null;
 	/** Repeat: the inputs shown once per row. Each value is a JSON object of row key to pick. */
@@ -21,6 +18,27 @@ export interface DynamicValueListPayload {
 	 * solve. The form shows the resolved pick and never sends a correction.
 	 */
 	resolvedInSolve?: boolean | null;
+	/** Options Table: the valid combinations for a set of inputs. */
+	pickTable?: PickTable | null;
+}
+
+/**
+ * The valid combinations for a set of inputs. Each input offers the values its cell still has in
+ * the rows matching the picks it depends on: the `by` inputs, then its parent, its parent's parent
+ * and so on.
+ */
+export interface PickTable {
+	/** Ids of the inputs that narrow the rows without being filled from them. */
+	by?: string[] | null;
+	/** Ids of the inputs the table fills, a parent before its children. */
+	inputs: string[];
+	/**
+	 * For each of `inputs`, the index of the input whose pick it narrows on, or -1 for one that only
+	 * `by` narrows. Absent: one chain, each input narrowing on the one before it.
+	 */
+	parents?: number[] | null;
+	/** One entry per valid combination: a cell for each of `by`, then one for each of `inputs`. */
+	rows: string[][];
 }
 
 export interface RepeatRow {
@@ -146,7 +164,7 @@ export function buildDynamicValueListOptions(
 }
 
 // ============================================================================
-// Option tables, repeats, and picks resolved in the solve
+// Pick tables, repeats, and picks resolved in the solve
 // ============================================================================
 
 export interface RepeatSpec {
@@ -169,16 +187,6 @@ export interface FormModel {
 	 * the pick if still offered, else the first option; one per row for a repeated input.
 	 */
 	shown: Record<string, unknown>;
-}
-
-const FALLBACK_KEY = '*';
-
-function pickBranch(
-	table: Record<string, Record<string, string>>,
-	driverValue: unknown
-): Record<string, string> {
-	const key = driverValue === undefined || driverValue === null ? '' : String(driverValue);
-	return table[key] ?? table[FALLBACK_KEY] ?? {};
 }
 
 function findOptionIndex(entries: [string, string][], pick: unknown): number {
@@ -271,48 +279,146 @@ interface SourcedPayload {
 	payload: DynamicValueListPayload;
 }
 
+/** The options each targeted payload gives its input: one set, or the same set for every row. */
 function lookUpOptions(
 	payloads: SourcedPayload[],
 	repeatById: Map<string, RepeatSpec>,
-	repeatOf: Record<string, string>,
-	read: (id: string) => unknown
+	repeatOf: Record<string, string>
 ): Lookup {
 	const options: Lookup['options'] = {};
 	const rowOptions: Lookup['rowOptions'] = {};
 
 	for (const { source, payload } of payloads) {
 		const target = payload.targetInputId ?? source.targetInputId;
-		if (!target) continue;
+		if (!target || !payload.options || typeof payload.options !== 'object') continue;
 		const repeat = repeatById.get(repeatOf[target]);
+		const offered = payload.options;
+		if (repeat) rowOptions[target] = repeat.rows.map(() => offered);
+		else options[target] = offered;
+	}
 
-		if (payload.table && typeof payload.table === 'object' && payload.by) {
-			// As Options By does in the solve: one branch per item `by` holds (a row of a repeat, a
-			// ticked checklist item), row i taking item i and the last item covering the rest; an
-			// input shown once takes item 0.
-			const driver = read(payload.by);
-			const items = Array.isArray(driver) ? driver : [driver];
-			const table = payload.table;
-			const branches = (items.length > 0 ? items : [undefined]).map((item) =>
-				pickBranch(table, item)
-			);
-			if (repeat) {
-				rowOptions[target] = repeat.rows.map((_, i) => branches[Math.min(i, branches.length - 1)]);
-			} else {
-				options[target] = branches[0];
-			}
-		} else if (payload.options && typeof payload.options === 'object') {
-			if (repeat) rowOptions[target] = repeat.rows.map(() => payload.options!);
-			else options[target] = payload.options;
+	// A Repeat's own options are for the members nothing else fills.
+	for (const { source, payload } of payloads) {
+		const repeat = repeatById.get(source.id);
+		const offered = payload.options;
+		if (!repeat || !offered || Object.keys(offered).length === 0) continue;
+		for (const member of repeat.members) {
+			rowOptions[member] ??= repeat.rows.map(() => offered);
 		}
 	}
 
 	return { options, rowOptions };
 }
 
+// One options object per column and set of earlier picks, per table. This runs on every value
+// change, and a fresh object re-renders the dropdown it feeds.
+const tableOptionsCache = new WeakMap<string[][], Map<string, Record<string, string>>>();
+
+/**
+ * Narrows each pick table as Grasshopper does in the solve: an input offers the values its column
+ * has in the rows left by the picks before it, and resolves its own pick against those.
+ * `packages/schemas/fixtures/pick-table.json` pins both.
+ */
+function narrowPickTables(
+	payloads: SourcedPayload[],
+	values: Record<string, unknown>,
+	repeatById: Map<string, RepeatSpec>,
+	repeatOf: Record<string, string>
+): Lookup & { shown: Record<string, unknown> } {
+	const options: Lookup['options'] = {};
+	const rowOptions: Lookup['rowOptions'] = {};
+	const shown: Record<string, unknown> = {};
+
+	for (const { payload } of payloads) {
+		const table = payload.pickTable;
+		if (!table || !Array.isArray(table.inputs) || !Array.isArray(table.rows)) continue;
+
+		const cache = tableOptionsCache.get(table.rows) ?? new Map<string, Record<string, string>>();
+		tableOptionsCache.set(table.rows, cache);
+
+		// The rows left by a run of picks, and those picks: one entry, or one per row of a repeat.
+		// Row i reads entry i, the last entry covering the rest, so a repeated input after a single
+		// one starts every row from the same rows.
+		type Left = { rows: string[][]; picked: string[] }[];
+
+		// Where an input with no parent starts: the rows matching what the `by` inputs hold. A `by`
+		// input holding several items (a repeated one) gives one entry per item. Cells match
+		// ignoring case, so a table may say True where a toggle sends true; no value yet narrows
+		// nothing.
+		const by = Array.isArray(table.by) ? table.by : [];
+		const held = by.map((id) => {
+			const value = values[id];
+			const items = Array.isArray(value) ? value : [value];
+			return items.filter((item) => item !== undefined && item !== null).map(String);
+		});
+		const start: Left = Array.from(
+			{ length: Math.max(1, ...held.map((h) => h.length)) },
+			(_, i) => {
+				const picked = held.map((items) => items[Math.min(i, items.length - 1)]);
+				const rows = table.rows.filter((row) =>
+					picked.every(
+						(item, d) => item === undefined || row[d]?.toLowerCase() === item.toLowerCase()
+					)
+				);
+				return { rows, picked: picked.map((item) => item ?? '') };
+			}
+		);
+
+		const left: Left[] = [];
+		table.inputs.forEach((id, index) => {
+			const column = by.length + index;
+			// Without `parents` the inputs are one chain, each narrowing on the one before it.
+			const parent = table.parents?.[index] ?? index - 1;
+			const before = parent >= 0 && left[parent] ? left[parent] : start;
+
+			const repeat = repeatById.get(repeatOf[id]);
+			const rowPicks = repeat ? readRowPicks(values[id]) : undefined;
+			const picks = repeat ? repeat.rows.map((row) => rowPicks?.[row.key]) : [values[id]];
+
+			const offeredPerRow: Record<string, string>[] = [];
+			const resolved: string[] = [];
+			const after = picks.map((wanted, i) => {
+				const { rows, picked } = before[Math.min(i, before.length - 1)];
+				const key = JSON.stringify([column, ...picked]);
+				let offered = cache.get(key);
+				if (!offered) {
+					offered = {};
+					for (const row of rows) {
+						const cell = row[column];
+						if (typeof cell === 'string' && cell !== '') offered[cell] = cell;
+					}
+					cache.set(key, offered);
+				}
+
+				offeredPerRow.push(offered);
+				const pick = resolvePick(offered, wanted);
+				resolved.push(pick);
+				// The column joins the picks: two inputs narrowing on the same ones offer different cells.
+				return {
+					rows: rows.filter((row) => row[column] === pick),
+					picked: [...picked, `${column}:${pick}`]
+				};
+			});
+
+			if (repeat) {
+				rowOptions[id] = offeredPerRow;
+				shown[id] = resolved;
+			} else {
+				options[id] = offeredPerRow[0];
+				shown[id] = resolved[0];
+			}
+			// A repeat with no rows shows nothing; the inputs after it still start from what was left.
+			left[index] = after.length > 0 ? after : before;
+		});
+	}
+
+	return { options, rowOptions, shown };
+}
+
 /**
  * What the form shows, from the payloads the last solve returned and the values on screen now.
- * A table is looked up against the value its `by` input shows, so changing that input switches
- * the list without a solve.
+ * A pick table is narrowed by the picks on screen, so changing one updates the lists that depend
+ * on it without a solve.
  *
  * Pass the previous model to keep the identity of every array that didn't change: this runs on
  * each value change, and a fresh array re-renders its whole checklist or repeat.
@@ -338,42 +444,27 @@ export function buildFormModel(
 	}
 	const repeatById = new Map(repeats.map((r) => [r.id, r]));
 
-	const resolvedSingles = new Set<string>();
+	const tables = narrowPickTables(payloads, values, repeatById, repeatOf);
+	const lookup = lookUpOptions(payloads, repeatById, repeatOf);
+	Object.assign(lookup.options, tables.options);
+	Object.assign(lookup.rowOptions, tables.rowOptions);
+
+	const shown: Record<string, unknown> = { ...tables.shown };
 	for (const { source, payload } of payloads) {
 		const target = payload.targetInputId ?? source.targetInputId;
-		if (target && payload.resolvedInSolve && !repeatOf[target]) resolvedSingles.add(target);
+		if (!target || !payload.resolvedInSolve || repeatOf[target]) continue;
+		const value = values[target];
+		shown[target] = Array.isArray(value)
+			? resolvePicks(lookup.options[target], value)
+			: resolvePick(lookup.options[target], value);
 	}
-
-	// A table reads the value its driver shows, and the driver may itself be resolved, so look up
-	// until nothing changes. Grasshopper refuses a cycle of wires: one pass per table is enough.
-	// With no table driven by a resolved input, the first pass is final.
-	const chained = payloads.some(
-		({ payload }) =>
-			payload.table && payload.by && (resolvedSingles.has(payload.by) || repeatOf[payload.by])
-	);
-	let shown: Record<string, unknown> = {};
-	let lookup: Lookup = { options: {}, rowOptions: {} };
-	for (let pass = 0; pass <= payloads.length; pass++) {
-		const read = (id: string) => (id in shown ? shown[id] : values[id]);
-		lookup = lookUpOptions(payloads, repeatById, repeatOf, read);
-		const next: Record<string, unknown> = {};
-		for (const id of resolvedSingles) {
-			const value = values[id];
-			next[id] = Array.isArray(value)
-				? resolvePicks(lookup.options[id], value)
-				: resolvePick(lookup.options[id], value);
+	for (const repeat of repeats) {
+		for (const member of repeat.members) {
+			const picks = readRowPicks(values[member]);
+			shown[member] = repeat.rows.map((row, i) =>
+				resolvePick(lookup.rowOptions[member]?.[i], picks[row.key])
+			);
 		}
-		for (const repeat of repeats) {
-			for (const member of repeat.members) {
-				const picks = readRowPicks(values[member]);
-				next[member] = repeat.rows.map((row, i) =>
-					resolvePick(lookup.rowOptions[member]?.[i], picks[row.key])
-				);
-			}
-		}
-		const settled = !chained || sameEntries(next, shown);
-		shown = next;
-		if (settled) break;
 	}
 
 	if (previous) {
@@ -387,13 +478,6 @@ function sameValue(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
 	if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
 	return a.every((item, i) => item === b[i]);
-}
-
-function sameEntries(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-	const keys = Object.keys(a);
-	return (
-		keys.length === Object.keys(b).length && keys.every((k) => k in b && sameValue(a[k], b[k]))
-	);
 }
 
 function reuseUnchanged(next: Record<string, unknown>, previous: Record<string, unknown>) {

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Eto.Drawing;
 using Eto.Forms;
+using Rhino.Runtime;
 using Rhino.UI;
 
 namespace Selva.RhinoPanel;
@@ -146,6 +147,13 @@ internal sealed class SelvaWebHost
             Minimizable = true,
             Size = DefaultWindowSize
         };
+        // Owned on Windows, so it stays above Rhino and minimizes with it instead of getting lost
+        // behind it. Not on Mac: Eto.Mac attaches an owned window as a child window, which follows
+        // Rhino's window and can't take its own fullscreen Space.
+        if (!HostUtils.RunningOnOSX)
+        {
+            window.Owner = RhinoEtoApp.MainWindow;
+        }
         if (_lastWindowBounds is Rectangle bounds)
         {
             window.Bounds = bounds;
@@ -161,7 +169,8 @@ internal sealed class SelvaWebHost
         NotifyPage();
     }
 
-    private void CloseWindow()
+    /// <summary>Closing the window docks the UI back into the panel.</summary>
+    public void CloseWindow()
     {
         var window = _window;
         if (window == null)

@@ -67,7 +67,9 @@ Without this, every request looks like `127.0.0.1`. Login rate limiting is per I
 
 **Safe only while Selva is bound to loopback.** If it is reachable directly, anyone can spoof `X-Forwarded-For` and pick their own rate-limit bucket.
 
-Set the proxy's body cap at or above `BODY_SIZE_LIMIT` (256M) and its read timeout above the compute server's `--timeout`, or large uploads and long solves fail at the proxy.
+Set the proxy's body cap at or above `BODY_SIZE_LIMIT`, or large uploads and solves fail at the proxy.
+
+Solves from the web app send a keep-alive byte every 15 s, so the proxy's read timeout doesn't limit them. API callers (`/api/v1/definitions/{guid}/solve`, MCP) hold a plain request: if they run solves longer than the read timeout, raise it above the compute server's `--timeout`.
 
 ## Debugging
 

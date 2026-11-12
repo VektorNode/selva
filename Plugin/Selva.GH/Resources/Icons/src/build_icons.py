@@ -301,21 +301,25 @@ def chevron(x, y, fill=TILE):
     return path(f"M{x} {y} H{x + 4} L{x + 2} {y + 2} Z", fill)
 
 
-def i_options_by():
-    # A key forks to one of several dropdowns: the picked one is PALE.
-    return tile(rect(4, 9, 4, 6),
-                stroke("M8 12 H11 M14 7 H11 V17 H14", MID),
-                rect(14, 4, 6, 6, MID), chevron(15, 6),
-                rect(14, 14, 6, 6), chevron(15, 16))
-
-
 def i_repeat():
     # The same dropdown once per row, each behind its row label.
     return tile(*(rect(4, y, 3, 4, MID, 0.5) + rect(9, y, 11, 4) + chevron(15, y + 1)
                   for y in (4, 10, 16)))
 
 
-ICONS.update({"OptionsBy": i_options_by, "Repeat": i_repeat})
+def i_options_table():
+    # A header over rows of combinations: the picked row is PALE.
+    return tile(rect(4, 4, 16, 3, MID, 0.5),
+                *(rect(x, y, 4, 3, PALE if y == 13 else MID, 0.5)
+                  for y in (9, 13, 17) for x in (4, 10, 16)))
+
+
+def i_solve_mode():
+    # A solve arrow in two parts: the preview half and the rest a full solve adds.
+    return tile(path("M4 4 L10 7 V17 L4 20 Z", MID), path("M12 8 L20 12 L12 16 Z"))
+
+
+ICONS.update({"Repeat": i_repeat, "OptionsTable": i_options_table, "SolveMode": i_solve_mode})
 
 # ============================================================================
 # Drawing (PDF / SVG output)

@@ -18,8 +18,8 @@ public static partial class Definitions
 
     static List<(IGH_DocumentObject, object)> Lamp(B b)
     {
-        b.Note("STUDIO TASK LAMP\nA desk lamp configurator. Three small C# Scripts do the geometry, the light on the desk and the drawing views; " +
-               "the rest is stock and Selva components: a light-source list that follows the head, night-look lighting, checks, charts, " +
+        b.Note("STUDIO TASK LAMP\nA desk lamp configurator. Four small C# Scripts do the head's light sources, the geometry, the light on the desk and the " +
+               "drawing views; the rest is stock and Selva components: a light-source list that follows the head, night-look lighting, checks, charts, " +
                "a two-sheet A3 PDF, the model and a parts list.", w: 560);
 
         // ---- Inputs
@@ -54,13 +54,23 @@ public static partial class Definitions
         var cableColour = b.Choice("Cable colour", 1, "Black", "Copper", "White");
         b.Section("Finish", nFinish);
 
-        var nLight = b.Note("LIGHT AND DESK\nLight source is a dynamic value list: the lamp script computes its options, so they change with the head.");
+        var nSource = b.Note("LIGHT SOURCE\nThe head script lists the light sources that fit the shade. Set Dynamic Value List sends them into " +
+                             "Light source and into a Context Bake. Change the head and a source that no longer fits falls back to the " +
+                             "brightest one that does, in the same solve. Source: LampHead.script.cs.", w: 400);
+        var headScript = Script(b, "Head", "LampHead.script.cs",
+            new (string, object)[] { ("Head", head), ("HeadSize", headSize), ("BarLength", barLength), ("Diffuser", diffuser) },
+            "Options", "Sources", "Profile");
+        var setSource = b.SetDynamicValueList(Options: H.Out(headScript, "Options"), nick: "Light source options");
+        var source = b.Add(GetDynamicValueList, nick: "Light source");
+        b.W(setSource.Obj, source, null);
+        b.Output("Light source options", setSource.Obj);
+        b.Section("Light source", nSource, headScript);
+
+        var nLight = b.Note("LIGHT AND DESK\nThe light switch, its colour temperature and the desk top.");
         var lightOn = b.Switch("Light on", true);
         var kelvin = b.Number("Colour temperature", 2200, 2700, 6500, 0);
-        var source = b.Add(GetDynamicValueList, nick: "Light source");
-        source.GetType().GetProperty("Prompt")?.SetValue(source, "Light source");
-        var desk = b.Choice("Desk", 0, "Oak", "Walnut", "Maple", "Wenge");
-        b.Section("Light and desk", nLight, source);
+        var desk = b.Choice("Desk", 1, "Oak", "Walnut", "Maple", "Wenge");
+        b.Section("Light and desk", nLight);
 
         var nOrder = b.Note("ORDER\nThe project name goes into the spec sheet's title block. Quantity sets the price break.");
         var project = b.Text("Project", "Studio fit-out");
@@ -68,7 +78,7 @@ public static partial class Definitions
         b.Section("Order", nOrder);
 
         // ---- The lamp
-        var nScript = b.Note("LAMP SCRIPT\nBuilds the lamp in millimetres. It also reports the light sources that fit the head, the beam for the light " +
+        var nScript = b.Note("LAMP SCRIPT\nBuilds the lamp in millimetres, with the things on the desk. It also reports the beam for the light " +
                              "on the desk, whether the lamp stands, and its parts at list price. Source: Lamp.script.cs beside the generator.", w: 460);
         var lamp = Script(b, "Lamp", "Lamp.script.cs",
             new (string, object)[]
@@ -76,18 +86,12 @@ public static partial class Definitions
                 ("Base", baseType), ("BaseSize", baseSize), ("DeskThickness", deskT), ("Weighted", weighted),
                 ("Arm", arm), ("Height", height), ("Reach", reach), ("Elbow", elbow), ("Tilt", tilt),
                 ("Head", head), ("HeadSize", headSize), ("BarLength", barLength), ("Diffuser", diffuser), ("CableOn", cableOn),
-                ("Source", source), ("LightOn", lightOn),
+                ("*Profile", H.Out(headScript, "Profile")), ("*Sources", H.Out(headScript, "Sources")), ("Source", source), ("LightOn", lightOn),
             },
-            "SourceOptions", "Body", "Inner", "Glass", "Light", "Cable", "Desk", "Lumens", "Beam", "Spread", "Cutoff", "Efficiency",
+            "Body", "Trim", "Inner", "Glass", "Light", "Cable", "Desk", "Props", "Lumens", "Beam", "Spread", "Cutoff", "Efficiency",
             "Steady", "GlareFree", "SourceName", "PowerW", "Stability", "WeightKg", "PartNames", "PartNotes", "PartEur");
         GhOut L(string output) => H.Out(lamp, output);
         b.Section("Lamp script", nScript, lamp);
-
-        var nOptions = b.Note("LIGHT SOURCE OPTIONS\nSet Dynamic Value List sends the script's options to the Light source input, through its own output.");
-        var setSource = b.SetDynamicValueList(Options: L("SourceOptions"), nick: "Light source options");
-        setSource.Obj.GetType().GetProperty("TargetInputId").SetValue(setSource.Obj, source.InstanceGuid);
-        var oSource = b.Output("Light source options", setSource.Obj);
-        b.Section("Light source options", nOptions);
 
         // ---- Finish: lookups by the chosen option
         var nLook = b.Note("FINISH VALUES\nEach choice's index picks its row from a small table: metalness, roughness and clearcoat by finish, " +
@@ -124,16 +128,20 @@ public static partial class Definitions
         var lightMat = b.EmissiveMaterial(Color: warm, Strength: b.Ev("if(x>0,4,0)", "Glow strength", L("Lumens")), Base: bulbBase,
             Kelvin: kelvin, Lumens: L("Lumens"), nick: "Light");
         var cableMat = b.ThreeMaterial(Color: cableColor, Metalness: 0.0, Roughness: 0.6, nick: "Cable");
+        var trimMat = b.ThreeMaterial(Color: b.Swatch(Color.FromArgb(26, 27, 30)), Metalness: 0.0, Roughness: 0.55, nick: "Trim");
+        var propsMat = b.ThreeMaterial(Color: b.Swatch(Color.FromArgb(244, 241, 232)), Metalness: 0.0, Roughness: 0.5, nick: "Paper and ceramic");
         var deskIdx = b.IndexOf(desk, "Desk index", "Oak", "Walnut", "Maple", "Wenge");
         var deskMat = b.MaterialPreset(Preset: b.Lookup(deskIdx, "I", "Desk preset", PresetText("Oak, oiled"), PresetText("Walnut"), PresetText("Maple, lacquered"), PresetText("Wenge, oiled")), nick: "Desk top");
         var shows = new[]
         {
             b.Display(Geo: L("Body"), Name: "Body", Layer: "Lamp/Body", Material: bodyMat, nick: "Body"),
+            b.Display(Geo: L("Trim"), Name: "Knobs and switch", Layer: "Lamp/Trim", Material: trimMat, nick: "Trim"),
             b.Display(Geo: L("Inner"), Name: "Inner", Layer: "Lamp/Shade lining", Material: innerMat, nick: "Lining"),
             b.Display(Geo: L("Glass"), Name: "Diffuser", Layer: "Lamp/Diffuser", Material: glassMat, nick: "Diffuser"),
             b.Display(Geo: L("Light"), Name: "Light source", Layer: "Lamp/Light", Material: lightMat, nick: "Light source"),
             b.Display(Geo: L("Cable"), Name: "Cable", Layer: "Lamp/Cable", Material: cableMat, nick: "Cable"),
             b.Display(Geo: L("Desk"), Name: "Desk", Layer: "Context/Desk", Material: deskMat, nick: "Desk"),
+            b.Display(Geo: L("Props"), Name: "On the desk", Layer: "Context/On the desk", Material: propsMat, nick: "On the desk"),
         };
         var combine = b.CombineDisplay(nick: "Lamp");
         foreach (var s in shows) b.Feed(combine.Obj, 0, s);
@@ -212,7 +220,7 @@ public static partial class Definitions
         var nFiles = b.Note("DOWNLOADS\nThe model takes its layers and colours from the 3D view through Deconstruct Display, but the script's own meshes: " +
                             "the view's come back triangulated and write four times slower. The parts list is priced for the order.", w: 460);
         var parts3d = b.DeconstructDisplay(WebDisplay: combine, nick: "Model parts");
-        var lampParts = b.MergeAll("Lamp parts", true, L("Body"), L("Inner"), L("Glass"), L("Light"), L("Cable"), L("Desk"));
+        var lampParts = b.MergeAll("Lamp parts", true, L("Body"), L("Trim"), L("Inner"), L("Glass"), L("Light"), L("Cable"), L("Desk"), L("Props"));
         var model = b.GeometryToFile(Geometry: Flatten(lampParts), LayerNames: Flatten(parts3d.Layers), LayerColors: Flatten(parts3d.Colors),
             FileNames: "studio-task-lamp", FileEnding: ".3dm", nick: "Model");
         var o3dm = b.Output("Model (3DM)", model.Obj);
@@ -229,7 +237,7 @@ public static partial class Definitions
 
         b.Bridge();
         b.AfterSolve = () => b.FormLayout(LampForm());
-        return new() { (lamp, "SourceOptions"), (lamp, "Lumens"), (lamp, "PartEur"), (lux, "Peak"), (unit.Obj, null), (bodyColor.Obj, null),
+        return new() { (headScript, "Options"), (headScript, "Sources"), (source, null), (lamp, "Lumens"), (lamp, "PartEur"), (lux, "Peak"), (unit.Obj, null), (bodyColor.Obj, null),
             (setSource.Obj, null), (combine.Obj, null), (luxFigure.Obj, null), (priceFigure.Obj, null), (pdf, null), (parts3d.Obj, 2), (model.Obj, null), (csv.Obj, null) };
     }
 
@@ -369,6 +377,17 @@ public static partial class Definitions
         Asset("ic-round", new JObject { ["d"] = "M3 15a9 3 0 0 0 18 0a9 3 0 0 0-18 0 M12 15V4" });
         Asset("ic-square", new JObject { ["d"] = "M3 13h18v4H3z M12 13V4" });
         Asset("ic-clamp", new JObject { ["d"] = "M3 11h12 M3 14h12 M15 8h4v12h-4 M17 8V3 M17 20v1" });
+        Asset("ic-straight", new JObject { ["d"] = "M4 20h8 M8 20L17 5 M14 5h6" });
+        Asset("ic-two-joint", new JObject { ["d"] = "M4 20h8 M8 20l-2-9l11-6 M14 5h6" });
+        Asset("ic-arc", new JObject { ["d"] = "M4 20h8 M8 20A15 15 0 0 1 17 5 M14 5h6" });
+        Asset("ic-globe", new JObject { ["d"] = "M12 3a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13 M10 16v5h4v-5" });
+        Asset("ic-bulb", new JObject { ["d"] = "M12 3a5 5 0 0 0-3 9v3h6v-3a5 5 0 0 0-3-9 M10 18h4 M10 21h4" });
+        Asset("ic-spot", new JObject { ["d"] = "M6 6h12l-3 9H9z M10 15v5 M14 15v5" });
+        Asset("ic-module", new JObject { ["d"] = "M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14 M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4" });
+        Asset("ic-strip", new JObject { ["d"] = "M3 10h18v4H3z M7 12h.01 M12 12h.01 M17 12h.01" });
+        Asset("ic-strip-high", new JObject { ["d"] = "M3 6h18v4H3z M3 14h18v4H3z M7 8h.01 M12 8h.01 M17 8h.01 M7 16h.01 M12 16h.01 M17 16h.01" });
+        Asset("th-black", new JObject { ["img"] = H.Thumb(Color.FromArgb(22, 22, 24)) });
+        Asset("th-copper", new JObject { ["img"] = H.Stripes(Color.FromArgb(176, 92, 58), Color.FromArgb(150, 76, 46)) });
         Asset("th-custom", new JObject { ["img"] = Rainbow() });
         Asset("th-white", new JObject { ["img"] = H.Thumb(Color.FromArgb(250, 248, 242)) });
         Asset("th-gold", new JObject { ["img"] = H.Stripes(Color.FromArgb(214, 170, 96), Color.FromArgb(190, 148, 78)) });
@@ -392,7 +411,8 @@ public static partial class Definitions
         { 'param': 'Desk thickness', 'label': 'Desk thickness (mm)', " + SliderConfig + ", " + ShowWhen("Base", "Clamp") + @" }
       ] },
       { 'label': 'Arm', 'items': [
-        { 'param': 'Arm', 'label': 'Style', 'widget': 'dropdown', 'config': { 'displayAs': 'segmented' } },
+        { 'param': 'Arm', 'label': 'Style', 'widget': 'dropdown', 'config': { 'displayAs': 'tiles', 'optionMedia': {
+            'Straight': { 'icon': 'ic-straight' }, 'Two-Joint': { 'icon': 'ic-two-joint' }, 'Arc': { 'icon': 'ic-arc' } } } },
         { 'param': 'Height', 'label': 'Height (mm)', " + SliderConfig + @" },
         { 'param': 'Reach', 'label': 'Reach (mm)', " + SliderConfig + @" },
         { 'param': 'Elbow', 'label': 'Elbow position (%)', " + SliderConfig + ", " + ShowWhen("Arm", "Two-Joint") + @" }
@@ -421,13 +441,16 @@ public static partial class Definitions
       ] },
       { 'label': 'Cable', 'items': [
         { 'param': 'Cable', 'label': 'Visible cable', 'description': 'Off for a battery version.' },
-        { 'param': 'Cable colour', 'widget': 'dropdown', 'config': { 'displayAs': 'segmented' }, " + ShowWhen("Cable", true) + @" }
+        { 'param': 'Cable colour', 'widget': 'dropdown', 'config': { 'displayAs': 'segmented', 'optionMedia': {
+            'Black': { 'image': 'th-black' }, 'Copper': { 'image': 'th-copper' }, 'White': { 'image': 'th-white' } } }, " + ShowWhen("Cable", true) + @" }
       ] }
     ] },
     { 'label': 'Light', 'groups': [
       { 'label': 'Light source', 'items': [
-        { 'param': 'Light source options', 'widget': 'dynamicValueList' },
-        { 'param': 'Light source', 'description': 'Only what fits the head. Try a bigger dome, or take the diffuser off.' },
+        { 'param': 'Light source', 'description': 'Only what fits the head. Try a bigger dome, or take the diffuser off.', 'config': { 'displayAs': 'tiles', 'optionMedia': {
+            'Filament globe 6 W, 470 lm': { 'icon': 'ic-globe' }, 'E27 LED 13 W, 1,521 lm': { 'icon': 'ic-bulb' }, 'E27 LED 9 W, 806 lm': { 'icon': 'ic-bulb' },
+            'GU10 LED 7 W, 600 lm': { 'icon': 'ic-spot' }, 'LED module 6 W, 600 lm': { 'icon': 'ic-module' },
+            'High-output strip, 1,600 lm/m': { 'icon': 'ic-strip-high' }, 'LED strip, 900 lm/m': { 'icon': 'ic-strip' } } } },
         { 'param': 'Light on', 'description': 'Switch the viewer to Night: the lamp then lights the desk.' },
         { 'param': 'Colour temperature', 'label': 'Colour temperature (K)', " + SliderConfig + ", " + ShowWhen("Light on", true) + @" }
       ] },

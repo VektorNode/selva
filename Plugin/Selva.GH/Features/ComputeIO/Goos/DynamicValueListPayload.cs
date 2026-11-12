@@ -11,10 +11,10 @@ namespace Selva.GH.Features.ComputeIO.Goos;
 ///     computed name -> value options. Single source of truth for both the local WebSocket collector
 ///     and the Rhino.Compute fork; <see cref="DynamicValueListGoo" /> wraps this in a GH_Goo.
 ///     <para>
-///         The same channel carries two richer shapes, each optional. Options By adds <see cref="By" />
-///         and <see cref="Table" />: the browser picks the table branch for the current value of the
-///         <c>by</c> input, so changing it needs no solve. Repeat adds <see cref="Rows" /> and
-///         <see cref="Members" />, has no target, and makes each member input take one value per row.
+///         The same channel carries two richer shapes, each optional and without a target. Repeat adds
+///         <see cref="Rows" /> and <see cref="Members" />, and makes each member input take one value
+///         per row. Options Table adds <see cref="PickTable" />: the browser narrows it by the picks on
+///         screen, so changing one needs no solve to update the lists that depend on it.
 ///     </para>
 /// </summary>
 public sealed class DynamicValueListPayload
@@ -39,12 +39,6 @@ public sealed class DynamicValueListPayload
 
     public Dictionary<string, string> Options { get; set; }
 
-    /// <summary>Options By: id of the input whose value picks a branch of <see cref="Table" />.</summary>
-    public string By { get; set; }
-
-    /// <summary>Options By: option sets keyed by the <see cref="By" /> input's value, "*" as the fallback.</summary>
-    public Dictionary<string, Dictionary<string, string>> Table { get; set; }
-
     /// <summary>Repeat: one entry per row, in order.</summary>
     public List<RepeatRow> Rows { get; set; }
 
@@ -57,15 +51,12 @@ public sealed class DynamicValueListPayload
     /// </summary>
     public bool ResolvedInSolve { get; set; }
 
-    /// <summary>
-    ///     Options By: the options for each of By's items now, in item order. Read by the target in the
-    ///     same solve; never sent, since the browser looks them up in <see cref="Table" />.
-    /// </summary>
-    public List<Dictionary<string, string>> ItemOptions { get; set; }
+    /// <summary>Options Table: the valid combinations for inputs that depend on each other.</summary>
+    public PickTable PickTable { get; set; }
 
     /// <summary>
     ///     Wire shape: { "targetInputId": "&lt;guid&gt;" | null, "options": { name: value } }, plus
-    ///     "by", "table", "rows", "members" and "resolvedInSolve" when set.
+    ///     "rows", "members", "pickTable" and "resolvedInSolve" when set.
     /// </summary>
     public JObject ToJObject()
     {
@@ -78,22 +69,6 @@ public sealed class DynamicValueListPayload
         if (ResolvedInSolve)
         {
             obj["resolvedInSolve"] = true;
-        }
-
-        if (!string.IsNullOrEmpty(By))
-        {
-            obj["by"] = By;
-        }
-
-        if (Table != null)
-        {
-            var table = new JObject();
-            foreach (var branch in Table)
-            {
-                table[branch.Key] = ToJObject(branch.Value);
-            }
-
-            obj["table"] = table;
         }
 
         if (Rows != null)
@@ -116,6 +91,28 @@ public sealed class DynamicValueListPayload
             }
 
             obj["members"] = members;
+        }
+
+        if (PickTable != null)
+        {
+            var rows = new JArray();
+            foreach (var row in PickTable.Rows)
+            {
+                rows.Add(new JArray(row));
+            }
+
+            var table = new JObject
+            {
+                { "inputs", new JArray(PickTable.Inputs) },
+                { "parents", new JArray(PickTable.Parents) },
+                { "rows", rows }
+            };
+            if (PickTable.By.Count > 0)
+            {
+                table["by"] = new JArray(PickTable.By);
+            }
+
+            obj["pickTable"] = table;
         }
 
         return obj;
@@ -146,18 +143,6 @@ public sealed class DynamicValueListPayload
             payload["resolvedInSolve"] = true;
         }
 
-        if (!string.IsNullOrEmpty(By))
-        {
-            payload["by"] = By;
-        }
-
-        if (Table != null)
-        {
-            payload["table"] = Table.ToDictionary(
-                branch => branch.Key,
-                branch => new Dictionary<string, string>(branch.Value ?? new Dictionary<string, string>()));
-        }
-
         if (Rows != null)
         {
             payload["rows"] = Rows.Select(row => new Dictionary<string, string>
@@ -173,6 +158,22 @@ public sealed class DynamicValueListPayload
             payload["members"] = new List<string>(Members);
         }
 
+        if (PickTable != null)
+        {
+            var table = new Dictionary<string, object>
+            {
+                ["inputs"] = new List<string>(PickTable.Inputs),
+                ["parents"] = new List<int>(PickTable.Parents),
+                ["rows"] = PickTable.Rows.Select(row => new List<string>(row)).ToList()
+            };
+            if (PickTable.By.Count > 0)
+            {
+                table["by"] = new List<string>(PickTable.By);
+            }
+
+            payload["pickTable"] = table;
+        }
+
         return payload;
     }
 
@@ -180,13 +181,10 @@ public sealed class DynamicValueListPayload
     {
         return new DynamicValueListPayload(TargetInputId, Options)
         {
-            By = By,
-            Table = Table?.ToDictionary(branch => branch.Key,
-                branch => new Dictionary<string, string>(branch.Value ?? new Dictionary<string, string>())),
             Rows = Rows?.ToList(),
             Members = Members?.ToList(),
             ResolvedInSolve = ResolvedInSolve,
-            ItemOptions = ItemOptions?.Select(options => new Dictionary<string, string>(options)).ToList()
+            PickTable = PickTable?.Clone()
         };
     }
 
@@ -202,19 +200,8 @@ public sealed class DynamicValueListPayload
         {
             TargetInputId = Guid.TryParse((string)obj["targetInputId"], out var guid) ? guid : Guid.Empty,
             Options = obj["options"]?.ToObject<Dictionary<string, string>>() ?? new Dictionary<string, string>(),
-            By = (string)obj["by"],
             ResolvedInSolve = obj["resolvedInSolve"]?.Type == JTokenType.Boolean && (bool)obj["resolvedInSolve"]
         };
-
-        if (obj["table"] is JObject table)
-        {
-            payload.Table = new Dictionary<string, Dictionary<string, string>>();
-            foreach (var branch in table.Properties())
-            {
-                payload.Table[branch.Name] = branch.Value.ToObject<Dictionary<string, string>>()
-                                             ?? new Dictionary<string, string>();
-            }
-        }
 
         if (obj["rows"] is JArray rows)
         {
@@ -226,6 +213,17 @@ public sealed class DynamicValueListPayload
         if (obj["members"] is JArray members)
         {
             payload.Members = members.Select(member => (string)member).Where(id => id != null).ToList();
+        }
+
+        if (obj["pickTable"] is JObject pickTable)
+        {
+            payload.PickTable = new PickTable
+            {
+                Inputs = pickTable["inputs"]?.ToObject<List<string>>() ?? new List<string>(),
+                Parents = pickTable["parents"]?.ToObject<List<int>>() ?? new List<int>(),
+                By = pickTable["by"]?.ToObject<List<string>>() ?? new List<string>(),
+                Rows = pickTable["rows"]?.ToObject<List<List<string>>>() ?? new List<List<string>>()
+            };
         }
 
         return payload;
@@ -243,6 +241,51 @@ public sealed class DynamicValueListPayload
         }
 
         return obj;
+    }
+}
+
+/// <summary>
+///     The valid combinations for a set of inputs. Each input offers the values its cell still has in
+///     the rows matching the picks it depends on: the inputs in <see cref="By" />, then the input it
+///     is wired from, the one that is wired from, and so on.
+/// </summary>
+public sealed class PickTable
+{
+    /// <summary>Ids of the inputs that narrow the rows without being filled from them.</summary>
+    public List<string> By { get; set; } = new List<string>();
+
+    /// <summary>Ids of the inputs the table fills, a parent before its children.</summary>
+    public List<string> Inputs { get; set; } = new List<string>();
+
+    /// <summary>
+    ///     For each of <see cref="Inputs" />, the index of the input whose pick it narrows on, or -1
+    ///     for one that only <see cref="By" /> narrows.
+    /// </summary>
+    public List<int> Parents { get; set; } = new List<int>();
+
+    /// <summary>
+    ///     One entry per valid combination: a cell for each of <see cref="By" />, then one for each of
+    ///     <see cref="Inputs" />.
+    /// </summary>
+    public List<List<string>> Rows { get; set; } = new List<List<string>>();
+
+    /// <summary>
+    ///     The rows matching what the <see cref="By" /> inputs hold in this solve: one set, or one per
+    ///     item when a By input is repeated. Where an input with no parent starts. Grasshopper-side
+    ///     only: never sent, since the browser narrows <see cref="Rows" /> itself.
+    /// </summary>
+    public List<List<List<string>>> Start { get; set; }
+
+    public PickTable Clone()
+    {
+        return new PickTable
+        {
+            By = By.ToList(),
+            Inputs = Inputs.ToList(),
+            Parents = Parents.ToList(),
+            Rows = Rows.Select(row => row.ToList()).ToList(),
+            Start = Start?.Select(set => set.Select(row => row.ToList()).ToList()).ToList()
+        };
     }
 }
 

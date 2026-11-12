@@ -127,7 +127,7 @@
 			key: 'COMPUTE_REQUEST_MAX_BYTES',
 			label: 'Compute request body cap',
 			value: (l) => formatBytes(l.COMPUTE_REQUEST_MAX_BYTES),
-			note: 'Inputs plus base64 file values.'
+			note: 'Inputs plus base64 file values. The largest RHINO_COMPUTE_MAX_REQUEST_SIZE a reached compute server reports; 256 MB before one is reached.'
 		},
 		{
 			key: 'COMPUTE_RESPONSE_MAX_BYTES',

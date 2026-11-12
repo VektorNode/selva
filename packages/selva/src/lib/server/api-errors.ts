@@ -1,4 +1,4 @@
-import { error, isHttpError } from '@sveltejs/kit';
+import { error, isHttpError, json } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
 import { ApiErrorCode, codeForStatus, isApiError } from '@selvajs/server/api';
@@ -89,3 +89,13 @@ export function handleApiError(err: unknown, fallback: string, log?: ILogger): n
 }
 
 export { throwZodError } from '@selvajs/server/api';
+
+/**
+ * The response SvelteKit sends for `err` thrown from an endpoint, for a handler whose 200 is
+ * already out (a keep-alive solve), where a throw could only drop the connection.
+ */
+export function errorResponse(err: unknown, log: ILogger): Response {
+	if (isHttpError(err)) return json(err.body, { status: err.status });
+	log.error('[API] Unhandled error', { component: 'api', err: renderThrown(err) });
+	return json({ message: 'Internal Error', code: ApiErrorCode.INTERNAL }, { status: 500 });
+}

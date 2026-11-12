@@ -1,10 +1,11 @@
-import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
-import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
+import type { RequestEvent, RequestHandler } from './$types';
+import { apiError, ApiErrorCode, errorResponse } from '#lib/server/api-errors.js';
+import { computeRequestCap } from '#lib/server/compute/engine.server.js';
 import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
 import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { runSolve, mapSolveError, type SolveAccess } from '#lib/server/compute/solve.server.js';
 import { SolveModeSchema } from '@selvajs/server/api';
+import { respondWithKeepalive, wantsKeepalive } from '@selvajs/solve/server';
 
 interface ComputeRequest {
 	/** Read for a remote `definitionUrl` only: a stored definition's inputs come from its schema. */
@@ -29,10 +30,18 @@ interface ComputeRequest {
 // `/api/v1/definitions/{guid}/solve` live in `solve.server.ts`; what stays here
 // is the body shape and the share-token branch, which must NOT reach the
 // definition-addressed route.
+//
+// The web app asks for keep-alive, so a solve longer than the reverse proxy's read timeout
+// still lands. Errors then travel inside the 200, which is why they become responses here.
 
-export const POST: RequestHandler = async ({ request, locals, url }) => {
+export const POST: RequestHandler = (event) => {
+	if (!wantsKeepalive(event.request)) return solve(event);
+	return respondWithKeepalive(solve(event).catch((err) => errorResponse(err, event.locals.log)));
+};
+
+async function solve({ request, locals, url }: RequestEvent): Promise<Response> {
 	// Reject oversized payloads before buffering.
-	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
+	requireMaxBodySize(request, computeRequestCap());
 
 	// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): start of server-side work. The solve metric's
 	// `durationMs` wraps ONLY scheduler.solve, so everything before it (auth, DB reads,
@@ -121,4 +130,4 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	} catch (err) {
 		mapSolveError(err, locals);
 	}
-};
+}

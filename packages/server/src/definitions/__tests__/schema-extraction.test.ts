@@ -9,6 +9,7 @@ import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
 import type { ComputeServerConfig } from '@selvajs/platform';
 import {
 	fetchSchemaFromCompute,
+	extractSchemaForUpload,
 	assertSupportedSchemaVersion,
 	assertCamelCaseSchema,
 	SchemaExtractionError,
@@ -202,5 +203,59 @@ describe('readSchemaResults', () => {
 		const [result] = readSchemaResults([{ FileName: 'a.gh', Schemas: [schema()] }]);
 
 		expect(result.schemas).toHaveLength(1);
+	});
+});
+
+describe('extractSchemaForUpload', () => {
+	let fetchMock: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const json = { 'content-type': 'application/json' };
+	const embedded = { ...schema(UI_SCHEMA_VERSION), inputs: [{ id: 'a', default: 1 }] };
+
+	function routeCompute(io: () => Response) {
+		fetchMock.mockImplementation(async (url: string | URL) =>
+			String(url).endsWith('/io')
+				? io()
+				: new Response(JSON.stringify([{ fileName: 'definition.gh', schemas: [embedded] }]), {
+						status: 200,
+						headers: json
+					})
+		);
+	}
+
+	it('stores the values saved in the file as input defaults', async () => {
+		routeCompute(
+			() =>
+				new Response(
+					JSON.stringify({
+						Inputs: [
+							{ Id: 'a', Name: 'A', ParamType: 'Number', Minimum: 0, Maximum: 10, Default: '5' }
+						],
+						Outputs: []
+					}),
+					{ status: 200, headers: json }
+				)
+		);
+
+		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
+
+		expect(result.inputs[0]).toMatchObject({ id: 'a', default: 5 });
+	});
+
+	it('keeps the embedded defaults when /io fails: only the schema gates the upload', async () => {
+		routeCompute(() => new Response('boom', { status: 500 }));
+
+		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
+
+		expect(result.inputs[0]).toMatchObject({ id: 'a', default: 1 });
 	});
 });

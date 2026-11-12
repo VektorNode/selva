@@ -17,14 +17,15 @@ using Grasshopper.Kernel.Types;
 public class Script_Instance : GH_ScriptInstance
 {
     // A desk lamp in millimetres, base on the desk at the origin, reaching along +X. Besides the parts
-    // it reports the light sources that fit the head, the beam the light script needs, whether the lamp
-    // stands, and a priced parts list. Outputs are ordered by the section that reads them.
+    // it reports the beam the light script needs, whether the lamp stands, and a priced parts list.
+    // The shade's profile and the light sources that fit it come from the head script.
     private void RunScript(
 		object Base, object BaseSize, object DeskThickness, object Weighted,
 		object Arm, object Height, object Reach, object Elbow, object Tilt,
-		object Head, object HeadSize, object BarLength, object Diffuser, object CableOn, object Source, object LightOn,
-		ref object SourceOptions,
-		ref object Body, ref object Inner, ref object Glass, ref object Light, ref object Cable, ref object Desk, ref object Lumens,
+		object Head, object HeadSize, object BarLength, object Diffuser, object CableOn,
+		List<object> Profile, List<object> Sources, object Source, object LightOn,
+		ref object Body, ref object Trim, ref object Inner, ref object Glass, ref object Light, ref object Cable,
+		ref object Desk, ref object Props, ref object Lumens,
 		ref object Beam, ref object Spread, ref object Cutoff, ref object Efficiency,
 		ref object Steady, ref object GlareFree,
 		ref object SourceName, ref object PowerW, ref object Stability, ref object WeightKg,
@@ -37,12 +38,14 @@ public class Script_Instance : GH_ScriptInstance
 
         var body = new List<Mesh>(); var inner = new List<Mesh>(); var glass = new List<Mesh>();
         var light = new List<Mesh>(); var cable = new List<Mesh>(); var desk = new List<Mesh>();
+        var trim = new List<Mesh>(); var props = new List<Mesh>();
 
         bool clamp = baseType == "Clamp";
         bool bar = head == "Linear Bar";
 
         // Desk: a clamp needs an edge, so the desk starts at the lamp.
-        desk.Add(Mesh.CreateFromBox(new BoundingBox(clamp ? 0 : -300, -300, -deskT, Math.Max(reach + 260, 620), 300, 0), 1, 1, 1));
+        double deskFrom = clamp ? 0 : -300, deskTo = Math.Max(reach + 260, 620);
+        desk.Add(Mesh.CreateFromBox(new BoundingBox(deskFrom, -300, -deskT, deskTo, 300, 0), 1, 1, 1));
 
         // Base
         double baseTop, baseMassKg, footprint;
@@ -88,11 +91,15 @@ public class Script_Instance : GH_ScriptInstance
             baseMassKg = Math.PI * R * R * t * 7.85e-6;
         }
 
+        if (!clamp)
+            trim.Add(Mesh.CreateFromBox(new BoundingBox(-footprint * 0.62 - 11, -7, baseTop - 1, -footprint * 0.62 + 11, 7, baseTop + 3.5), 1, 1, 1));
+
         // Arm: pivot at the base, head knuckle at (reach, 0, height).
         var pivot = new Point3d(clamp ? 36 : 0, 0, baseTop + 22);
         var knuckle = new Point3d(reach, 0, h);
         body.Add(ToMesh(Tube(new LineCurve(new Point3d(pivot.X, 0, baseTop - 1), pivot), 11)));
         body.Add(ToMesh(Joint(pivot, 15, 38)));
+        trim.Add(ToMesh(Knob(pivot, 38)));
 
         double armLen, armRadius;
         var armPath = new List<Curve>();
@@ -120,6 +127,7 @@ public class Script_Instance : GH_ScriptInstance
                 body.Add(ToMesh(Tube(new LineCurve(e + off, knuckle + off), 5)));
             }
             body.Add(ToMesh(Joint(e, 13, 34)));
+            trim.Add(ToMesh(Knob(e, 34)));
             armLen = pivot.DistanceTo(e) + e.DistanceTo(knuckle); armRadius = 5;
             armPath.Add(new LineCurve(pivot, e)); armPath.Add(new LineCurve(e, knuckle));
         }
@@ -127,30 +135,18 @@ public class Script_Instance : GH_ScriptInstance
         // Head: local +Z is the light direction.
         var dir = new Vector3d(Math.Sin(tilt), 0, -Math.Cos(tilt));
         var x = Vector3d.CrossProduct(Vector3d.YAxis, dir);
-        double headR = headSize / 2;
-        var outer = new List<Point3d> { new Point3d(23, 0, 0), new Point3d(23, 0, 28) };
-        double depth = bar ? 28 : HeadProfile(head, headR, out outer);
-        double mouth = outer[outer.Count - 1].X;
-
-        // The light sources that fit this head. Behind a diffuser a bulb must sit inside the shade;
-        // without one it may stand proud of the rim, like an exposed filament globe.
-        var options = new List<Lamp>();
-        if (bar)
-            foreach (var s in Strips)
-                options.Add(new Lamp(s.Id, s.Name, s.Lm * barLen / 1000, s.W * barLen / 1000, s.Price * barLen / 1000, 0, 0, "strip"));
-        else
-        {
-            double room = head == "Cylinder" ? 2 * mouth * 0.95 : 2 * mouth * 0.8;
-            double reachOut = depth + (diffuser ? -4 : 30);
-            options.AddRange(Bulbs.Where(b => b.Dia + 10 <= room && Tip(b, outer) <= reachOut));
-        }
-        options = options.OrderByDescending(o => o.Lm).ToList();
-        var src = options.FirstOrDefault(o => o.Id == Txt(Source, "")) ?? options.FirstOrDefault() ?? Bulbs.Last();
+        var outer = Profile.Select(ToPoint).ToList();
+        if (outer.Count < 2) outer = new List<Point3d> { new Point3d(23, 0, 0), new Point3d(23, 0, 28) };
+        double depth = outer[outer.Count - 1].Z, mouth = outer[outer.Count - 1].X;
+        var sources = Sources.Select(o => Lamp.Parse(Txt(o, ""))).Where(o => o != null).ToList();
+        var src = sources.FirstOrDefault(o => o.Id == Txt(Source, "")) ?? sources.FirstOrDefault()
+            ?? Lamp.Parse("module-6|LED module 6 W|600|6|11|40|18|module|0|5");
 
         // A wide head on a short reach swallows its own arm, so the head moves out on a neck until it clears.
         double neck = NeckToClear(knuckle, dir, x, armPath, armRadius, outer);
         var mount = knuckle + Vector3d.XAxis * neck;
         body.Add(ToMesh(new Sphere(knuckle, 13).ToBrep()));
+        trim.Add(ToMesh(Joint(knuckle, 5.5, 34)));
         if (neck > 0)
         {
             body.Add(ToMesh(Tube(new LineCurve(knuckle, mount), 6)));
@@ -194,7 +190,7 @@ public class Script_Instance : GH_ScriptInstance
             var collar = ToMesh(new Cylinder(new Circle(new Plane(new Point3d(0, 0, -12), Vector3d.ZAxis), 15), 16).ToBrep(true, true));
             collar.Transform(toHead); body.Add(collar);
 
-            foreach (var part in BulbMeshes(src, Seat(src, outer), out lightZ)) { part.Transform(toHead); light.Add(part); }
+            foreach (var part in BulbMeshes(src, src.Seat, out lightZ)) { part.Transform(toHead); light.Add(part); }
 
             if (diffuser)
             {
@@ -257,6 +253,33 @@ public class Script_Instance : GH_ScriptInstance
             cable.Add(ToMesh(Tube(Curve.CreateInterpolatedCurve(route, 3, CurveKnotStyle.Chord, -Vector3d.XAxis, arrival), r)));
         }
 
+        // On the desk: a sketchbook where the light falls, a pencil and a mug.
+        double bookX = Math.Max(reach + 60, footprint + 150);
+        var onDesk = Transform.Translation(bookX, -110, 0) * Transform.Rotation(0.2, Vector3d.ZAxis, Point3d.Origin);
+        foreach (var part in new[]
+        {
+            Tuple.Create(trim, Mesh.CreateFromBox(new BoundingBox(-105, -74, 0, 105, 74, 2.5), 1, 1, 1)),
+            Tuple.Create(props, Mesh.CreateFromBox(new BoundingBox(-101, -71, 2.5, 102, 71, 12), 1, 1, 1)),
+            Tuple.Create(trim, Mesh.CreateFromBox(new BoundingBox(-105, -74, 12, 105, 74, 14.5), 1, 1, 1)),
+            Tuple.Create(trim, ToMesh(Tube(new LineCurve(new Point3d(-80, -104, 3.7), new Point3d(95, -96, 3.7)), 3.6))),
+        })
+        {
+            part.Item2.Transform(onDesk);
+            part.Item1.Add(part.Item2);
+        }
+        var mugAt = Transform.Translation(Math.Min(bookX + 185, deskTo - 60), 165, 0);
+        var mugWall = new Polyline(new[]
+        {
+            new Point3d(0.01, 0, 0), new Point3d(36, 0, 0), new Point3d(40, 0, 6), new Point3d(40, 0, 92), new Point3d(36.5, 0, 92),
+            new Point3d(36.5, 0, 7), new Point3d(0.01, 0, 5)
+        }).ToNurbsCurve();
+        var handle = new ArcCurve(new Arc(new Point3d(39, 0, 74), new Point3d(64, 0, 48), new Point3d(39, 0, 22)));
+        foreach (var part in new[] { ToMesh(Revolve(mugWall)), ToMesh(Tube(handle, 4.5)) })
+        {
+            part.Transform(mugAt);
+            props.Add(part);
+        }
+
         // Tipping about the base edge on the head's side.
         double armMassKg = armLen / 1000 * 0.55;
         double baseKg = heavy ? baseMassKg : baseMassKg * 0.75;
@@ -287,8 +310,7 @@ public class Script_Instance : GH_ScriptInstance
         if (diffuser && !bar) n *= 0.7;
         double cutoff = bar ? 80 : Math.Min(Math.Atan2(mouth, Math.Max(depth - lightZ, 5)) * 180 / Math.PI, 85);
 
-        SourceOptions = options.Select(o => string.Format(Inv, "\"{0}, {1:#,0} lm\" = {2}", o.Name, o.Lm, o.Id)).ToList();
-        Body = body; Inner = inner; Glass = glass; Light = light; Cable = cable; Desk = desk;
+        Body = body; Trim = trim; Inner = inner; Glass = glass; Light = light; Cable = cable; Desk = desk; Props = props;
         Lumens = lightOn ? src.Lm : 0;
         Beam = new Plane(c0 + dir * lightZ, dir);
         Spread = n;
@@ -296,7 +318,7 @@ public class Script_Instance : GH_ScriptInstance
         Efficiency = (bar ? 0.9 : 0.8) * (diffuser && !bar ? 0.85 : 1);
         Steady = margin >= 1;
         // A bare source standing out of the rim shines straight into the eye.
-        GlareFree = bar || diffuser || Tip(src, outer) <= depth;
+        GlareFree = bar || diffuser || src.Tip <= depth;
         SourceName = string.Format(Inv, "{0}, {1:#,0} lm", src.Name, src.Lm);
         PowerW = Math.Round(src.W, 1);
         Stability = stability;
@@ -308,56 +330,17 @@ public class Script_Instance : GH_ScriptInstance
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-    // A light source: lumens, watts and price, and for bulbs the diameter and length the head must hold.
+    // A light source as the head script lists it: id|name|lm|W|EUR|diameter|length|kind|seat|tip.
     class Lamp
     {
-        public string Id, Name, Kind; public double Lm, W, Price, Dia, Len;
-        public Lamp(string id, string name, double lm, double w, double price, double dia, double len, string kind)
-        { Id = id; Name = name; Lm = lm; W = w; Price = price; Dia = dia; Len = len; Kind = kind; }
-    }
-
-    static readonly Lamp[] Bulbs =
-    {
-        new Lamp("globe-6", "Filament globe 6 W", 470, 6, 14, 95, 135, "globe"),
-        new Lamp("e27-13", "E27 LED 13 W", 1521, 13, 9, 67, 120, "bulb"),
-        new Lamp("e27-9", "E27 LED 9 W", 806, 9, 6, 60, 105, "bulb"),
-        new Lamp("gu10-7", "GU10 LED 7 W", 600, 7, 7, 50, 55, "spot"),
-        new Lamp("module-6", "LED module 6 W", 600, 6, 11, 40, 18, "module"),
-    };
-
-    // Per metre of bar.
-    static readonly Lamp[] Strips =
-    {
-        new Lamp("strip-high", "High-output strip", 1600, 15, 26, 0, 0, "strip"),
-        new Lamp("strip-std", "LED strip", 900, 9, 18, 0, 0, "strip"),
-    };
-
-    // Where a source's front ends along the head's axis. A bulb's narrow E27 neck sits in the collar; a
-    // spot or module is as wide as its face, so it moves down the shade until the shade is wider than it.
-    static double Seat(Lamp s, List<Point3d> profile)
-    {
-        if (s.Kind != "spot" && s.Kind != "module") return 0;
-        for (double z = 0; z < profile[profile.Count - 1].Z; z += 1)
-            if (HalfWidth(profile, z) >= s.Dia / 2 + 2) return z;
-        return profile[profile.Count - 1].Z;
-    }
-
-    static double Tip(Lamp s, List<Point3d> profile)
-    {
-        return s.Kind == "module" ? Seat(s, profile) + 5 : Seat(s, profile) + s.Len - 12;
-    }
-
-    // The shade's inside radius at a depth along its axis.
-    static double HalfWidth(List<Point3d> profile, double z)
-    {
-        double best = 0;
-        for (int i = 1; i < profile.Count; i++)
+        public string Id, Name, Kind; public double Lm, W, Price, Dia, Len, Seat, Tip;
+        public static Lamp Parse(string line)
         {
-            Point3d a = profile[i - 1], b = profile[i];
-            if (b.Z <= a.Z || z > b.Z || z < a.Z) continue;
-            best = Math.Max(best, a.X + (b.X - a.X) * (z - a.Z) / (b.Z - a.Z));
+            var f = line.Split('|');
+            if (f.Length < 10) return null;
+            Func<int, double> n = i => double.Parse(f[i], Inv);
+            return new Lamp { Id = f[0], Name = f[1], Lm = n(2), W = n(3), Price = n(4), Dia = n(5), Len = n(6), Kind = f[7], Seat = n(8), Tip = n(9) };
         }
-        return best;
     }
 
     // The source in the head's frame, from its seat. lightZ is where it emits from.
@@ -421,30 +404,6 @@ public class Script_Instance : GH_ScriptInstance
         return 15;
     }
 
-    static double HeadProfile(string head, double R, out List<Point3d> p)
-    {
-        p = new List<Point3d>();
-        if (head == "Cone")
-        {
-            p.Add(new Point3d(R * 0.14, 0, 0)); p.Add(new Point3d(R, 0, R * 0.92));
-            return R * 0.92;
-        }
-        if (head == "Cylinder")
-        {
-            double r = R * 0.62, d = R * 1.5;
-            p.Add(new Point3d(0.01, 0, 0)); p.Add(new Point3d(r, 0, 0)); p.Add(new Point3d(r, 0, d));
-            return d;
-        }
-        double depth = R * 0.74;
-        for (int i = 1; i <= 8; i++)
-        {
-            double t = i / 8.0 * Math.PI / 2;
-            p.Insert(p.Count, new Point3d(R * Math.Sin(t), 0, depth * (1 - Math.Cos(t))));
-        }
-        p.Insert(0, new Point3d(0.01, 0, 0));
-        return depth;
-    }
-
     static Curve RoundedRect(double w, double d, double r)
     {
         var rect = new Rectangle3d(Plane.WorldXY, new Interval(-w / 2, w / 2), new Interval(-d / 2, d / 2));
@@ -468,6 +427,15 @@ public class Script_Instance : GH_ScriptInstance
         var plane = new Plane(at - Vector3d.YAxis * width / 2, Vector3d.YAxis);
         return new Cylinder(new Circle(plane, r), width).ToBrep(true, true);
     }
+
+    // The tightening knob on one side of a joint.
+    static Brep Knob(Point3d at, double width)
+    {
+        var plane = new Plane(at - Vector3d.YAxis * (width / 2 + 9), Vector3d.YAxis);
+        return new Cylinder(new Circle(plane, 9), 9).ToBrep(true, true);
+    }
+
+    static Point3d ToPoint(object o) { var p = Point3d.Origin; GH_Convert.ToPoint3d(o, ref p, GH_Conversion.Both); return p; }
 
     static Mesh ToMesh(Brep b)
     {

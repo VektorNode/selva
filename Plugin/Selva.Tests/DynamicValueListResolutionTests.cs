@@ -72,20 +72,18 @@ public class DynamicValueListResolutionTests
     }
 
     [Fact]
-    public void Payload_ResolvedInSolveRoundTripsAndItemOptionsStayLocal()
+    public void Payload_ResolvedInSolveRoundTrips()
     {
         var payload = new DynamicValueListPayload(Guid.NewGuid(), new Dictionary<string, string> { ["a"] = "a" })
         {
-            ResolvedInSolve = true,
-            ItemOptions = new List<Dictionary<string, string>> { new() { ["a"] = "a" } }
+            ResolvedInSolve = true
         };
 
         var json = JObject.Parse(payload.ToComputeJson());
 
         Assert.True(json.Value<bool>("resolvedInSolve"));
-        Assert.Null(json["itemOptions"]);
         Assert.True(DynamicValueListPayload.FromJson(payload.ToComputeJson()).ResolvedInSolve);
-        Assert.Equal("a", payload.Clone().ItemOptions![0]["a"]);
+        Assert.True(payload.Clone().ResolvedInSolve);
         Assert.Null(JObject.Parse(new DynamicValueListPayload().ToComputeJson())["resolvedInSolve"]);
     }
 

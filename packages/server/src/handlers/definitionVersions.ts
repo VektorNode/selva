@@ -25,7 +25,7 @@ import { requireEditableDefinition } from '../access/index.js';
 import { GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../compute/index.js';
 import {
-	fetchSchemaFromCompute,
+	extractSchemaForUpload,
 	getVisibleDefinition,
 	loadVisibleVersion
 } from '../definitions/index.js';
@@ -67,7 +67,7 @@ export const uploadVersion: ApiHandler = async (req) => {
 	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
 		definitionPin: record.computeServerId ?? null
 	});
-	const schema = await fetchSchemaFromCompute(data, server);
+	const schema = await extractSchemaForUpload(data, server);
 
 	const version = await definitionService(req.deps).uploadVersion(
 		ctx,

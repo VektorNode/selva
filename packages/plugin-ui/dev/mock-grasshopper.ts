@@ -392,14 +392,14 @@ const INPUTS: DiscoveredInput[] = [
 		groupName: 'Massing'
 	}),
 
-	// Kitchen: Options By and Repeat. The layout decides the rows; the browser switches each row's
-	// lists from the tables without waiting for a solve.
+	// Kitchen: Options Table and Repeat. The layout decides the rows; the browser narrows each row's
+	// lists from the table without waiting for a solve.
 	input({
 		id: 'kitchen-layout',
 		nickname: 'Layout',
 		type: 'valueList',
 		default: 'Straight',
-		options: { Straight: 'Straight', 'L-shaped': 'L-shaped', Galley: 'Galley' },
+		options: { Straight: 'Straight', 'L-shaped': 'L-shaped', Island: 'Island' },
 		groupName: 'Kitchen'
 	}),
 	input({
@@ -431,17 +431,9 @@ const OUTPUTS: DiscoveredOutput[] = [
 	{ id: 'export', nickname: 'Export Model', type: 'file', groupName: 'Results' },
 	{ id: 'warnings', nickname: 'Warnings', type: 'text' },
 	{
-		id: 'front-table',
-		nickname: 'Fronts by Style',
+		id: 'kitchen-options',
+		nickname: 'Kitchen Options',
 		type: 'dynamicValueList',
-		targetInputId: 'fronts',
-		groupName: 'Kitchen'
-	},
-	{
-		id: 'handle-table',
-		nickname: 'Handles by Front',
-		type: 'dynamicValueList',
-		targetInputId: 'handles',
 		groupName: 'Kitchen'
 	},
 	{ id: 'cabinets', nickname: 'Cabinets', type: 'dynamicValueList', groupName: 'Kitchen' },
@@ -661,7 +653,7 @@ const TABS: TabConfig[] = [
 		groups: [
 			group('g-kitchen', 'Kitchen', 1, [placeInput('kitchen-layout'), placeInput('kitchen-style')]),
 			group('g-kitchen-cabinets', 'Cabinets', 1, [placeInput('fronts'), placeInput('handles')], {
-				description: 'Rows come from the layout. Lists switch without a solve.'
+				description: 'Rows come from the layout. Lists narrow without a solve.'
 			}),
 			group('g-kitchen-result', 'Result', 1, [placeOutput('cabinet-list')])
 		]
@@ -817,52 +809,53 @@ function solve(): Record<string, unknown> {
 	};
 }
 
-// What Options By and Repeat would emit, plus a list that reads the per-row picks back. The same
-// cabinets, fronts and handles as examples/definitions/kitchen-run.gh.
+// What Options Table and Repeat would emit, plus a list that reads the per-row picks back. The
+// same cabinets, fronts and handles as examples/definitions/kitchen-run.gh.
 const CABINETS: [key: string, label: string, wall: string, layouts: string][] = [
-	['back/sink', 'Sink', 'Back wall', 'SLG'],
-	['back/drawers', 'Drawers', 'Back wall', 'SLG'],
-	['back/hob', 'Hob', 'Back wall', 'SLG'],
-	['back/larder', 'Larder', 'Back wall', 'S'],
-	['side/corner', 'Corner', 'Side wall', 'L'],
-	['side/drawers', 'Pan drawers', 'Side wall', 'L'],
+	['back/sink', 'Sink', 'Back wall', 'SLI'],
+	['back/prep', 'Prep', 'Back wall', 'SLI'],
+	['back/hob', 'Hob', 'Back wall', 'SLI'],
+	['back/larder', 'Larder', 'Back wall', 'SI'],
+	['side/crockery', 'Crockery', 'Side wall', 'L'],
+	['side/pans', 'Pans', 'Side wall', 'L'],
 	['side/larder', 'Larder', 'Side wall', 'L'],
-	['opposite/drawers', 'Pan drawers', 'Opposite wall', 'G'],
-	['opposite/larder', 'Larder', 'Opposite wall', 'G'],
-	['opposite/dresser', 'Dresser', 'Opposite wall', 'G']
+	['island/cutlery', 'Cutlery', 'Island', 'I'],
+	['island/pans', 'Pans', 'Island', 'I'],
+	['island/end', 'Open end', 'Island', 'I']
 ];
-const names = (...options: string[]) => Object.fromEntries(options.map((o) => [o, o]));
-const FRONT_TABLE: Record<string, Record<string, string>> = {
-	Shaker: names('Shaker door', 'Shaker drawers', 'Glazed door', 'Open shelves'),
-	Slab: names('Slab door', 'Slab drawers', 'Open shelves'),
-	Handleless: names('Push door', 'Push drawers', 'Open shelves')
-};
-const HANDLE_TABLE: Record<string, Record<string, string>> = {
-	'Shaker drawers': names('Cup pull', 'Knob', 'Bar'),
-	'Push door': names('None'),
-	'Push drawers': names('None'),
-	'Open shelves': names('None'),
-	'*': names('Knob', 'Bar', 'Edge pull')
-};
+// The table an author would paste into a Panel for Options Table: style, front, and the handles
+// that go with them. Style is wired into By; the output fills Fronts, and Fronts fills Handles.
+const KITCHEN_OPTIONS: [style: string, front: string, handles: string[]][] = [
+	['Shaker', 'Shaker door', ['Knob', 'Bar', 'Edge pull']],
+	['Shaker', 'Shaker drawers', ['Cup pull', 'Knob', 'Bar']],
+	['Shaker', 'Glazed door', ['Knob', 'Bar', 'Edge pull']],
+	['Shaker', 'Open shelves', ['None']],
+	['Slab', 'Slab door', ['Bar', 'Knob', 'Edge pull']],
+	['Slab', 'Slab drawers', ['Bar', 'Knob', 'Edge pull']],
+	['Slab', 'Open shelves', ['None']],
+	['Handleless', 'Push door', ['None']],
+	['Handleless', 'Push drawers', ['None']],
+	['Handleless', 'Open shelves', ['None']]
+];
+const KITCHEN_ROWS = KITCHEN_OPTIONS.flatMap(([style, front, handles]) =>
+	handles.map((handle) => [style, front, handle])
+);
 
-// As a Get Dynamic Value List wired from Repeat and Options By resolves in the solve: each row
-// finds its pick by key, keeps it if offered, and otherwise takes the first option.
-function resolveRows(
-	rowKeys: string[],
-	value: unknown,
-	optionsFor: (i: number) => Record<string, string>
-) {
-	let picks: Record<string, unknown> = {};
+function readRowPicks(value: unknown): Record<string, unknown> {
 	try {
-		if (typeof value === 'string' && value.startsWith('{')) picks = JSON.parse(value);
+		if (typeof value === 'string' && value.startsWith('{')) return JSON.parse(value);
 	} catch {
 		// No picks: every row takes its first option.
 	}
-	return rowKeys.map((key, i) => {
-		const options = optionsFor(i);
-		const pick = picks[key];
-		return typeof pick === 'string' && pick in options ? pick : (Object.keys(options)[0] ?? '');
-	});
+	return {};
+}
+
+// As the chained Get Dynamic Value Lists resolve in the solve: each keeps its pick if the rows
+// left by the picks before it still offer it, and otherwise takes the first one offered.
+function narrow(rows: string[][], column: number, pick: unknown) {
+	const offered = [...new Set(rows.map((row) => row[column]))];
+	const resolved = offered.find((cell) => cell === pick) ?? offered[0] ?? '';
+	return { resolved, rows: rows.filter((row) => row[column] === resolved) };
 }
 
 function solveKitchen(): Record<string, unknown> {
@@ -870,28 +863,29 @@ function solveKitchen(): Record<string, unknown> {
 	const rows = CABINETS.filter(([, , , layouts]) => layouts.includes(layout[0])).map(
 		([key, label, wall]) => ({ key, label, section: wall })
 	);
-	const keys = rows.map((row) => row.key);
-	const branch = (table: Record<string, Record<string, string>>, key: unknown) =>
-		table[String(key)] ?? table['*'] ?? {};
-	const fronts = resolveRows(keys, values.fronts, () =>
-		branch(FRONT_TABLE, values['kitchen-style'] ?? 'Shaker')
-	);
-	const handles = resolveRows(keys, values.handles, (i) => branch(HANDLE_TABLE, fronts[i]));
+	const style = String(values['kitchen-style'] ?? 'Shaker');
+	const forStyle = KITCHEN_ROWS.filter((row) => row[0] === style);
+	const frontPicks = readRowPicks(values.fronts);
+	const handlePicks = readRowPicks(values.handles);
+	const fronts: string[] = [];
+	const handles: string[] = [];
+	for (const { key } of rows) {
+		const front = narrow(forStyle, 1, frontPicks[key]);
+		fronts.push(front.resolved);
+		handles.push(narrow(front.rows, 2, handlePicks[key]).resolved);
+	}
 
 	return {
-		'front-table': {
-			targetInputId: 'fronts',
+		'kitchen-options': {
+			targetInputId: null,
 			options: {},
-			by: 'kitchen-style',
-			table: FRONT_TABLE,
-			resolvedInSolve: true
-		},
-		'handle-table': {
-			targetInputId: 'handles',
-			options: {},
-			by: 'fronts',
-			table: HANDLE_TABLE,
-			resolvedInSolve: true
+			resolvedInSolve: true,
+			pickTable: {
+				by: ['kitchen-style'],
+				inputs: ['fronts', 'handles'],
+				parents: [-1, 0],
+				rows: KITCHEN_ROWS
+			}
 		},
 		cabinets: {
 			targetInputId: null,

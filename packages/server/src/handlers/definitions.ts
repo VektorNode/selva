@@ -33,7 +33,7 @@ import { requireCanCreateDefinition, requireEditableDefinition } from '../access
 import { COVER_IMAGE_CONTENT_TYPES, GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../compute/index.js';
 import {
-	fetchSchemaFromCompute,
+	extractSchemaForUpload,
 	getVisibleDefinition,
 	listEditableDefinitionsByDocument,
 	listVisibleDefinitions,
@@ -160,7 +160,7 @@ export const createDefinition: ApiHandler = async (req) => {
 	const server = await resolveServerForOrg(ctx, project.orgId, req.deps.computeServer, {
 		definitionPin: parsed.data.computeServerId ?? null
 	});
-	const schema = await fetchSchemaFromCompute(fileData, server);
+	const schema = await extractSchemaForUpload(fileData, server);
 
 	const service = definitionService(req.deps);
 	const { record, version } = await service.create(

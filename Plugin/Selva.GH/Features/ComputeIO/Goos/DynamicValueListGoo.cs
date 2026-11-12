@@ -61,9 +61,12 @@ public class DynamicValueListGoo : GH_Goo<DynamicValueListGoo>, ISelvaSerializab
             return $"Repeat: {Payload.Rows.Count} row(s), {Payload.Members?.Count ?? 0} control(s)";
         }
 
-        return Payload.Table != null
-            ? $"Option table: {Payload.Table.Count} branch(es)"
-            : $"Dynamic Value List: {Options?.Count ?? 0} option(s)";
+        if (Payload.PickTable != null)
+        {
+            return $"Options table: {Payload.PickTable.Rows.Count} combination(s), {Payload.PickTable.Inputs.Count} input(s)";
+        }
+
+        return $"Dynamic Value List: {Options?.Count ?? 0} option(s)";
     }
 
     // Rhino.Compute returns this payload; the web UI routes it back into the targeted input.

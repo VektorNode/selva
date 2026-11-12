@@ -3,12 +3,15 @@
 // gate as well as the render path's fallback for un-cached or stale versions.
 
 import {
+	fetchParsedDefinitionIO,
 	normalizeUISchemaCasing,
 	readSchemaResults as readWrapper,
 	type SchemaEndpointResult
 } from '@selvajs/compute/grasshopper';
 import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
 import type { ComputeServerConfig } from '@selvajs/platform';
+import { applySavedValues, savedValuesFrom } from './saved-values.js';
+import { withTimeout } from './with-timeout.js';
 
 /** One entry of the compute schema endpoint's response, typed to our `UISchema`. */
 export type SchemaExtractionResult = SchemaEndpointResult<UISchema>;
@@ -191,4 +194,38 @@ export async function fetchSchemaFromCompute(
 	assertSupportedSchemaVersion(schemas[0]);
 	assertCamelCaseSchema(schemas[0]);
 	return schemas[0];
+}
+
+/**
+ * How long an upload waits for the saved values once the schema is in. Missing them costs only
+ * the first render its defaults: the render path reads them behind that render.
+ */
+const SAVED_VALUES_GRACE_MS = 5_000;
+
+// Bounds the `/io` request itself, which outlives an upload that stopped waiting for it.
+const SAVED_VALUES_TIMEOUT_MS = 120_000;
+
+/**
+ * `fetchSchemaFromCompute` with the values saved in the file as input defaults, so the stored
+ * schema renders without asking Compute again. The values are read beside the schema,
+ * best-effort: only the schema gates the upload.
+ */
+export async function extractSchemaForUpload(
+	definitionBytes: Uint8Array,
+	server: ComputeServerConfig
+): Promise<UISchema> {
+	const values = fetchParsedDefinitionIO(definitionBytes, {
+		serverUrl: server.serverUrl,
+		...(server.apiKey && { apiKey: server.apiKey }),
+		timeoutMs: SAVED_VALUES_TIMEOUT_MS
+	}).then((io) => savedValuesFrom(io.inputs));
+	values.catch(() => {});
+
+	const schema = await fetchSchemaFromCompute(definitionBytes, server);
+	const saved = await withTimeout(
+		values,
+		SAVED_VALUES_GRACE_MS,
+		() => new Error('saved values not read in time')
+	).catch(() => null);
+	return saved ? applySavedValues(schema, saved) : schema;
 }

@@ -105,6 +105,8 @@ export interface ClientCache {
 	evict(id: string): void;
 	/** Solve-cache counters summed across every warm client. Counters die with the client that owns them, so totals can fall over time. */
 	solveCacheStats(): SolveCacheStats;
+	/** The largest `maxRequestBytes` a warm client's server reports; null when none reports one. */
+	largestReportedRequestBytes(): number | null;
 	/**
 	 * Drop every retained solve result, keeping the warm clients (and their
 	 * connections and server-side definition pointers) intact. Nothing expires
@@ -465,6 +467,15 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				debugLog(`[Compute/client-cache] evicted warm client for server ${id} (config change)`);
 				evictEntry(id);
 			}
+		},
+
+		largestReportedRequestBytes(): number | null {
+			let largest: number | null = null;
+			for (const { limits } of cache.values()) {
+				const reported = limits.maxRequestBytes;
+				if (reported !== null && (largest === null || reported > largest)) largest = reported;
+			}
+			return largest;
 		},
 
 		solveCacheStats(): SolveCacheStats {

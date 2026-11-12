@@ -33,6 +33,30 @@
 			"outputs": []
 		},
 		{
+			"guid": "116A5E1C-7275-43C6-AAB4-AD4680C56D7E",
+			"class": "GH_OptionsTableComponent",
+			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_OptionsTableComponent.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Table",
+					"access": "tree"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "By",
+					"access": "tree"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Options",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "15736FB4-A5A1-48AD-B0EE-A9193DB08DA8",
 			"class": "GH_MaterialPreset",
 			"file": "Plugin/Selva.GH/Features/Display/Components/GH_MaterialPreset.cs",
@@ -763,6 +787,11 @@
 				{
 					"kind": "AddTextParameter",
 					"name": "Section",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Options",
 					"access": "tree"
 				}
 			],
@@ -1578,35 +1607,6 @@
 				{
 					"kind": "AddGenericParameter",
 					"name": "Drawing",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "6C1E2B7A-4D3F-4E8B-9A15-2F7C0D6E8B31",
-			"class": "GH_OptionsByComponent",
-			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_OptionsByComponent.cs",
-			"inputs": [
-				{
-					"kind": "AddTextParameter",
-					"name": "Options",
-					"access": "tree"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "By",
-					"access": "tree"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Keys",
-					"access": "tree"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Options",
 					"access": "item"
 				}
 			]

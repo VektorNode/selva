@@ -14,6 +14,7 @@ import {
 } from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
+import { KEEPALIVE_REQUEST_HEADERS, unwrapKeepalive } from './keepalive.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -45,6 +46,12 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	onSessionExpired?: () => void;
 	/** Where the server redirects an expired session. Default `/login`. */
 	loginPath?: string;
+	/**
+	 * Ask the server to hold a long solve open with keep-alive bytes, so a reverse proxy's read
+	 * timeout can't cut it. A server without support ignores the ask. Sends a `Prefer` header,
+	 * which a cross-origin endpoint must allow in CORS. Default `false`.
+	 */
+	keepalive?: boolean;
 }
 
 /** Applied to a 429 that names no wait. */
@@ -154,7 +161,8 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {})
+					...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
+					...(opts.keepalive ? KEEPALIVE_REQUEST_HEADERS : {})
 				},
 				body: payload,
 				signal
@@ -179,6 +187,17 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 
 		const redirectedToLogin =
 			res.redirected && new URL(res.url).pathname === (opts.loginPath ?? '/login');
+		try {
+			res = await unwrapKeepalive(res);
+		} catch (err) {
+			if (signal.aborted) {
+				log('[Compute] solve aborted while the server held it — empty result discarded');
+				return { outputs: {} };
+			}
+			throw new Error('The connection dropped while waiting for the result. Please try again.', {
+				cause: err
+			});
+		}
 		if (res.status === 401 || redirectedToLogin) {
 			opts.onSessionExpired?.();
 			throw sessionExpiredError();

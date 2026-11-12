@@ -43,13 +43,14 @@ Set on the compute server and read from it per server (see `/admin/compute`):
 | `--timeout` / `RHINO_COMPUTE_TIMEOUT`                   | 100 s   | Longest single solve. Selva aborts 5 s after it, and never past an hour.    |
 | `--max-request-size` / `RHINO_COMPUTE_MAX_REQUEST_SIZE` | 50 MB   | Largest solve request. Over it, the solve returns **413** naming the limit. |
 
+Selva takes solve requests up to the largest `RHINO_COMPUTE_MAX_REQUEST_SIZE` a reached server reports, and up to 256 MB before it has reached one. `BODY_SIZE_LIMIT` must be at least that: `/admin/system` warns when it is lower.
+
 A server that doesn't report them (standard rhino.compute, or an older fork) is assumed to run the defaults.
 
 Fixed in code, not configurable:
 
 | Cap                 | Value  | Guards                                                                      |
 | ------------------- | ------ | --------------------------------------------------------------------------- |
-| Solve request body  | 256 MB | `/api/v1/compute` request. `BODY_SIZE_LIMIT` must be at least this.         |
 | Solve response body | 300 MB | `/api/v1/compute` response, under Node's ~512 MB string limit. Over is 413. |
 | Cover image upload  | 10 MB  | Project and org images.                                                     |
 | Remote `.gh` fetch  | 30 s   | Deadline on fetching a definition from a URL.                               |

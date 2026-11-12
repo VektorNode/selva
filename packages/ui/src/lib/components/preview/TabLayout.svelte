@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
+	import type { OptionMedia, UISchema, SupportedTypes } from '@selvajs/schemas';
 	import { getLayoutItems } from '@selvajs/schemas';
 	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import TabBar from './TabBar.svelte';
@@ -75,6 +75,17 @@
 		return leads;
 	});
 
+	// A repeated input draws its own dropdowns, so its option pictures are handed over by input id.
+	const memberMedia = $derived.by(() => {
+		const media: Record<string, Record<string, OptionMedia>> = {};
+		for (const item of getLayoutItems(schema)) {
+			if (item.type !== 'input') continue;
+			const config = item.config as { optionMedia?: Record<string, OptionMedia> } | undefined;
+			if (config?.optionMedia) media[item.paramId] = config.optionMedia;
+		}
+		return media;
+	});
+
 	const memberLabels = $derived.by(() => {
 		const labels: Record<string, string> = {};
 		for (const input of schema.inputs) labels[input.id] = input.nickname;
@@ -147,6 +158,7 @@
 				{formModel}
 				{repeatLeads}
 				{memberLabels}
+				{memberMedia}
 				assets={schema.assets}
 				{bare}
 			/>

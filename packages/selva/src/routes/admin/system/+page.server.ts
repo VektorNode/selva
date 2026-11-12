@@ -9,7 +9,6 @@ import {
 	RATE_LIMIT_MAX_REQUESTS,
 	MAX_DEFINITION_FILE_SIZE,
 	MAX_IMAGE_FILE_SIZE,
-	COMPUTE_REQUEST_MAX_BYTES,
 	COMPUTE_RESPONSE_MAX_BYTES,
 	REMOTE_DEFINITION_MAX_BYTES,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
@@ -17,6 +16,7 @@ import {
 	COMPUTE_DEFINITION_CACHE_BYTES,
 	COMPUTE_SOLVE_CACHE_BYTES
 } from '#lib/server/computeLimits.js';
+import { computeRequestCap } from '#lib/server/compute/engine.server.js';
 import { dev } from '$app/env';
 import {
 	getChangesSinceLastBoot,
@@ -62,7 +62,7 @@ export const load: PageServerLoad = async ({ locals, fetch, request, url }) => {
 		RATE_LIMIT_MAX_REQUESTS,
 		MAX_DEFINITION_FILE_SIZE,
 		MAX_IMAGE_FILE_SIZE,
-		COMPUTE_REQUEST_MAX_BYTES,
+		COMPUTE_REQUEST_MAX_BYTES: computeRequestCap(),
 		COMPUTE_RESPONSE_MAX_BYTES,
 		REMOTE_DEFINITION_MAX_BYTES,
 		REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
@@ -117,7 +117,7 @@ async function configView(request: Request, url: URL) {
 		checks: getConfigChecks({
 			atRestOnPreviousKey,
 			request: facts,
-			computeRequestMaxBytes: COMPUTE_REQUEST_MAX_BYTES,
+			computeRequestMaxBytes: computeRequestCap(),
 			dev
 		})
 	};

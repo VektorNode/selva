@@ -12,9 +12,18 @@ the schema there would mean rewriting it on every publish and rollback.
 
 ## What is cached
 
-Only the raw schema, exactly as Rhino.Compute's `/grasshopper/schema` returns it. The render
-path still calls `getIO` + `mergeComputeDefaults` to merge compute default values (including
-color→hex). Caching the merged result would bake defaults in at upload time.
+The schema Rhino.Compute's `/grasshopper/schema` returns, with the input values saved in the file
+(`/io`, colors as hex) as defaults. The embedded schema only holds the values from the author's
+last schema sync. The bytes are immutable, so the merged values are too.
+
+Upload merges them best-effort and gives `/io` 5 s past the schema. The render loader reads `/io`
+once per version per process, behind the render, and writes the row back when its defaults differ.
+Nothing on the row says it is merged, which is why every process reads once. A row from before the
+merge shows sync-time defaults on its first render only.
+
+The render never waits on Compute while the row holds a renderable schema. That matters for large
+definitions: `/io` sends the whole file, and a 5 MB `.gh` keeps it busy past a reverse proxy's
+timeout.
 
 ## Upload is a hard gate
 
@@ -33,9 +42,10 @@ The service itself does no compute work; it stores what the handler hands it.
 [ADR 0005](../adr/0005-uischema-version-and-disposable-schema-cache.md) made the cache
 disposable: the render loader (`@selvajs/server/definitions`, wired by
 [loadForRender.server.ts](../../packages/selva/src/lib/server/definitions/loadForRender.server.ts)) uses the cached
-schema only when its `schemaVersion` matches the app's `UI_SCHEMA_VERSION`. On mismatch it
-re-extracts from compute (which runs the C# migrator) and persists the refreshed schema back
-best-effort.
+schema as fresh only when its `schemaVersion` matches the app's `UI_SCHEMA_VERSION`. An older
+one still renders while the loader re-extracts from compute (which runs the C# migrator) and
+persists the refreshed schema back best-effort. Only a version with no renderable schema waits on
+the extract, for at most `renderWaitMs`, then answers 503 while the extract finishes for the retry.
 
 ## The backfill bridge (temporary)
 

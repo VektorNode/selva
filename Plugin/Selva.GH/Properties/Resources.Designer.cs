@@ -588,11 +588,23 @@ namespace Selva.GH.Properties
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap OptionsBy
+        internal static System.Drawing.Bitmap OptionsTable
         {
             get
             {
-                object obj = ResourceManager.GetObject("OptionsBy", resourceCulture);
+                object obj = ResourceManager.GetObject("OptionsTable", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap SolveMode
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("SolveMode", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }

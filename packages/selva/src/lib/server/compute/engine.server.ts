@@ -3,10 +3,10 @@
  * client cache, the definition-byte cache, and solve coalescing for the whole app.
  */
 
-import { SolveEngine, type CachedClient } from '@selvajs/solve/server';
+import { DEFAULT_SOLVE_DEADLINE_MS, SolveEngine, type CachedClient } from '@selvajs/solve/server';
 import { env } from '#lib/server/env.js';
 import { getLogger } from '#lib/server/providers.server.js';
-import { computeLimits } from '#lib/server/computeLimits.js';
+import { computeLimits, COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
 import { computeDebugMode } from '#lib/server/config/settings.js';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
@@ -38,6 +38,34 @@ export function getClient(serverConfig: ComputeServerConfig): Promise<CachedClie
 		serverUrl: serverConfig.serverUrl,
 		apiKey: serverConfig.apiKey
 	});
+}
+
+/**
+ * The solve deadline `server` reports, for the browser's AbortController. A cold client connects
+ * first, and a page must not wait on a slow Compute for it: past `waitMs` it gets the default.
+ * The connect carries on and warms the client for the first solve.
+ */
+export async function solveDeadlineFor(
+	serverConfig: ComputeServerConfig,
+	waitMs = 2_000
+): Promise<number> {
+	const fallback = new Promise<number>((resolve) => {
+		setTimeout(() => resolve(DEFAULT_SOLVE_DEADLINE_MS), waitMs).unref?.();
+	});
+	const reported = getClient(serverConfig).then(
+		({ limits }) => limits.solveDeadlineMs,
+		() => DEFAULT_SOLVE_DEADLINE_MS
+	);
+	return Promise.race([reported, fallback]);
+}
+
+/**
+ * The largest solve request Selva takes: the largest a warm compute server reports
+ * (`RHINO_COMPUTE_MAX_REQUEST_SIZE`), so that one setting drives both. Until a server has been
+ * reached, `COMPUTE_REQUEST_MAX_BYTES`. Each server still refuses what exceeds its own cap.
+ */
+export function computeRequestCap(): number {
+	return engine.largestReportedRequestBytes() ?? COMPUTE_REQUEST_MAX_BYTES;
 }
 
 /** Drop the warm client for a server whose config just changed (URL/key rotation or deletion). */

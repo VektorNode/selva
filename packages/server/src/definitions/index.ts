@@ -2,6 +2,7 @@ export { DefinitionService, type CreateDefinitionRecord } from './definition-ser
 
 export {
 	fetchSchemaFromCompute,
+	extractSchemaForUpload,
 	postSchemaFormData,
 	assertSupportedSchemaVersion,
 	assertCamelCaseSchema,

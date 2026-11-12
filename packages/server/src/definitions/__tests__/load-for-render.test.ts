@@ -2,6 +2,9 @@
  * Schema-staleness rule under test: a cached schema is used at the app's current
  * format version, or at an older one within the recheck window; anything else
  * re-extracts from compute and persists back, best-effort, unless it is newer.
+ *
+ * A stored schema renders without waiting on Compute; the saved values (`/io`)
+ * and any re-extract are read behind it.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -82,17 +85,39 @@ async function flushMicrotasks() {
 }
 
 describe('schema cache staleness (ADR 0005)', () => {
-	it('uses the cached schema when its version matches, without re-extracting or persisting', async () => {
+	it('serves the cached schema at once and reads the saved values behind it', async () => {
 		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
-		const { deps, mocks } = makeDeps();
+		const { deps, mocks, getIO } = makeDeps();
 		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
+		const load = createDefinitionLoader(deps);
 
-		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
+		const first = await load(ctx, record, 'live');
+		await flushMicrotasks();
+		const second = await load(ctx, record, 'live');
 
+		expect(first.schema).toBe(cached);
+		expect(second.schema.inputs[0]).toMatchObject({ default: 42 });
+		expect(getIO).toHaveBeenCalledTimes(1);
 		expect(mocks.fetchSchema).not.toHaveBeenCalled();
+		// The row lacked the saved value, so it is written back for the next process.
+		expect(mocks.definitions.setVersionSchema).toHaveBeenCalledWith(
+			ctx,
+			'v-live',
+			expect.objectContaining({ inputs: [{ id: 'a', default: 42 }] })
+		);
+	});
+
+	it('does not rewrite a row that already holds the saved values', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'a', default: 42 }]) })
+		);
+
+		await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(getIO).toHaveBeenCalledTimes(1);
 		expect(mocks.definitions.setVersionSchema).not.toHaveBeenCalled();
-		// Cached still means live defaults: getIO's `default: 42` is merged in.
-		expect((result.schema.inputs[0] as { default?: unknown }).default).toBe(42);
 	});
 
 	it('re-extracts and persists when the cached schema is at an older format version', async () => {
@@ -157,7 +182,7 @@ describe('schema cache staleness (ADR 0005)', () => {
 		expect(mocks.onWarn).toHaveBeenCalledTimes(1);
 	});
 
-	it('serves an older schema extracted within the recheck window without asking Compute', async () => {
+	it('serves an older schema extracted within the recheck window without re-extracting it', async () => {
 		const { deps, mocks } = makeDeps();
 		mocks.definitions.getVersion.mockResolvedValue(
 			version({ schema: uiSchema('2.10.0'), schemaExtractedAt: new Date().toISOString() })
@@ -301,20 +326,21 @@ describe('skipComputeDefaults', () => {
 		await createDefinitionLoader(deps)(ctx, record, 'live', null, {
 			skipComputeDefaults: true
 		});
+		await flushMicrotasks();
 
 		expect(mocks.fetchSchema).toHaveBeenCalled();
 	});
 
-	it('does not change behavior when the option is omitted', async () => {
+	it('without the option, a fresh cached schema is still read behind the render', async () => {
 		const cached = uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]);
 		const { deps, mocks, getIO } = makeDeps();
 		mocks.definitions.getVersion.mockResolvedValue(version({ schema: cached }));
 
-		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
+		await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
 
 		expect(mocks.getClient).toHaveBeenCalled();
 		expect(getIO).toHaveBeenCalled();
-		expect(result.schema.inputs[0]).toMatchObject({ default: 42 });
 	});
 });
 
@@ -470,22 +496,72 @@ describe('compute default merging', () => {
 	beforeEach(() => vi.clearAllMocks());
 
 	it('converts Color defaults to hex', async () => {
-		const { deps, mocks } = makeDeps({
-			getClient: vi.fn(async () => ({
-				client: {
-					getIO: vi.fn(async () => ({
-						inputs: [{ id: 'col', paramType: 'Color', default: '255,128,0' }],
-						outputs: []
-					})),
-					getRawIO: vi.fn()
-				}
-			}))
+		const { deps, mocks, getIO } = makeDeps({
+			fetchSchema: vi.fn(async () => uiSchema(UI_SCHEMA_VERSION, [{ id: 'col' }]))
 		});
-		mocks.definitions.getVersion.mockResolvedValue(
-			version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'col' }]) })
-		);
+		getIO.mockResolvedValue({
+			inputs: [{ id: 'col', paramType: 'Color', default: '255,128,0' }],
+			outputs: []
+		} as never);
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
 
 		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
 		expect((result.schema.inputs[0] as { default?: unknown }).default).toBe('#ff8000');
+	});
+});
+
+describe('waiting on Compute', () => {
+	const stored = () => version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]) });
+
+	it('renders a stored schema while /io hangs', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		getIO.mockImplementation(() => new Promise(() => {}));
+		mocks.definitions.getVersion.mockResolvedValue(stored());
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
+
+		expect(result.schema.inputs[0]).toMatchObject({ id: 'a' });
+	});
+
+	it("fails as 'connect' past renderWaitMs when nothing is stored, and a retry finds the read done", async () => {
+		let finish: (io: unknown) => void = () => {};
+		const { deps, mocks, getIO } = makeDeps({ renderWaitMs: 10 });
+		getIO.mockImplementation(() => new Promise((resolve) => (finish = resolve)) as never);
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+		const load = createDefinitionLoader(deps);
+
+		await expect(load(ctx, record, 'live')).rejects.toMatchObject({ kind: 'connect' });
+		finish({ inputs: [{ id: 'a', default: 7 }], outputs: [] });
+		await flushMicrotasks();
+		const retry = await load(ctx, record, 'live');
+
+		expect(retry.schema.inputs[0]).toMatchObject({ default: 7 });
+		expect(getIO).toHaveBeenCalledTimes(1);
+	});
+
+	it('concurrent loads share one Compute read', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(version({ schema: undefined }));
+		const load = createDefinitionLoader(deps);
+
+		await Promise.all([load(ctx, record, 'live'), load(ctx, record, 'live')]);
+
+		expect(getIO).toHaveBeenCalledTimes(1);
+		expect(mocks.fetchSchema).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not send the file again on every load after a background read failed', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		getIO.mockRejectedValue(new Error('Compute answered 500'));
+		mocks.definitions.getVersion.mockResolvedValue(stored());
+		const load = createDefinitionLoader(deps);
+
+		await load(ctx, record, 'live');
+		await flushMicrotasks();
+		await load(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(getIO).toHaveBeenCalledTimes(1);
+		expect(mocks.onWarn).toHaveBeenCalledWith(expect.stringContaining('background read failed'));
 	});
 });

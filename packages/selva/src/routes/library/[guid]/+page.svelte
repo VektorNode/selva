@@ -49,6 +49,7 @@
 		versionId: () => data.versionId,
 		streamId: () => liveEvents?.streamId ?? null,
 		bearerToken: () => data.shareToken,
+		keepalive: true,
 		meshes: shouldShowViewer()
 			? { extract: (response, opts) => getThreeObjectsFromComputeResponse(response, opts) }
 			: undefined,

@@ -64,8 +64,11 @@ async function solve(values: Record<string, unknown>) {
 	return outputs;
 }
 
+// Each line ends with the cabinet's price, which the form doesn't know.
 const resultLines = (outputs: Record<string, unknown>) =>
-	String(outputs[outputId('Cabinet list')] ?? '').split(/\r?\n/);
+	String(outputs[outputId('Cabinet list')] ?? '')
+		.split(/\r?\n/)
+		.map((line) => line.replace(/ · EUR \d+$/, ''));
 
 // The lines the result would read if it used the picks the form shows.
 function shownLines(values: Record<string, unknown>, outputs: Record<string, unknown>) {
@@ -103,14 +106,14 @@ describe.runIf(process.env.COMPUTE_CHECK)('kitchen run on rhino.compute', () => 
 			};
 
 			await step('1. page opens, no picks yet: every row takes its first option');
-			values[id('Fronts')] = withRowPick(values[id('Fronts')], 'back/drawers', 'Shaker drawers');
-			await step('2. Drawers -> Shaker drawers: its handles switch to the drawer handles');
+			values[id('Fronts')] = withRowPick(values[id('Fronts')], 'back/prep', 'Shaker drawers');
+			await step('2. Prep -> Shaker drawers: its handles switch to the drawer handles');
 			values[id('Style')] = 'Handleless';
 			const handleless = await step(
 				'3. Style -> Handleless: no picks sent, Grasshopper resolves them'
 			);
 			values[id('Style')] = 'Shaker';
-			await step('4. back to Shaker: Drawers shows Shaker drawers again');
+			await step('4. back to Shaker: Prep shows Shaker drawers again');
 			values[id('Layout')] = 'L-shaped';
 			const lShaped = await step('5. Layout -> L-shaped: rows change, picks follow their keys');
 
@@ -120,7 +123,7 @@ describe.runIf(process.env.COMPUTE_CHECK)('kitchen run on rhino.compute', () => 
 			expect(solves).toBe(5);
 			expect(handleless.every((l) => l.endsWith('Push door / None'))).toBe(true);
 			expect(lShaped).toHaveLength(6);
-			expect(lShaped).toContain('Drawers · Back wall: Shaker drawers / Cup pull');
+			expect(lShaped).toContain('Prep · Back wall: Shaker drawers / Cup pull');
 		}
 	);
 });
