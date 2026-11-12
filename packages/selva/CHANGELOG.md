@@ -1,5 +1,19 @@
 # @selvajs/selva
 
+## 4.21.0-beta.8
+
+### Patch Changes
+
+- 5c0adaf: A definition page no longer waits on Rhino.Compute when its version has a stored schema. The loader serves the stored schema at once and reads the file's saved input values (`/io`) behind it, so a large definition no longer holds the page past a reverse proxy's timeout (504). Concurrent loads share one read, and a failed read waits a minute before the next.
+
+  A version with no renderable stored schema waits at most `renderWaitMs` (default 20 s), then fails as `connect` (503) while the read finishes for the retry.
+
+  Uploads store the file's saved values as input defaults (`extractSchemaForUpload` in `@selvajs/server/definitions`). A version uploaded before this release shows the defaults from its last schema sync on its first render, until the background read lands.
+
+- 5c0adaf: A solve from the web app no longer depends on the reverse proxy's read timeout. With `keepalive: true`, `createComputeFetchSolveFn` sends `Prefer: selva-keepalive`, and `/api/v1/compute` answers 200 at once, holds the connection with a space every 15 s, then sends the real status, headers and body inside it. `@selvajs/solve/server` gains `wantsKeepalive` and `respondWithKeepalive` for other hosts. A server without support ignores the header.
+
+  Selva's solve request cap now follows the compute servers: the largest `RHINO_COMPUTE_MAX_REQUEST_SIZE` a reached server reports, 256 MB before one is reached. `SolveEngine.largestReportedRequestBytes()` exposes it. `BODY_SIZE_LIMIT` must be at least that; `/admin/system` warns when it is lower.
+
 ## 4.21.0-beta.7
 
 ### Patch Changes
