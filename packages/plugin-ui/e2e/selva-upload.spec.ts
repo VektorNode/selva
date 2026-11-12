@@ -38,6 +38,7 @@ test.describe('Upload to Selva', () => {
 
 		await page.locator('input[type="number"]').first().fill('3');
 		await expect(upload).toBeDisabled();
-		await expect(page.getByTitle('Save the schema first')).toBeVisible();
+		// Export as app carries the same title while the schema is unsaved.
+		await expect(page.getByTitle('Save the schema first').filter({ has: upload })).toBeVisible();
 	});
 });
