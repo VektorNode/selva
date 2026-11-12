@@ -9,6 +9,10 @@ import Darwin
 final class RhinoHost {
     // A cold Rhino on a slow disk: start, then load the panel plug-in and connect.
     private static let startTimeout: TimeInterval = 120
+
+    // How long a hidden Rhino gets before it is started again on screen. One that connects
+    // takes well under this, also on a cold machine.
+    private static let hiddenTimeout: TimeInterval = 30
     private static let quitTimeout: TimeInterval = 8
 
     /// A message from Rhino, as `AppHostProtocol` describes.
@@ -16,6 +20,9 @@ final class RhinoHost {
 
     /// Rhino couldn't be started, or went away. The message is for the user. Called once.
     var onFailed: ((String) -> Void)?
+
+    /// A hidden Rhino didn't connect, and Rhino is starting again on screen.
+    var onShown: (() -> Void)?
 
     private let state = NSLock()
     private let writing = NSLock()
@@ -154,7 +161,18 @@ final class RhinoHost {
                 return
             }
 
-            if tryStart(install.appURL) {
+            var start = tryStart(install.appURL, hidden: true)
+            if start == .silent {
+                // A hidden Rhino that never runs the command is waiting at a dialog: a licence
+                // prompt, or Rhino 9's "Preparing Plug-ins for First Use" after an install.
+                // Showing that Rhino doesn't help, because the dialog only works when Rhino
+                // came up on screen. So it starts again in sight, where the user can answer it,
+                // and the plug-in hides it once the open has ended.
+                DispatchQueue.main.async { self.onShown?() }
+                start = tryStart(install.appURL, hidden: false)
+            }
+
+            if start == .connected {
                 return
             }
         }
@@ -162,9 +180,19 @@ final class RhinoHost {
         fail("Rhino didn't start. Open Rhino once to check that it runs and has a licence, then try again.")
     }
 
-    private func tryStart(_ appURL: URL) -> Bool {
+    private enum Start {
+        case connected
+
+        /// Rhino couldn't be started, exited, or the app is quitting.
+        case failed
+
+        /// Rhino ran for the whole time allowed and never connected.
+        case silent
+    }
+
+    private func tryStart(_ appURL: URL, hidden: Bool) -> Start {
         guard let (listener, path) = Self.openSocket() else {
-            return false
+            return .failed
         }
 
         // One Rhino connects, once. The connection outlives both the listener and its path.
@@ -178,8 +206,8 @@ final class RhinoHost {
         // open would take the command line otherwise.
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.arguments = ["-nosplash", "-runscript=_-\(AppHostProtocol.command) \(path)"]
-        configuration.hides = true
-        configuration.activates = false
+        configuration.hides = hidden
+        configuration.activates = !hidden
         configuration.addsToRecentItems = false
         configuration.createsNewApplicationInstance = true
 
@@ -191,18 +219,24 @@ final class RhinoHost {
         }
         launched.wait()
         guard started > 0 else {
-            return false
+            return .failed
         }
 
         locked { rhino = started }
-        let deadline = Date().addingTimeInterval(Self.startTimeout)
+        let deadline = Date().addingTimeInterval(hidden ? Self.hiddenTimeout : Self.startTimeout)
         var waiting = pollfd(fd: listener, events: Int16(POLLIN), revents: 0)
         while poll(&waiting, 1, 250) <= 0 {
-            if locked({ quitting }) || !Self.isRunning(started) || Date() > deadline {
-                // Still running means it may be sitting on a dialog nobody can see.
+            let running = Self.isRunning(started)
+            if locked({ quitting }) || !running || Date() > deadline {
+                // A Mac runs one Rhino at a time: this one is gone before the next starts.
                 Self.forceStop(started)
+                let gone = Date().addingTimeInterval(5)
+                while Self.isRunning(started) && Date() < gone {
+                    usleep(100_000)
+                }
+
                 locked { rhino = 0 }
-                return false
+                return running && !locked({ quitting }) ? .silent : .failed
             }
         }
 
@@ -210,7 +244,7 @@ final class RhinoHost {
         guard accepted >= 0 else {
             Self.forceStop(started)
             locked { rhino = 0 }
-            return false
+            return .failed
         }
 
         // A write to a Rhino that has gone must fail, not end this app with SIGPIPE.
@@ -218,7 +252,7 @@ final class RhinoHost {
         setsockopt(accepted, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
         locked { connection = accepted }
         Thread.detachNewThread { [self] in readLoop(accepted) }
-        return true
+        return .connected
     }
 
     private func readLoop(_ connection: Int32) {

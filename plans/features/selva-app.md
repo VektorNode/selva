@@ -81,10 +81,16 @@ same messages to Rhino. `pnpm build:app:mac` builds `Selva.app`. What differs fr
 Checked live on Rhino 8: `open`, key from the keychain, a second file into the same window,
 quit, and a killed app (Rhino exits by itself).
 
-Rhino 9 behaves the same once it runs this plug-in, with one catch. After Selva is installed or
-updated, Rhino 9 shows "Preparing Plug-ins for First Use" at its next start. That dialog does
-its work only once it is on screen, so a hidden Rhino 9 waits at it for ever, and the app times
-out. Opening Rhino 9 once gets past it.
+A hidden Rhino can't be asked anything, and some starts need an answer: a licence prompt, or
+Rhino 9's "Preparing Plug-ins for First Use" after Selva was installed or updated. That dialog
+does its work only when Rhino came up on screen, and showing a Rhino that started hidden doesn't
+get it going. So when a hidden Rhino hasn't connected after 30 seconds, the app stops it and
+starts Rhino again in sight, and the progress page says so. The plug-in hides Rhino when the
+open has ended, with the session showing or an error. Not sooner: loading Grasshopper shows
+Rhino's windows again.
+
+Checked live on Rhino 9 in that state: the session shows about 40 seconds after the open, and
+Rhino stays out of sight from then on.
 
 ## The page in the app is a browser tab
 
@@ -178,11 +184,9 @@ of itself as the uninstaller.
 - **Rhino's Dock icon on a Mac.** Making Rhino an accessory app from the plug-in removes it, but
   that change also unhides Rhino. Hiding it again straight away held on Rhino 8 and failed about
   one start in four on Rhino 9, where Rhino's main window then stayed on screen.
-- **Rhino 9's first start after an install.** See "On a Mac". The app could show Rhino when it
-  hasn't connected after a few seconds, and the plug-in could hide it again once it has.
-- **Stray dialogs on a Mac.** The Mac app doesn't look for a dialog in the hidden Rhino as the
-  Windows app does. It times out, kills that Rhino and starts a new one on the next try, but
-  can't say which dialog it was.
+- **Stray dialogs on a Mac during an open.** A dialog Grasshopper raises while it reads the
+  definition (components from a missing plug-in) is hidden with Rhino. The open times out, the
+  app stops that Rhino and starts a new one on the next try, but can't say which dialog it was.
 - **Remembering the icon.** The export dialog keeps a picked icon until the page reloads. The
   page's origin changes with the session's port, so browser storage can't carry it further; the
   definition could.

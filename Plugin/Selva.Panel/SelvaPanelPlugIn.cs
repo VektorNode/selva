@@ -158,6 +158,7 @@ public class SelvaPanelPlugIn : PlugIn
 
         _app = link;
         Launcher.HostedByApp = true;
+
         link.OpenRequested += (path, key) => Launcher.Open(path, key);
         link.CloseRequested += Launcher.CloseDefinition;
         link.Ended += ExitRhino;
@@ -172,6 +173,20 @@ public class SelvaPanelPlugIn : PlugIn
             (AppHostProtocol.UrlField, url),
             (AppHostProtocol.SessionIdField, sessionId));
         Launcher.SessionShown();
+        HideOnMac();
+    }
+
+    /// <summary>
+    ///     The Mac app starts Rhino on screen when a hidden one didn't connect, so that what it
+    ///     asks can be answered. Once an open has ended, Rhino goes out of sight again. Not
+    ///     sooner: loading Grasshopper shows Rhino's windows again.
+    /// </summary>
+    private static void HideOnMac()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            MacApp.Hide();
+        }
     }
 
     /// <summary>The app draws what the idle panel would: each step of an open, and why one failed.</summary>
@@ -197,6 +212,7 @@ public class SelvaPanelPlugIn : PlugIn
             if (_reportedError != null)
             {
                 _app.Send(AppHostProtocol.Error, (AppHostProtocol.MessageField, _reportedError));
+                HideOnMac();
             }
         }
     }

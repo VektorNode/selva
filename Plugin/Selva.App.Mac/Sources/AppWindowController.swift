@@ -33,6 +33,10 @@ final class AppWindowController: NSObject {
     private var rhino: RhinoHost?
     private var rhinoReady = false
 
+    // What the progress page says while Rhino's own window is on screen; nil otherwise.
+    private var rhinoNotice: String?
+    private var step = AppWindowController.startingRhino
+
     // From startOpen until the session shows or the open fails.
     private var opening = false
 
@@ -188,7 +192,17 @@ final class AppWindowController: NSObject {
 
         if rhino == nil {
             rhinoReady = false
+            rhinoNotice = nil
             let host = RhinoHost()
+            host.onShown = { [weak self, weak host] in
+                if let self, self.rhino === host, !self.rhinoReady {
+                    self.rhinoNotice = "Rhino is taking a while to start, so it is starting again where you "
+                        + "can see it. If it asks something, answer it to go on."
+                    if self.opening {
+                        self.showOpening(self.step)
+                    }
+                }
+            }
             host.onMessage = { [weak self, weak host] message in
                 if let self, self.rhino === host {
                     self.onRhinoMessage(message)
@@ -206,8 +220,13 @@ final class AppWindowController: NSObject {
         if rhinoReady {
             sendOpen()
         } else {
-            setShell("opening", ["name": name, "step": Self.startingRhino])
+            showOpening(Self.startingRhino)
         }
+    }
+
+    private func showOpening(_ step: String) {
+        self.step = step
+        setShell("opening", ["name": name, "step": step, "dialog": rhinoNotice ?? NSNull()])
     }
 
     private func sendOpen() {
@@ -217,7 +236,7 @@ final class AppWindowController: NSObject {
             self?.onOpenTimedOut()
         }
 
-        setShell("opening", ["name": name, "step": Self.loadingGrasshopper])
+        showOpening(Self.loadingGrasshopper)
         rhino?.send(AppHostProtocol.open, [AppHostProtocol.pathField: path, AppHostProtocol.keyField: key])
     }
 
@@ -225,13 +244,14 @@ final class AppWindowController: NSObject {
         switch message[AppHostProtocol.typeField] {
         case AppHostProtocol.ready:
             rhinoReady = true
+            rhinoNotice = nil
             if opening {
                 sendOpen()
             }
 
         case AppHostProtocol.step:
             if let step = message[AppHostProtocol.stepField], opening {
-                setShell("opening", ["name": name, "step": step])
+                showOpening(step)
             }
 
         case AppHostProtocol.show:
