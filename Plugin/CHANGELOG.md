@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1-beta.1] - 2026-11-13
+
 ### Added
 
 - Preview solves, for a schema with `previewSolves` on. A Rhino.Compute solve sent as a preview skips each Selva file component whose every recipient is a Context Bake the layout shows only as a Download, and lists those outputs in the verdict's `deferred`. A file component that feeds a Download but also anything else is made every solve; on the canvas a remark says why.
