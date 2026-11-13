@@ -1,5 +1,21 @@
 # @selvajs/selva
 
+## 4.21.0-beta.9
+
+### Minor Changes
+
+- 28e2b9a: The updater refuses a release that cannot read the deployment's data, before it stops the app. Each release declares a data format (`selva.dataFormat` in `package.json`; 4.21.0 is format 2, releases without the field are format 1), and a target on a lower format than the installed one is refused with exit code 10. The System page shows the block instead of the Update button. Before, switching from a 4.21.0 beta back to 4.20.0 left stored Compute API keys unreadable. [Going back to an older release](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/deployment/admin.md#going-back-to-an-older-release) has the manual steps.
+
+  A boot whose database schema handshake fails no longer re-seals Compute API keys. The updater rolls that boot back to the previous version, which could not read keys already re-sealed.
+
+### Patch Changes
+
+- 28e2b9a: A Compute API key sealed by a newer Selva than the one running is no longer reported as plaintext. Both compute-server stores return the server without a key and log what happened, `verifySecrets` reports the new reason `unknown_envelope`, and system health and `selva update` name the downgrade. `@selvajs/platform/computeServer` gains `isUnknownEnvelope`.
+
+  `/admin/compute` can replace a key the local store cannot read. Reading keys for a save used to throw on a plaintext key, so the save that the error message asked for failed with a 500. Reads that use the key still throw on plaintext.
+
+  The CLI help and docs say that `npx selva` outside a deployment directory resolves to an unrelated npm package.
+
 ## 4.21.0-beta.8
 
 ### Patch Changes
