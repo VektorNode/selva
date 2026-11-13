@@ -205,10 +205,10 @@ describe('assertKeyNotRetargeted', () => {
 describe('assertStoredKeysReadable', () => {
 	const unreadable = [{ id: 'a', hasApiKey: true, apiKey: undefined }];
 
-	it('refuses to overwrite a key it could not decrypt by leaving it out', () => {
-		expect(() => assertStoredKeysReadable([{ id: 'a' }], unreadable)).toThrow(/SELVA_AT_REST_KEY/);
+	it('refuses to overwrite a key it could not read by leaving it out', () => {
+		expect(() => assertStoredKeysReadable([{ id: 'a' }], unreadable)).toThrow(/cannot be read/);
 		expect(() => assertStoredKeysReadable([{ id: 'a', apiKey: '' }], unreadable)).toThrow(
-			/SELVA_AT_REST_KEY/
+			/cannot be read/
 		);
 	});
 
