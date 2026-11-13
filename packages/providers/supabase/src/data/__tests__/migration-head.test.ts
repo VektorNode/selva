@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EXPECTED_MIGRATION_HEAD } from '../migrationHead.js';
+import { EXPECTED_MIGRATION_HEAD, REQUIRED_MIGRATION_HEAD } from '../migrationHead.js';
 
 const MIGRATIONS_DIR = join(
 	dirname(fileURLToPath(import.meta.url)),
@@ -29,5 +29,8 @@ describe('EXPECTED_MIGRATION_HEAD', () => {
 			.sort();
 		expect(stamps.length).toBeGreaterThan(0);
 		expect(EXPECTED_MIGRATION_HEAD).toBe(stamps[stamps.length - 1]);
+		// The floor names a real migration at or below the newest.
+		expect(stamps).toContain(REQUIRED_MIGRATION_HEAD);
+		expect(REQUIRED_MIGRATION_HEAD <= EXPECTED_MIGRATION_HEAD).toBe(true);
 	});
 });

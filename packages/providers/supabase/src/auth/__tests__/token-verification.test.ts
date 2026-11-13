@@ -214,3 +214,80 @@ describe('SupabaseAuthProvider — strict token verification', () => {
 		expect(result === null).toBe(disabled);
 	});
 });
+
+describe('SupabaseAuthProvider: sessions this process ended', () => {
+	beforeEach(() => vi.restoreAllMocks());
+
+	const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+	const JWT = `${b64({ alg: 'ES256' })}.${b64({ sub: 'user-1', session_id: 'sess-1' })}.sig`;
+
+	function warmProvider() {
+		const provider = new SupabaseAuthProvider({
+			supabaseUrl: URL,
+			anonKey: ANON,
+			serviceRoleKey: SERVICE,
+			revalidateMs: 60_000
+		});
+		const stub = stubAnonAuth(provider);
+		stub.getClaims.mockResolvedValue(okClaims());
+		stub.getUser.mockResolvedValue(okUser());
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const admin = (provider as any).admin.auth.admin;
+		admin.signOut = vi.fn(async () => ({ error: null }));
+		admin.getUserById = vi.fn(async () => ({ data: { user: { id: 'user-1' } }, error: null }));
+		admin.updateUserById = vi.fn(async () => ({ error: null }));
+		admin.deleteUser = vi.fn(async () => ({ error: null }));
+		return { provider, stub };
+	}
+
+	const gone = { data: { user: null }, error: { message: 'session not found' } };
+
+	it('rechecks a signed-out token on its next request, inside the window', async () => {
+		const { provider, stub } = warmProvider();
+		expect(await provider.verifyToken(JWT)).not.toBeNull();
+		expect(await provider.verifyToken(JWT)).not.toBeNull();
+		expect(stub.getUser).toHaveBeenCalledTimes(1);
+
+		await provider.sessionRefresh.revokeSession(JWT);
+		stub.getUser.mockResolvedValue(gone);
+
+		expect(await provider.verifyToken(JWT)).toBeNull();
+		expect(stub.getUser).toHaveBeenCalledTimes(2);
+	});
+
+	it.each(['disableUser', 'deleteUser'] as const)('rechecks after %s too', async (method) => {
+		const { provider, stub } = warmProvider();
+		expect(await provider.verifyToken(JWT)).not.toBeNull();
+
+		expect(await provider[method]('user-1')).toBe('ok');
+		stub.getUser.mockResolvedValue(gone);
+
+		expect(await provider.verifyToken(JWT)).toBeNull();
+	});
+
+	it('leaves other users on their own schedule', async () => {
+		const { provider, stub } = warmProvider();
+		await provider.verifyToken(JWT);
+		await provider.disableUser('someone-else');
+		await provider.verifyToken(JWT);
+		expect(stub.getUser).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not let a recheck in flight during a disable vouch for the session', async () => {
+		const { provider, stub } = warmProvider();
+		let now = 1_000;
+		vi.spyOn(Date, 'now').mockImplementation(() => now);
+		let answer!: (value: unknown) => void;
+		stub.getUser.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)));
+
+		const inFlight = provider.verifyToken(JWT);
+		now = 2_000;
+		expect(await provider.disableUser('user-1')).toBe('ok');
+		now = 3_000;
+		answer(okUser());
+		expect(await inFlight).not.toBeNull();
+
+		stub.getUser.mockResolvedValue(gone);
+		expect(await provider.verifyToken(JWT)).toBeNull();
+	});
+});

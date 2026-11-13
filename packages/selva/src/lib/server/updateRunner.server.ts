@@ -57,26 +57,36 @@ export function buildLauncher(
 	// expansion happens — the runner text is written verbatim.
 	return `
 LOGFILE=${shellQuote(logPath)}
-RUNNER=/tmp/selva-update-runner.sh
 mkdir -p "$(dirname "$LOGFILE")"
 : > "$LOGFILE"
 
-cat > "$RUNNER" <<'__SELVA_RUNNER_EOF__'
+# mktemp, never a fixed name: /tmp is shared, and a file another account left at
+# a known path survives the write below and would run as the app user.
+RUNNER=$(mktemp "\${TMPDIR:-/tmp}/selva-update-runner.XXXXXXXX") || {
+	echo "[ERROR] Could not create the update runner in \${TMPDIR:-/tmp}"
+	exit 1
+}
+cat > "$RUNNER" <<'__SELVA_RUNNER_EOF__' || { echo "[ERROR] Could not write the update runner"; exit 1; }
+rm -f "$0"
+for _ in $(seq 1 50); do
+  kill -0 "$SELVA_RUNNER_SPAWNER" 2>/dev/null || break
+  sleep 0.1
+done
 ${runnerScript}
 __SELVA_RUNNER_EOF__
-chmod +x "$RUNNER"
 
 trap '' PIPE
 exec > >(tee --output-error=warn-nopipe -a "$LOGFILE" 2>/dev/null) 2>&1
 ${echoes}
 
 # Daemonize the runner so PM2's tree-kill of selva-compute can't reach it.
-# setsid puts it in a new session; the trailing & + disown + launcher exit
-# leaves the runner with PPID=1 once we're gone. stdin/stdout/stderr are
-# fully detached from this process (and from selva-compute's pipes).
-setsid bash "$RUNNER" </dev/null >>"$LOGFILE" 2>&1 &
-RUNNER_PID=$!
-disown
+# When the runner calls pm2 stop, pm2 lists the app's descendants and SIGKILLs
+# whatever on that list outlives its kill timeout. A runner still parented to this
+# launcher is on the list: it died mid-update and left the app stopped whenever the
+# registry answered inside the pause below. So it is orphaned before it runs a
+# line: the subshell forks it and exits, and the runner waits for that exit.
+# setsid gives it its own session; its stdio is detached from selva-compute's pipes.
+RUNNER_PID=$( (SELVA_RUNNER_SPAWNER=$BASHPID setsid bash "$RUNNER" </dev/null >>"$LOGFILE" 2>&1 & echo $!) )
 echo "[INFO] Update runner started (PID $RUNNER_PID, log: $LOGFILE)"
 
 # Small pause so the runner has time to print its first line before SSE
@@ -461,14 +471,17 @@ PORT=$(grep "^PORT=" .env 2>/dev/null \\
 PORT=\${PORT:-3000}
 
 echo "[STEP] Health-probing the new process on port $PORT"
+# mktemp for the same reason as the runner itself: /tmp is shared. Without one
+# the probe still runs; only the rollback loses the body it names the cause from.
+HEALTH_BODY=$(mktemp "\${TMPDIR:-/tmp}/selva-health.XXXXXXXX") || HEALTH_BODY=
 HEALTHY=0
 for i in $(seq 1 15); do
   sleep 2
-  CODE=$(curl -sS -o /tmp/selva-health.$$ -w "%{http_code}" --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null || echo "000")
+  CODE=$(curl -sS -o "\${HEALTH_BODY:-/dev/null}" -w "%{http_code}" --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null || echo "000")
   if [ "$CODE" = "200" ]; then
     HEALTHY=1
     echo "[INFO] Health probe passed after \${i} attempt(s)"
-    rm -f /tmp/selva-health.$$
+    [ -n "$HEALTH_BODY" ] && rm -f "$HEALTH_BODY"
     break
   fi
   echo "[INFO] Probe attempt $i/15: HTTP $CODE — retrying"
@@ -483,8 +496,8 @@ fi
 # 7. Rollback path.
 # ---------------------------------------------------------------------------
 echo "[FATAL] New process failed health check after 30s"
-if [ -f /tmp/selva-health.$$ ]; then
-  BODY=$(cat /tmp/selva-health.$$)
+if [ -s "$HEALTH_BODY" ]; then
+  BODY=$(cat "$HEALTH_BODY")
   echo "[FATAL] Last response body:"
   echo "$BODY"
 
@@ -527,7 +540,7 @@ if [ -f /tmp/selva-health.$$ ]; then
     echo "[FATAL] \\\`pm2 logs selva-compute\\\` for what the new version failed on."
   fi
 
-  rm -f /tmp/selva-health.$$
+  rm -f "$HEALTH_BODY"
 fi
 
 if [ -z "$BEFORE" ]; then

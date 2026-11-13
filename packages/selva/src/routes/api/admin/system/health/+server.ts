@@ -117,6 +117,17 @@ function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
 		};
 	}
 
+	// Ok with a message: the app runs, and migrations it ships are still to push.
+	if (report.ok && report.message) {
+		return {
+			...base,
+			status: 'degraded',
+			summary: report.message,
+			remediation:
+				'Sync the provider migrations into your Supabase project and run `npx supabase db push`.'
+		};
+	}
+
 	if (report.ok) {
 		return {
 			...base,

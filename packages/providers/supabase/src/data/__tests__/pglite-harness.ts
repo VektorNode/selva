@@ -23,7 +23,7 @@ const MIGRATIONS_DIR = join(
 const SUPABASE_STUBS = `
 	create role anon nologin;
 	create role authenticated nologin;
-	create role service_role nologin;
+	create role service_role nologin bypassrls;
 	create role authenticator nologin;
 	create role supabase_auth_admin nologin;
 
@@ -168,8 +168,8 @@ export async function seedDefinition(
 		await db.query(
 			`insert into selva.definition_versions
 				(id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by)
-			 values ($1, $2, 1, 'gh', 'k', 'd.gh', $3)`,
-			[version, guid, owner]
+			 values ($1, $2, 1, 'gh', $4, 'd.gh', $3)`,
+			[version, guid, owner, `definitions/${guid}/versions/v1.gh`]
 		);
 		await db.query(`update selva.definitions set live_version_id = $1 where guid = $2`, [
 			version,

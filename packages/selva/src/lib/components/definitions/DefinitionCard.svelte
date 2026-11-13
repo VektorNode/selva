@@ -157,6 +157,14 @@
 				{#each record.tags.slice(0, 3) as tag (tag)}
 					<span class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">{tag}</span>
 				{/each}
+				{#if record.tags.length > 3}
+					<span
+						class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs"
+						title={record.tags.slice(3).join(', ')}
+					>
+						+{record.tags.length - 3}
+					</span>
+				{/if}
 			</div>
 		{/if}
 

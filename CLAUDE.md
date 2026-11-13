@@ -186,6 +186,11 @@ pnpm dev:local              # local provider (filesystem + password)
 pnpm dev:supabase           # Supabase CLI stack (Docker)
 pnpm dev:header             # forward-auth, the path Entra reaches (Caddy)
 
+# The built app as an operator installs it: published to a throwaway registry,
+# scaffolded by the CLI, under pm2 behind Caddy in Docker. `pnpm stage publish`
+# then offers a real self-update. scripts/develop/STAGING.md
+pnpm stage local            # or: supabase, header
+
 pnpm build                  # every package in dep order, cached
 pnpm build --filter=@selvajs/selva
 pnpm run build:plugin       # production .gha with embedded web assets

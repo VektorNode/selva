@@ -21,6 +21,7 @@ import {
 	getErrorReporter,
 	getEventSink,
 	getLogger,
+	getSolveMetricSink,
 	lazyLogger
 } from '#lib/server/providers.server.js';
 import { signInMaxAgeMs } from '#lib/server/signInMaxAge.server.js';
@@ -47,6 +48,8 @@ import { closeAllSolveEventStreams } from '#lib/server/solveEvents/sse.server.js
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '#lib/server/selfUpdate.server.js';
 import {
 	bootstrapUserSession,
+	hasSetupProof,
+	identifyWithSetupProof,
 	wireHeaderAuthBootstrap
 } from '#lib/server/auth-bootstrap.server.js';
 import {
@@ -78,8 +81,32 @@ export const init: ServerInit = () => {
 	if (!dev) {
 		process.once('SIGINT', closeAllSolveEventStreams);
 		process.once('SIGTERM', closeAllSolveEventStreams);
+		process.once('sveltekit:shutdown', () => void exitAfterShutdown());
 	}
 };
+
+const SHUTDOWN_FLUSH_MS = 3000;
+
+/**
+ * adapter-node closes the HTTP server on SIGINT or SIGTERM, emits this event and
+ * then waits for the event loop to empty. Here it never does (limiter sweeps,
+ * caches, the solve-event bus), so the process sat until pm2's kill timeout and
+ * was SIGKILLed: ten seconds on every stop, restart and update, and the metric
+ * sink's last batch lost. Bounded, so a dead database cannot hold the exit.
+ */
+async function exitAfterShutdown(): Promise<void> {
+	const sink = getSolveMetricSink() as { close?: () => Promise<void> };
+	try {
+		await Promise.race([
+			sink.close?.(),
+			new Promise((resolve) => setTimeout(resolve, SHUTDOWN_FLUSH_MS))
+		]);
+	} catch {
+		// Exiting anyway: a failed flush is not a reason to wait for the SIGKILL.
+	} finally {
+		process.exit(0);
+	}
+}
 
 // One-way transition (zero users → at least one). Once true, permanent —
 // caching it skips a per-request listUsers DB read after the first user exists.
@@ -440,13 +467,17 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 		// upstream-proxy signals (Caddy forward_auth, oauth2-proxy, etc.) get a
 		// chance to identify the request. See IProxyAuth for the trust contract.
 		let user = session?.user ?? null;
-		if (!user && providers.auth.proxyAuth) {
-			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
+		const proxyAuth = providers.auth.proxyAuth;
+		if (!user && proxyAuth) {
+			const setupProven = hasSetupProof(event.cookies);
+			user = await identifyWithSetupProof(setupProven, () =>
+				proxyAuth.identifyFromHeaders(event.request.headers)
+			);
 			// First-admin bootstrap for forward-auth deployments: OAuth and
 			// email-link callbacks call `bootstrapUserSession` themselves, but the
 			// proxy-auth path has no callback. Internally gated by `hasInstanceAdmin`
 			// and a no-op once an admin exists, so safe on every authed request.
-			if (user) await bootstrapUserSession(user);
+			if (user) await bootstrapUserSession(user, setupProven);
 		}
 
 		if (!user && carriesShareToken(event.request, event.url)) {

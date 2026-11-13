@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { getAuthProvider } from '#lib/server/providers.server.js';
-import { bootstrapUserSession } from '#lib/server/auth-bootstrap.server.js';
+import { bootstrapUserSession, hasSetupProof } from '#lib/server/auth-bootstrap.server.js';
 import { consumeOAuthState } from '#lib/server/auth/oauthState.server.js';
 import {
 	safeRedirectTarget,
@@ -41,7 +41,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const result = await oauth.exchangeOAuthCode(code);
 	if (!result) apiError(401, ApiErrorCode.UNAUTHORIZED, 'OAuth exchange failed');
 
-	await bootstrapUserSession(result.user);
+	await bootstrapUserSession(result.user, hasSetupProof(cookies));
 
 	setSessionCookie(cookies, result.sessionToken);
 	setRefreshCookie(cookies, result.refreshToken);

@@ -1,16 +1,20 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { randomUUID } from 'node:crypto';
+import { dev } from '$app/env';
 import type { Actions, PageServerLoad } from './$types';
 import {
 	ALL_PLATFORM_PERMISSIONS,
 	SYSTEM_CONTEXT,
+	actorFrom,
 	type Organization,
 	type Project
 } from '@selvajs/platform';
+import { isSetupToken, setupToken } from '@selvajs/platform/config';
 import { renderThrown } from '@selvajs/server/logging';
 import { getAuthProvider } from '#lib/server/providers.server.js';
 import {
 	getDataProvider,
+	getEventSink,
 	getOrganizationProvider,
 	getPermissionStore,
 	getProjectProvider,
@@ -18,27 +22,50 @@ import {
 	getTenancy
 } from '#lib/server/providers.server.js';
 import { setSessionCookie } from '#lib/server/admin-auth.server.js';
-import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { hasSetupProof, rememberSetupProof } from '#lib/server/auth-bootstrap.server.js';
 import { orgSlugFromName, slugify } from '@selvajs/platform';
 import { env } from '#lib/server/env.js';
 
 // Redirect away if a platform admin already exists — setup is only for a
 // fresh install. Uses the permission store directly (works for OIDC providers
 // that can't enumerate users via `listUsers`).
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ url, cookies }) => {
 	const hasAdmin = await getPermissionStore().hasInstanceAdmin(SYSTEM_CONTEXT);
 	if (hasAdmin) {
 		redirect(303, '/login');
 	}
 
 	const auth = getAuthProvider();
+	const hasPasswordAuth = Boolean(auth.passwordAuth);
+	const hasEmailLink = Boolean(auth.emailLink);
+	const oauthProviders = auth.oauth?.listProviders() ?? [];
+	const proxyOnly =
+		Boolean(auth.proxyAuth) && !hasPasswordAuth && !hasEmailLink && oauthProviders.length === 0;
+
+	const hmacKey = env.SELVA_HMAC_KEY;
+	const fromUrl = url.searchParams.get('token');
+	// The cookie carries the proof to the sign-in callbacks, and back here after
+	// a sign-in that failed.
+	let token: string | null = null;
+	if (hmacKey && fromUrl && isSetupToken(fromUrl, hmacKey)) {
+		token = fromUrl;
+		rememberSetupProof(cookies, token);
+	} else if (hmacKey && hasSetupProof(cookies)) {
+		token = setupToken(hmacKey);
+	}
 
 	return {
-		hasPasswordAuth: Boolean(auth.passwordAuth),
-		hasEmailLink: Boolean(auth.emailLink),
+		hasPasswordAuth,
+		hasEmailLink,
 		hasProxyAuth: Boolean(auth.proxyAuth),
-		bootstrapEmail: env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? null,
-		oauthProviders: auth.oauth?.listProviders() ?? []
+		pinned: Boolean(env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim()),
+		// Page data is public. The pinned address goes out only where the page
+		// shows it: a proxy sign-in proves the email, a password form does not.
+		bootstrapEmail: proxyOnly ? (env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? null) : null,
+		oauthProviders,
+		setupToken: token,
+		// A dev server is not a deployment: spare the trip to the CLI.
+		devSetupToken: dev && hmacKey && !token ? setupToken(hmacKey) : null
 	};
 };
 
@@ -53,6 +80,16 @@ export const actions = {
 
 		const tenancy = getTenancy();
 		const data = await request.formData();
+
+		// The email below is typed, not proven, so it cannot be what admits the
+		// caller. The token can: it takes read access to the deployment's .env.
+		const hmacKey = env.SELVA_HMAC_KEY;
+		if (!hmacKey || !isSetupToken(data.get('token') as string | null, hmacKey)) {
+			return fail(403, {
+				error: 'Open the setup link that `npx selva setup-url` prints on the server.'
+			});
+		}
+
 		const companyName = (data.get('companyName') as string | null)?.trim() ?? '';
 		const displayName = (data.get('displayName') as string | null)?.trim() || undefined;
 		const email = data.get('email') as string | null;
@@ -73,8 +110,7 @@ export const actions = {
 			return fail(400, { error: 'Valid email is required' });
 		}
 		// Same rule as the OAuth and proxy bootstrap: when the operator pinned an
-		// admin email, only that address may claim the empty instance. Unpinned,
-		// whoever reaches /setup first owns it.
+		// admin email, only that address may claim the empty instance.
 		const pinnedEmail = env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim().toLowerCase();
 		if (pinnedEmail && email.trim().toLowerCase() !== pinnedEmail) {
 			return fail(403, { error: 'Setup is restricted to the configured admin email.' });
@@ -104,11 +140,60 @@ export const actions = {
 		try {
 			user = await passwordAuth.createUserWithPassword(email, password);
 			await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
-			await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [...ALL_PLATFORM_PERMISSIONS]);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
 			return fail(500, { error: msg });
 		}
+
+		// The account would be a user with no permissions and no org. Erasure before
+		// the identity, as DELETE /api/admin/users/[id] does.
+		const newUserId = user.id;
+		const discardAccount = async () => {
+			await getDataProvider()
+				.onUserDeleted(SYSTEM_CONTEXT, newUserId, { email })
+				.catch((err: unknown) => {
+					locals.log.error('Erasing the unclaimed setup account failed', {
+						component: 'setup',
+						userId: newUserId,
+						err: renderThrown(err)
+					});
+				});
+			await getAuthProvider()
+				.deleteUser(newUserId)
+				.catch((err: unknown) => {
+					locals.log.error('Deleting the unclaimed setup account failed', {
+						component: 'setup',
+						userId: newUserId,
+						err: renderThrown(err)
+					});
+				});
+		};
+
+		// `claimFirstInstanceAdmin`, not `set`: the probe at the top and this write
+		// are several awaits apart, so two setups posted together can both pass it.
+		const permissions = [...ALL_PLATFORM_PERMISSIONS];
+		let claimed: boolean;
+		try {
+			claimed = await getPermissionStore().claimFirstInstanceAdmin(
+				SYSTEM_CONTEXT,
+				user.id,
+				permissions
+			);
+		} catch (err) {
+			locals.log.error('Admin claim failed', { component: 'setup', err: renderThrown(err) });
+			await discardAccount();
+			return fail(500, { error: 'Setup failed before the admin was created. Try again.' });
+		}
+		if (!claimed) {
+			await discardAccount();
+			return fail(403, { error: 'This instance is already set up.' });
+		}
+		await getEventSink().emit({
+			type: 'platform_permissions.changed',
+			userId: user.id,
+			permissions,
+			actorId: actorFrom(SYSTEM_CONTEXT)
+		});
 
 		// Everything below is best-effort: once the admin exists, `load()` will
 		// redirect future visitors away from /setup, so we must finish the flow

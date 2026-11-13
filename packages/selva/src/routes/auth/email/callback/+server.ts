@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { getAuthProvider } from '#lib/server/providers.server.js';
-import { bootstrapUserSession } from '#lib/server/auth-bootstrap.server.js';
+import { bootstrapUserSession, hasSetupProof } from '#lib/server/auth-bootstrap.server.js';
 import {
 	safeRedirectTarget,
 	setSessionCookie,
@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	if (!result)
 		apiError(401, ApiErrorCode.UNAUTHORIZED, 'This sign-in link is invalid or has expired.');
 
-	await bootstrapUserSession(result.user);
+	await bootstrapUserSession(result.user, hasSetupProof(cookies));
 
 	setSessionCookie(cookies, result.sessionToken);
 	if (result.refreshToken) setRefreshCookie(cookies, result.refreshToken);

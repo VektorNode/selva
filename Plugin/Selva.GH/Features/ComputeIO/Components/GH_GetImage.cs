@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using Grasshopper.Kernel;
+using Rhino;
 using Selva.FileIO;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
@@ -43,7 +44,8 @@ public class GetImageParameter : SelvaContextualParameter<FileInputGoo>
     protected override IEnumerable<FileInputGoo> FromContextual(object value)
     {
         var fileData = FileInputParser.Parse(value);
-        var problem = FileInputParser.Validate(fileData, ImageInputResolver.AcceptedFormats);
+        var problem = FileInputParser.Validate(fileData, ImageInputResolver.AcceptedFormats)
+                      ?? fileData.ProblemAsRequestInput(RhinoApp.IsRunningHeadless);
         if (problem != null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, problem);

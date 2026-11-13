@@ -15,8 +15,11 @@
 //   1  Through 4.20.0, which declares no number.
 //   2  4.21.0. Boot re-seals Compute API keys as `enc:v3:`, which format 1
 //      reports as plaintext and refuses to use.
+//   3  4.21.0. Supabase only: sessions lose every write on `selva` tables and the
+//      stores write with the service role. An older build writes as the user,
+//      so on the migrated schema each of its writes is refused.
 
-export const DATA_FORMAT = 2;
+export const DATA_FORMAT = 3;
 
 /** The format a published `package.json` declares. None means format 1. */
 export function declaredDataFormat(pkg: unknown): number {

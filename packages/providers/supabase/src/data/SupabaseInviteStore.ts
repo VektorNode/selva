@@ -20,8 +20,8 @@ const INVITE_COLUMNS =
  * unauthenticated caller (still validating an invite link) can resolve it
  * without RLS blocking them. The raw token is hashed at the route layer
  * (`invites/token.server.ts` in the selva app); this store only ever sees the
- * HMAC digest. Other operations go through the normal REST API, with RLS
- * enforcing `manage_org_members`.
+ * HMAC digest. Reads run as the caller, where RLS asks for `manage_org_members`;
+ * writes run as the service role.
  */
 export class SupabaseInviteStore implements IInviteStore {
 	constructor(
@@ -30,10 +30,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	) {}
 
 	async create(ctx: RequestContext, invite: Invite): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('invites')
-			.insert(inviteToRow(invite));
+		const { error } = await this.clients.serviceClient.from('invites').insert(inviteToRow(invite));
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'invite.created',
@@ -74,8 +71,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
 		// `.is('accepted_at', null)` makes this the claim: a second call matches nothing.
 		const now = new Date().toISOString();
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('invites')
 			.update({ accepted_at: now, accepted_by_user_id: userId })
 			.eq('id', id)
@@ -96,8 +92,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	}
 
 	async reopen(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('invites')
 			.update({ accepted_at: null, accepted_by_user_id: null })
 			.eq('id', id)
@@ -108,8 +103,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('invites')
 			.delete()
 			.eq('id', id)
@@ -129,8 +123,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	async revokePendingByEmail(ctx: RequestContext, orgId: string, email: string): Promise<string[]> {
 		// Emails are stored lowercase at mint time; normalize the needle too so an
 		// offboarding call with the address as the admin typed it still matches.
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('invites')
 			.delete()
 			.eq('org_id', orgId)
@@ -151,11 +144,7 @@ export class SupabaseInviteStore implements IInviteStore {
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('invites')
-			.delete()
-			.eq('org_id', orgId);
+		const { error } = await this.clients.serviceClient.from('invites').delete().eq('org_id', orgId);
 		if (error) throw mapPostgrestError(error);
 	}
 }

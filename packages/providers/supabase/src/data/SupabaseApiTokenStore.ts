@@ -30,10 +30,7 @@ export class SupabaseApiTokenStore implements IApiTokenStore {
 	) {}
 
 	async create(ctx: RequestContext, token: ApiToken): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('api_tokens')
-			.insert(tokenToRow(token));
+		const { error } = await this.clients.serviceClient.from('api_tokens').insert(tokenToRow(token));
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'api_token.created',
@@ -91,8 +88,7 @@ export class SupabaseApiTokenStore implements IApiTokenStore {
 
 	async revoke(ctx: RequestContext, id: string, reason: ApiTokenRevokeReason): Promise<void> {
 		// `.is('revoked_at', null)` keeps the first revocation time and makes a repeat a no-op.
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('api_tokens')
 			.update({ revoked_at: new Date().toISOString() })
 			.eq('id', id)
@@ -107,8 +103,7 @@ export class SupabaseApiTokenStore implements IApiTokenStore {
 		userId: string,
 		opts: { orgId?: string; reason: ApiTokenRevokeReason }
 	): Promise<string[]> {
-		let query = this.clients
-			.forRequest(ctx)
+		let query = this.clients.serviceClient
 			.from('api_tokens')
 			.update({ revoked_at: new Date().toISOString() })
 			.eq('user_id', userId)
@@ -122,8 +117,7 @@ export class SupabaseApiTokenStore implements IApiTokenStore {
 	}
 
 	async touchLastUsed(ctx: RequestContext, id: string, at: string): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('api_tokens')
 			.update({ last_used_at: at })
 			.eq('id', id);
@@ -146,8 +140,7 @@ export class SupabaseApiTokenStore implements IApiTokenStore {
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('api_tokens')
 			.delete()
 			.eq('org_id', orgId);

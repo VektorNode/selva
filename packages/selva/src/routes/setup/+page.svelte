@@ -10,8 +10,11 @@
 		hasPasswordAuth: boolean;
 		hasEmailLink: boolean;
 		hasProxyAuth: boolean;
+		pinned: boolean;
 		bootstrapEmail: string | null;
 		oauthProviders: string[];
+		setupToken: string | null;
+		devSetupToken: string | null;
 	}
 
 	interface Props {
@@ -21,10 +24,24 @@
 
 	let { form, data }: Props = $props();
 
+	const hasIdp = $derived(data.oauthProviders.length > 0 || data.hasEmailLink || data.hasProxyAuth);
+	const proxyOnly = $derived(
+		data.hasProxyAuth &&
+			!data.hasPasswordAuth &&
+			!data.hasEmailLink &&
+			data.oauthProviders.length === 0
+	);
+	// An IdP sign-in proves the pinned email. Without a pin only the setup link
+	// proves anything; the password form always needs it.
+	const idpCanClaim = $derived(data.pinned || data.setupToken !== null);
+	const passwordCanClaim = $derived(data.hasPasswordAuth && data.setupToken !== null);
+	const needsLink = $derived(
+		data.setupToken === null && (data.hasPasswordAuth || (hasIdp && !data.pinned))
+	);
+
 	function oauthHref(provider: string): string {
-		// First-OAuth-signin-becomes-admin: the callback grants instance_admin
-		// when no admin exists yet. Plain string concat — Svelte's lint flags
-		// a mutable URLSearchParams here.
+		// The callback grants instance_admin when no admin exists yet. Plain string
+		// concat — Svelte's lint flags a mutable URLSearchParams here.
 		return `/auth/supabase/start?provider=${encodeURIComponent(provider)}&redirectTo=%2Fadmin`;
 	}
 
@@ -58,10 +75,38 @@
 			</Callout>
 		{/if}
 
-		{#if data.oauthProviders.length > 0}
+		{#if needsLink}
+			<Callout tone="info">
+				<p>
+					{#if data.pinned}
+						Creating the admin with a password needs the setup link.
+					{:else}
+						Claiming this instance needs the setup link.
+					{/if}
+					On the server, run <code>npx selva setup-url</code> and open the link it prints.
+				</p>
+				{#if hasIdp && !data.pinned}
+					<p class="mt-2">
+						Or set <code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> in <code>.env</code>, restart, and
+						sign in with that address.
+					</p>
+				{/if}
+				{#if data.devSetupToken}
+					<p class="mt-2">
+						<a class="underline" href="/setup?token={data.devSetupToken}">
+							Dev server: continue without the CLI
+						</a>
+					</p>
+				{/if}
+			</Callout>
+		{/if}
+
+		{#if idpCanClaim && data.oauthProviders.length > 0}
 			<div class="space-y-2">
 				<p class="text-muted-foreground text-center text-xs">
-					The first user to sign in becomes the platform admin.
+					{data.pinned
+						? 'Sign in with the configured admin email to become the platform admin.'
+						: 'Sign in from this browser to become the platform admin.'}
 				</p>
 				{#each data.oauthProviders as provider (provider)}
 					<a href={oauthHref(provider)} class="block">
@@ -73,7 +118,7 @@
 			</div>
 		{/if}
 
-		{#if data.hasEmailLink && data.oauthProviders.length > 0}
+		{#if idpCanClaim && data.hasEmailLink && data.oauthProviders.length > 0}
 			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
 				<div class="bg-border h-px flex-1"></div>
 				<span>or</span>
@@ -81,11 +126,12 @@
 			</div>
 		{/if}
 
-		{#if data.hasEmailLink}
+		{#if idpCanClaim && data.hasEmailLink}
 			<form method="POST" action="/auth/email/start?redirectTo=%2Fadmin" class="space-y-4">
 				<p class="text-muted-foreground text-center text-xs">
-					Sign in via email link. Set <code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> in your env to control
-					which address becomes admin.
+					{data.pinned
+						? 'Sign in via email link, with the configured admin email.'
+						: 'Sign in via email link, and open the link in this browser.'}
 				</p>
 				<div class="space-y-2">
 					<Label for="bootstrap-email">Email</Label>
@@ -101,7 +147,7 @@
 			</form>
 		{/if}
 
-		{#if data.hasPasswordAuth && (data.hasEmailLink || data.oauthProviders.length > 0)}
+		{#if passwordCanClaim && idpCanClaim && (data.hasEmailLink || data.oauthProviders.length > 0)}
 			<div class="text-muted-foreground flex items-center gap-2 text-xs uppercase">
 				<div class="bg-border h-px flex-1"></div>
 				<span>or</span>
@@ -109,8 +155,9 @@
 			</div>
 		{/if}
 
-		{#if data.hasPasswordAuth}
+		{#if passwordCanClaim}
 			<form method="POST" class="space-y-4">
+				<input type="hidden" name="token" value={data.setupToken} />
 				<div class="space-y-2">
 					<Label for="companyName">Company name</Label>
 					<Input id="companyName" name="companyName" type="text" required placeholder="Acme Corp" />
@@ -152,30 +199,26 @@
 			</form>
 		{/if}
 
-		{#if data.hasProxyAuth && !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
-			<div class="space-y-3">
-				<p class="text-muted-foreground text-sm">
-					This deployment authenticates via your upstream proxy (forward-auth). To claim admin, sign
-					in through the proxy with the email below — the first proxy-authenticated visit will be
-					granted instance admin automatically.
-				</p>
-				{#if data.bootstrapEmail}
-					<p class="text-sm">
-						Expected email: <code class="bg-muted rounded-sm px-1 py-0.5"
-							>{data.bootstrapEmail}</code
-						>
+		{#if proxyOnly}
+			{#if idpCanClaim}
+				<div class="space-y-3">
+					<p class="text-muted-foreground text-sm">
+						This deployment authenticates via your upstream proxy (forward-auth). Continue through
+						the proxy {data.pinned ? 'with the email below' : 'from this browser'}: that visit is
+						granted instance admin.
 					</p>
-				{:else}
-					<Callout tone="danger">
-						<code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> is unset. Set it in
-						<code>.env</code>, restart, and reload this page — otherwise the first
-						proxy-authenticated visitor would gain admin (and may not be you).
-					</Callout>
-				{/if}
-				<a href="/" class="block">
-					<Button type="button" variant="outline" class="w-full">Continue</Button>
-				</a>
-			</div>
+					{#if data.bootstrapEmail}
+						<p class="text-sm">
+							Expected email: <code class="bg-muted rounded-sm px-1 py-0.5"
+								>{data.bootstrapEmail}</code
+							>
+						</p>
+					{/if}
+					<a href="/" class="block">
+						<Button type="button" variant="outline" class="w-full">Continue</Button>
+					</a>
+				</div>
+			{/if}
 		{:else if !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
 			<Callout tone="danger">
 				No setup methods are configured. Configure password auth, email-link sign-in, or OAuth

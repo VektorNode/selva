@@ -169,8 +169,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('definitions')
 			.insert(recordToRow(record));
 		if (error) throw mapPostgrestError(error);
@@ -187,8 +186,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (Object.keys(row).length === 0) return;
 		Object.assign(row, stampUpdate(ctx));
 
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('definitions')
 			.update(row)
 			.eq('guid', guid)
@@ -202,15 +200,14 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Soft-delete, matching the local provider. A retention sweep running
 		// as service-role hard-deletes later, which cascades versions +
 		// share_links via FK.
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('definitions')
 			.update(stampSoftDelete(ctx))
 			.eq('guid', guid)
 			.is('deleted_at', null)
 			.select('guid');
 		if (error) throw mapPostgrestError(error);
-		// No row: already deleted, or RLS hid it. Neither is a deletion to record.
+		// No row: already deleted. Not a deletion to record.
 		if (!data || data.length === 0) return;
 		await this.events.emit({
 			type: 'definition.deleted',
@@ -223,8 +220,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Cascade from `deleteProject`. `select('guid')` returns the affected rows
 		// so we can emit a `definition.deleted` per record, matching the local
 		// provider and the single-`delete` path above.
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('definitions')
 			.update(stampSoftDelete(ctx))
 			.eq('project_id', projectId)
@@ -241,7 +237,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async incrementSolveCount(ctx: RequestContext, guid: string): Promise<void> {
-		const { error } = await this.clients.forRequest(ctx).rpc('increment_run_count', { g: guid });
+		const { error } = await this.clients.serviceClient.rpc('increment_run_count', { g: guid });
 		if (error) throw mapPostgrestError(error);
 	}
 
@@ -249,9 +245,9 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// Atomic reserve-and-increment in one SQL function — no read-modify-write
 		// race. Raises no_data_found (mapped to 404) when the definition is
 		// missing or soft-deleted.
-		const { data, error } = await this.clients
-			.forRequest(ctx)
-			.rpc('reserve_next_version_number', { g: guid });
+		const { data, error } = await this.clients.serviceClient.rpc('reserve_next_version_number', {
+			g: guid
+		});
 		if (error) throw mapPostgrestError(error);
 		if (typeof data !== 'number') {
 			throw new ProviderError(`Definition '${guid}' not found`, 404);
@@ -264,8 +260,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	// ============================================================================
 
 	async createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('definition_versions')
 			.insert(versionToRow(version));
 		if (error) throw mapPostgrestError(error);
@@ -330,8 +325,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 	}
 
 	async setVersionSchema(ctx: RequestContext, versionId: string, schema: UISchema): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('definition_versions')
 			.update({ schema, schema_extracted_at: new Date().toISOString() })
 			.eq('id', versionId);
@@ -342,8 +336,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		// live_version_id / draft_version_id are ON DELETE RESTRICT — if the
 		// version is referenced by either channel, Postgres raises 23503 →
 		// mapPostgrestError → ProviderError(409).
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('definition_versions')
 			.delete()
 			.eq('id', versionId);
@@ -384,7 +377,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		definitionId: string,
 		versionId: string
 	): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		// Duplicates repointChannel's ownership check rather than calling it,
 		// so the bootstrap path enforces the same invariant independently of
 		// the two-channel repoint logic.
@@ -426,7 +419,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		versionId: string,
 		column: 'live_version_id' | 'draft_version_id'
 	): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const { data: version, error: vError } = await client
 			.from('definition_versions')
 			.select('id, definition_guid')

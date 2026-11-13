@@ -34,7 +34,7 @@ export interface SchemaVersionReport {
 	ok: boolean;
 	expected: string;
 	actual: string | null;
-	/** Operator-facing explanation + recovery hint when not ok. */
+	/** Operator-facing explanation + recovery hint: why not ok, or, when ok, what is still pending. */
 	message?: string;
 }
 

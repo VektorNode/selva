@@ -96,6 +96,13 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	 * on its own schedule.
 	 */
 	private readonly lastRevalidatedAt = new Map<string, number>();
+	/**
+	 * When this process ended a user's sessions (sign-out, disable, delete), by
+	 * user id. A session last rechecked before that moment is rechecked on its
+	 * next request instead of riding out the window. Other instances still take
+	 * up to `revalidateMs`.
+	 */
+	private readonly sessionsEndedAt = new Map<string, number>();
 
 	constructor(config: SupabaseAuthProviderConfig) {
 		this.supabaseUrl = config.supabaseUrl;
@@ -120,7 +127,15 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			config.enableSelfSignup ?? false,
 			(user) => this.hydrate(user)
 		);
-		this.sessionRefresh = new SupabaseSessionRefresh(this.anon, this.admin, this.logger);
+		this.sessionRefresh = new SupabaseSessionRefresh(
+			this.anon,
+			this.admin,
+			this.logger,
+			(token) => {
+				const userId = unverifiedSubject(token);
+				if (userId) this.markSessionsEnded(userId);
+			}
+		);
 		this.oauth = new SupabaseOAuthAuth(
 			this.anon,
 			(user) => this.hydrate(user),
@@ -202,13 +217,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		}
 
 		const sessionId = typeof claims.session_id === 'string' ? claims.session_id : claims.sub;
-		if (this.shouldRevalidate(sessionId)) {
+		if (this.shouldRevalidate(sessionId, claims.sub)) {
+			// Stamped with the start: a session ended while GoTrue was answering must
+			// still read as older than that end.
+			const startedAt = Date.now();
 			const fresh = await this.verifyViaGetUser(token);
 			if (!fresh) {
 				this.lastRevalidatedAt.delete(sessionId);
 				return null;
 			}
-			this.markRevalidated(sessionId);
+			this.markRevalidated(sessionId, startedAt);
 			return fresh;
 		}
 
@@ -239,14 +257,25 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		}
 	}
 
-	private shouldRevalidate(sessionId: string): boolean {
+	private shouldRevalidate(sessionId: string, userId: string): boolean {
 		const last = this.lastRevalidatedAt.get(sessionId);
-		return last === undefined || Date.now() - last >= this.revalidateMs;
+		if (last === undefined || Date.now() - last >= this.revalidateMs) return true;
+		const ended = this.sessionsEndedAt.get(userId);
+		return ended !== undefined && last <= ended;
 	}
 
-	private markRevalidated(sessionId: string): void {
+	private markSessionsEnded(userId: string): void {
 		const now = Date.now();
-		this.lastRevalidatedAt.set(sessionId, now);
+		// Past one window every session has rechecked on its own schedule.
+		for (const [id, at] of this.sessionsEndedAt) {
+			if (now - at > this.revalidateMs) this.sessionsEndedAt.delete(id);
+		}
+		this.sessionsEndedAt.set(userId, now);
+	}
+
+	private markRevalidated(sessionId: string, at: number): void {
+		const now = Date.now();
+		this.lastRevalidatedAt.set(sessionId, at);
 		// Lazy sweep so a churn of distinct sessions can't grow the map without
 		// bound. Anything older than two windows is definitely stale (it would
 		// revalidate on next use anyway). Cheap: only runs when the map is large.
@@ -300,6 +329,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			if (e.status === 404 || /not.?found/i.test(e.message ?? '')) return 'not_found';
 			throw error;
 		}
+		this.markSessionsEnded(id);
 		return 'ok';
 	}
 
@@ -317,6 +347,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			if (e.status === 404 || /not.?found/i.test(e.message ?? '')) return 'not_found';
 			throw error;
 		}
+		this.markSessionsEnded(id);
 		return 'ok';
 	}
 
@@ -475,6 +506,16 @@ function isDisabled(user: Pick<User, 'app_metadata' | 'banned_until'>): boolean 
 	return user.banned_until ? Date.parse(user.banned_until) > Date.now() : false;
 }
 
+/** The `sub` of a JWT, unverified: only ever used to force a recheck, never to trust. */
+function unverifiedSubject(token: string): string | null {
+	try {
+		const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString());
+		return typeof payload?.sub === 'string' ? payload.sub : null;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Supabase-backed `ISessionRefresh`. `refreshSession` uses the anon client —
  * a refresh token authenticates itself. `revokeSession` uses the service-role
@@ -484,7 +525,8 @@ class SupabaseSessionRefresh implements ISessionRefresh {
 	constructor(
 		private readonly anon: SupabaseClient,
 		private readonly admin: SupabaseClient,
-		private readonly logger: ILogger
+		private readonly logger: ILogger,
+		private readonly onRevoked: (token: string) => void
 	) {}
 
 	async refreshSession(refreshToken: string): Promise<{
@@ -510,6 +552,8 @@ class SupabaseSessionRefresh implements ISessionRefresh {
 		// JWT names. Logout on a shared machine shouldn't leave a sibling session
 		// alive, and a token that reached us at all may already be leaked.
 		const { error } = await this.admin.auth.admin.signOut(token, 'global');
+		// Whatever GoTrue answered, this process stops trusting its last recheck.
+		this.onRevoked(token);
 		if (!error) return true;
 		// A token GoTrue no longer recognizes (already signed out, expired,
 		// malformed) is the desired end state, not a failure — report success so

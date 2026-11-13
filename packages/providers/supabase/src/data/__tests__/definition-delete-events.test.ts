@@ -21,7 +21,7 @@ function bundleUpdating(rows: { guid: string }[]) {
 		return chain;
 	}
 	const from = vi.fn(() => chain);
-	const bundle = { forRequest: () => ({ from }) } as unknown as ClientBundle;
+	const bundle = { serviceClient: { from } } as unknown as ClientBundle;
 	return { bundle, calls, from };
 }
 

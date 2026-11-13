@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComputeServerConfig, RequestContext } from '@selvajs/platform';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
 import type { ClientBundle } from '../client.js';
-import { actAs, migratedDb, seedOrg, seedOrgMember, seedUser } from './pglite-harness.js';
+import { actAs, asRole, migratedDb, seedOrg, seedOrgMember, seedUser } from './pglite-harness.js';
 
 let db: PGlite;
 let admin: string;
@@ -25,6 +25,11 @@ const row = (id: string, overrides: Record<string, unknown> = {}) => ({
 
 const saveOrg = `select selva.save_org_compute_servers($1, $2::jsonb, $3, $4)`;
 const savePlatform = `select selva.save_platform_compute_servers($1::jsonb, $2::jsonb, $3)`;
+
+/** The app's own call: the stores save with the service role. */
+function asApp(sql: string, params: unknown[]) {
+	return asRole(db, 'service_role', sql, params);
+}
 
 async function serverIds(scope: string): Promise<string[]> {
 	const { rows } = await db.query<{ id: string }>(
@@ -59,10 +64,10 @@ describe('save_platform_compute_servers', () => {
 	it('keeps org defaults on a server that stays', async () => {
 		const id = crypto.randomUUID();
 		const json = JSON.stringify([row(id)]);
-		await actAs(db, { sub: admin }, savePlatform, [json, '[]', id]);
+		await asApp(savePlatform, [json, '[]', id]);
 		await db.query(`insert into selva.compute_server_org_defaults values ($1, $2)`, [acme, id]);
 
-		await actAs(db, { sub: admin }, savePlatform, [json, '[]', id]);
+		await asApp(savePlatform, [json, '[]', id]);
 
 		const { rows } = await db.query(
 			`select 1 from selva.compute_server_org_defaults where default_server_id = $1`,
@@ -73,10 +78,10 @@ describe('save_platform_compute_servers', () => {
 
 	it('leaves the stored set alone when a row fails', async () => {
 		const id = crypto.randomUUID();
-		await actAs(db, { sub: admin }, savePlatform, [JSON.stringify([row(id)]), '[]', id]);
+		await asApp(savePlatform, [JSON.stringify([row(id)]), '[]', id]);
 
 		const bad = JSON.stringify([row(crypto.randomUUID(), { timeout_ms: 3e9 })]);
-		await expect(actAs(db, { sub: admin }, savePlatform, [bad, '[]', null])).rejects.toThrow();
+		await expect(asApp(savePlatform, [bad, '[]', null])).rejects.toThrow();
 
 		expect(await serverIds('platform')).toEqual([id]);
 	});
@@ -85,9 +90,9 @@ describe('save_platform_compute_servers', () => {
 		const kept = crypto.randomUUID();
 		const dropped = crypto.randomUUID();
 		const both = JSON.stringify([row(kept), row(dropped)]);
-		await actAs(db, { sub: admin }, savePlatform, [both, '[]', kept]);
+		await asApp(savePlatform, [both, '[]', kept]);
 
-		await actAs(db, { sub: admin }, savePlatform, [JSON.stringify([row(kept)]), '[]', kept]);
+		await asApp(savePlatform, [JSON.stringify([row(kept)]), '[]', kept]);
 
 		expect(await serverIds('platform')).toEqual([kept]);
 	});
@@ -96,9 +101,9 @@ describe('save_platform_compute_servers', () => {
 		const id = crypto.randomUUID();
 		const json = JSON.stringify([row(id, { shared_with_all: false })]);
 		const shares = (org: string) => JSON.stringify([{ server_id: id, org_id: org }]);
-		await actAs(db, { sub: admin }, savePlatform, [json, shares(acme), null]);
+		await asApp(savePlatform, [json, shares(acme), null]);
 
-		await actAs(db, { sub: admin }, savePlatform, [json, shares(other), null]);
+		await asApp(savePlatform, [json, shares(other), null]);
 
 		const { rows } = await db.query<{ org_id: string }>(
 			`select org_id from selva.compute_server_shares where server_id = $1`,
@@ -107,9 +112,9 @@ describe('save_platform_compute_servers', () => {
 		expect(rows).toEqual([{ org_id: other }]);
 	});
 
-	it('refuses a session without instance rights and changes nothing', async () => {
+	it('refuses a session and changes nothing', async () => {
 		const id = crypto.randomUUID();
-		await actAs(db, { sub: admin }, savePlatform, [JSON.stringify([row(id)]), '[]', id]);
+		await asApp(savePlatform, [JSON.stringify([row(id)]), '[]', id]);
 
 		await expect(
 			actAs(db, { sub: manage }, savePlatform, [
@@ -126,7 +131,7 @@ describe('save_platform_compute_servers', () => {
 describe('save_org_compute_servers', () => {
 	it('replaces the org set and sets its default', async () => {
 		const id = crypto.randomUUID();
-		await actAs(db, { sub: manage }, saveOrg, [acme, JSON.stringify([row(id)]), true, id]);
+		await asApp(saveOrg, [acme, JSON.stringify([row(id)]), true, id]);
 
 		expect(await serverIds('org')).toEqual([id]);
 		const { rows } = await db.query<{ default_server_id: string }>(
@@ -139,9 +144,9 @@ describe('save_org_compute_servers', () => {
 	it('leaves the default alone unless asked', async () => {
 		const id = crypto.randomUUID();
 		const json = JSON.stringify([row(id)]);
-		await actAs(db, { sub: manage }, saveOrg, [acme, json, true, id]);
+		await asApp(saveOrg, [acme, json, true, id]);
 
-		await actAs(db, { sub: manage }, saveOrg, [acme, json, false, null]);
+		await asApp(saveOrg, [acme, json, false, null]);
 
 		const { rows } = await db.query(
 			`select 1 from selva.compute_server_org_defaults where org_id = $1`,
@@ -153,22 +158,18 @@ describe('save_org_compute_servers', () => {
 	it('refuses an id that collides with a platform server, and keeps the old set', async () => {
 		const platform = crypto.randomUUID();
 		const mine = crypto.randomUUID();
-		await actAs(db, { sub: admin }, savePlatform, [
-			JSON.stringify([row(platform)]),
-			'[]',
-			platform
-		]);
-		await actAs(db, { sub: manage }, saveOrg, [acme, JSON.stringify([row(mine)]), false, null]);
+		await asApp(savePlatform, [JSON.stringify([row(platform)]), '[]', platform]);
+		await asApp(saveOrg, [acme, JSON.stringify([row(mine)]), false, null]);
 
 		await expect(
-			actAs(db, { sub: manage }, saveOrg, [acme, JSON.stringify([row(platform)]), false, null])
+			asApp(saveOrg, [acme, JSON.stringify([row(platform)]), false, null])
 		).rejects.toThrow(/already in use/);
 
 		expect(await serverIds('org')).toEqual([mine]);
 		expect(await serverIds('platform')).toEqual([platform]);
 	});
 
-	it('refuses a member of another org', async () => {
+	it('refuses a session on the org save too', async () => {
 		await expect(
 			actAs(db, { sub: manage }, saveOrg, [
 				other,
@@ -186,7 +187,7 @@ describe('SupabaseComputeServerStore saves', () => {
 
 	function bundle() {
 		const rpc = vi.fn(async () => ({ data: null, error: null }));
-		return { rpc, clients: { forRequest: () => ({ rpc }) } as unknown as ClientBundle };
+		return { rpc, clients: { serviceClient: { rpc } } as unknown as ClientBundle };
 	}
 
 	it('sends a platform save as one call', async () => {

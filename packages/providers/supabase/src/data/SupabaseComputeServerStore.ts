@@ -165,7 +165,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				? []
 				: s.sharedWith.map((orgId) => ({ server_id: s.id, org_id: orgId }))
 		);
-		const { error } = await this.clients.forRequest(ctx).rpc('save_platform_compute_servers', {
+		const { error } = await this.clients.serviceClient.rpc('save_platform_compute_servers', {
 			servers: platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))),
 			shares,
 			default_server: defaultServerId ?? null
@@ -180,7 +180,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		defaultServerId?: string | null
 	): Promise<void> {
 		const orgOnly = servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }));
-		const { error } = await this.clients.forRequest(ctx).rpc('save_org_compute_servers', {
+		const { error } = await this.clients.serviceClient.rpc('save_org_compute_servers', {
 			o: orgId,
 			servers: orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))),
 			set_default: defaultServerId !== undefined,
@@ -190,7 +190,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	}
 
 	async setOrgDefault(ctx: RequestContext, orgId: string, serverId: string | null): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		if (serverId === null) {
 			const { error } = await client
 				.from('compute_server_org_defaults')
@@ -206,7 +206,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	}
 
 	async deleteByOrg(ctx: RequestContext, orgId: string): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 
 		// Org soft-delete doesn't trigger the FK cascade from orgs(id), so
 		// each dependent table needs an explicit delete here.

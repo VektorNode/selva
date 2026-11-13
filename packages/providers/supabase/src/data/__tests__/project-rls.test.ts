@@ -133,36 +133,6 @@ if (!envCtx) {
 			expect(after?.ownerId).toBe(owner.userId);
 		});
 
-		it('still refuses settings edits from a member who is not a project owner', async () => {
-			const store = new SupabaseProjectStore(env.bundle);
-			const owner = await seedPlainUser(env, '');
-			const orgId = await seedOrg(owner.userId);
-			const ownerCtx = ctxFor(owner.userId, owner.sessionToken, orgId);
-
-			const project = draftProject(orgId, owner.userId);
-			await store.createProject(ownerCtx, project);
-
-			const editor = await seedPlainUser(env, '');
-			await addOrgMember(orgId, editor.userId, 'member');
-			await store.addProjectMember(ownerCtx, {
-				projectId: project.id,
-				userId: editor.userId,
-				role: 'editor',
-				joinedAt: new Date().toISOString(),
-				updatedAt: new Date().toISOString(),
-				updatedBy: owner.userId,
-				deletedAt: null
-			});
-			const editorCtx = ctxFor(editor.userId, editor.sessionToken, orgId);
-
-			// The control that keeps the fix honest: swapping `owner_id` for member
-			// role must not widen the policy to any member. `updateProject` maps an
-			// RLS-filtered update to a 404 — zero rows came back.
-			await expect(
-				store.updateProject(editorCtx, project.id, { name: 'Not Yours' })
-			).rejects.toMatchObject({ statusCode: 404 });
-		});
-
 		it('hides the member roster of a public project from non-members', async () => {
 			const store = new SupabaseProjectStore(env.bundle);
 			const owner = await seedPlainUser(env, '');

@@ -139,6 +139,32 @@ describe('generated runner script', () => {
 		assertParses(buildLauncher(runner(), '/srv/selva/selva-update.log', ['[INFO] starting']));
 	});
 
+	it('writes the runner to a file it created, never to a fixed /tmp name', () => {
+		// A fixed name lets another local account plant the file first: the write
+		// fails, and the launcher would run the planted script as the app user.
+		const launcher = buildLauncher(runner(), '/srv/selva/selva-update.log');
+		expect(launcher).toMatch(/RUNNER=\$\(mktemp [^)]*XXXXXXXX"\) \|\|/);
+		expect(launcher).not.toMatch(/RUNNER=\/tmp\//);
+		expect(launcher).toMatch(/__SELVA_RUNNER_EOF__' \|\| \{[^}]*exit 1/);
+	});
+
+	it('orphans the runner before it runs, so pm2 cannot kill it with the app', () => {
+		// pm2 7 lists the app's descendants at `pm2 stop` and SIGKILLs the survivors
+		// after its kill timeout. A runner forked straight from the launcher is still
+		// on that list while the launcher lives: seen on a staging host, where the
+		// update died after the stop and left the app down.
+		const launcher = buildLauncher('echo runner-body', '/srv/selva/selva-update.log');
+		// Forked from a subshell that exits at once...
+		expect(launcher).toContain(
+			'RUNNER_PID=$( (SELVA_RUNNER_SPAWNER=$BASHPID setsid bash "$RUNNER" </dev/null'
+		);
+		expect(launcher).toContain('& echo $!) )');
+		// ...and the runner's own lines start only after that subshell is gone.
+		const waitsAt = launcher.indexOf('kill -0 "$SELVA_RUNNER_SPAWNER"');
+		expect(waitsAt).toBeGreaterThan(-1);
+		expect(waitsAt).toBeLessThan(launcher.indexOf('echo runner-body'));
+	});
+
 	itParses('survives a deployment path containing a single quote', () => {
 		const script = buildNpmRunnerScript(
 			npmInstallArgs('stable'),
@@ -591,7 +617,7 @@ describe('a rollback names the cause the health endpoint reported', () => {
 	function classify(body: string, tag = 'latest'): string {
 		const script = runner();
 		const start = script.indexOf('  if echo "$BODY" | grep -q \'"expected":\'');
-		const end = script.indexOf('rm -f /tmp/selva-health.$$', start);
+		const end = script.indexOf('  rm -f "$HEALTH_BODY"', start);
 		expect(start).toBeGreaterThan(-1);
 		expect(end).toBeGreaterThan(start);
 

@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
+import { setupToken } from '@selvajs/platform/config';
 
 // E2E tests run against the production build served by adapter-node — the same
 // `node build/index.js` entrypoint a deployment uses. This avoids the dev
@@ -84,5 +85,6 @@ export const ADMIN = {
 	password: 'e2e-password-1234',
 	company: 'E2E Test Co',
 	displayName: 'E2E Admin',
+	setupPath: `/setup?token=${setupToken(TEST_KEY)}`,
 	stateFile: ADMIN_STATE
 };

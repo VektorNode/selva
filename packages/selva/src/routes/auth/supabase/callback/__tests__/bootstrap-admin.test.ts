@@ -1,16 +1,13 @@
 /**
- * Spec §2 — first-OAuth-signin-becomes-instance-admin.
- *
  * The OAuth callback grants every platform permission to the signing-in user
- * iff (a) no instance_admin currently exists AND (b) either
- * `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is unset OR the user's email matches it.
- *
- * The unset-env-var case is the "fresh self-hosted install" path; the
- * matching-email case is the production hardening / break-glass recovery
- * path. A non-matching email or an existing admin both lock the path down.
+ * iff (a) no instance_admin currently exists AND (b) the sign-in proves it is
+ * the operator: its email matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, or, with
+ * none pinned, the browser opened the setup link first. Unproven, the first
+ * signer would win whatever instance they reached.
  */
 
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	freshProviders,
 	installOAuthShim,
@@ -19,6 +16,9 @@ import {
 	type TestProviders
 } from '#lib/server/__tests__/fixtures.js';
 import { issueOAuthState } from '#lib/server/auth/oauthState.server.js';
+import { rememberSetupProof } from '#lib/server/auth-bootstrap.server.js';
+import { env } from '#lib/server/env.js';
+import { setupToken } from '@selvajs/platform/config';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;
@@ -35,7 +35,7 @@ beforeEach(async () => {
 	await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', undefined);
 });
 
-async function callback(opts: { code: string }): Promise<{
+async function callback(opts: { code: string; setupLink?: boolean }): Promise<{
 	status: number;
 	location?: string;
 	json?: unknown;
@@ -52,6 +52,7 @@ async function callback(opts: { code: string }): Promise<{
 		getAll: () => [...jar].map(([name, value]) => ({ name, value }))
 	};
 	const state = issueOAuthState(cookies as never);
+	if (opts.setupLink) rememberSetupProof(cookies as never, setupToken(env.SELVA_HMAC_KEY!));
 
 	const event = {
 		url: new URL(`http://test.local/auth/supabase/callback?code=${opts.code}&selva_state=${state}`),
@@ -84,11 +85,24 @@ async function callback(opts: { code: string }): Promise<{
 }
 
 describe('OAuth callback bootstrap admin grant', () => {
-	it('Fresh instance, no env var → first OAuth signer becomes admin', async () => {
+	it('Fresh instance, no env var, no setup link → first OAuth signer is NOT admin', async () => {
 		tp = await freshProviders();
 		installOAuthShim(tp, { email: 'first@example.test' });
 
 		const res = await callback({ code: 'fake-code' });
+		expect(res.status).toBe(303);
+
+		const first = await tp.authUsers.findByEmail('first@example.test');
+		expect(await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, first!.id)).not.toContain(
+			'instance_admin'
+		);
+	});
+
+	it('Fresh instance, no env var, setup link opened → signer becomes admin', async () => {
+		tp = await freshProviders();
+		installOAuthShim(tp, { email: 'first@example.test' });
+
+		const res = await callback({ code: 'fake-code', setupLink: true });
 		expect(res.status).toBe(303);
 		expect(res.location).toBe('/library');
 
@@ -158,10 +172,8 @@ describe('OAuth callback bootstrap admin grant', () => {
 		expect(perms).not.toContain('instance_admin');
 	});
 
-	// In multi-tenant mode the first OAuth signer must NOT win the race —
-	// without the env var, a random SaaS signup would become Selva staff.
-	// Operators seed admin explicitly via BOOTSTRAP_INSTANCE_ADMIN_EMAIL.
-	it('Multi-tenant, no env var → bootstrap disabled, first signer is NOT admin', async () => {
+	// A random SaaS signup must not become Selva staff.
+	it('Multi-tenant, no env var, no setup link → first signer is NOT admin', async () => {
 		tp = await freshProviders({ tenancy: 'multi' });
 		installOAuthShim(tp, { email: 'random@example.test' });
 

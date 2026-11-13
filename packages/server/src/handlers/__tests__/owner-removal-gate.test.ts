@@ -116,6 +116,21 @@ describe('DELETE /api/v1/orgs/{orgId}/members/{userId} — owner removal', () =>
 		expect(res.status).toBe(409);
 	});
 
+	it('does not count a disabled co-owner as the one who stays', async () => {
+		tp = await freshHarness();
+		const { acme } = await seedAcme(tp);
+		const owner = await seedOwner(acme.id, 'owner@acme.test');
+		const coOwner = await seedOwner(acme.id, 'coowner@acme.test');
+		await tp.config.auth.disableUser(coOwner.id);
+
+		const res = await callHandler(removeOrgMember, {
+			locals: await actAs(tp, owner.id),
+			params: { orgId: acme.id, userId: owner.id }
+		});
+
+		expect(res.status).toBe(409);
+	});
+
 	it('finds a second owner sitting past the first roster page', async () => {
 		tp = await freshHarness();
 		const { acme } = await seedAcme(tp);

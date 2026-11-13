@@ -27,8 +27,11 @@ export function channelTag(channel: ReleaseChannel): string {
 	return channel === 'beta' ? 'beta' : 'latest';
 }
 
+// The update runner installs through npm, which reads this same variable, so
+// the check and the install can never ask two different registries.
 export function channelRegistryUrl(channel: ReleaseChannel): string {
-	return `https://registry.npmjs.org/@selvajs%2Fselva/${channelTag(channel)}`;
+	const registry = (env.NPM_CONFIG_REGISTRY || 'https://registry.npmjs.org').replace(/\/+$/, '');
+	return `${registry}/@selvajs%2Fselva/${channelTag(channel)}`;
 }
 
 function isChannel(v: unknown): v is ReleaseChannel {

@@ -17,7 +17,7 @@ function recordingBundle() {
 		select: async () => ({ data: [{ guid: 'g' }], error: null })
 	};
 	const client = { from: () => chain };
-	const bundle = { forRequest: () => client } as unknown as ClientBundle;
+	const bundle = { serviceClient: client } as unknown as ClientBundle;
 	return { bundle, updates };
 }
 

@@ -87,7 +87,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async createProject(ctx: RequestContext, project: Project): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const { error } = await client.from('projects').insert(projectToRow(project));
 		if (error) throw mapPostgrestError(error);
 
@@ -128,8 +128,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (Object.keys(row).length === 0) return;
 		Object.assign(row, stampUpdate(ctx));
 
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('projects')
 			.update(row)
 			.eq('id', id)
@@ -142,7 +141,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	async deleteProject(ctx: RequestContext, id: string): Promise<void> {
 		// Soft-delete cascades in app code, not via FK: project → project_members,
 		// definitions. FK CASCADE only fires on a real DELETE.
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const stampRow = stampSoftDelete(ctx);
 
 		const { data, error } = await client
@@ -187,7 +186,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		orgId: string,
 		slug: string
 	): Promise<Project | null> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 
 		// `.not('deleted_at', 'is', null)` guards against clobbering a live row;
 		// the unique constraint on (org_id, slug) means at most one tombstone exists.
@@ -289,8 +288,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			deleted_at: null,
 			...stampUpdate(ctx)
 		};
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('project_members')
 			.upsert(row, { onConflict: 'project_id,user_id' });
 		if (error) throw mapPostgrestError(error);
@@ -309,8 +307,7 @@ export class SupabaseProjectStore implements IProjectStore {
 		role: ProjectRole
 	): Promise<void> {
 		const row: Record<string, unknown> = { role, ...stampUpdate(ctx) };
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('project_members')
 			.update(row)
 			.eq('project_id', projectId)
@@ -330,8 +327,7 @@ export class SupabaseProjectStore implements IProjectStore {
 	}
 
 	async removeProjectMember(ctx: RequestContext, projectId: string, userId: string): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('project_members')
 			.update(stampSoftDelete(ctx))
 			.eq('project_id', projectId)

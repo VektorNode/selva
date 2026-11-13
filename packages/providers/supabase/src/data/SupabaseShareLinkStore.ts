@@ -38,10 +38,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async create(ctx: RequestContext, link: ShareLink): Promise<void> {
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.from('share_links')
-			.insert(linkToRow(link));
+		const { error } = await this.clients.serviceClient.from('share_links').insert(linkToRow(link));
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'share_link.minted',
@@ -117,7 +114,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const { data, error } = await client
 			.from('share_links')
 			.update({ revoked_at: new Date().toISOString() })
@@ -126,8 +123,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.select('id');
 		if (error) throw mapPostgrestError(error);
 		if (!data || data.length === 0) {
-			// No rows means already revoked, which is fine, or refused by RLS, which is
-			// not: PostgREST reports both the same way.
+			// No rows means already revoked, which is fine, or no such link.
 			const { data: existing, error: readError } = await client
 				.from('share_links')
 				.select('revoked_at')
@@ -135,8 +131,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 				.maybeSingle();
 			if (readError) throw mapPostgrestError(readError);
 			if (!existing) throw new ProviderError(`Share link '${id}' not found`, 404);
-			if (existing.revoked_at) return;
-			throw new ProviderError(`Forbidden: cannot revoke share link '${id}'`, 403);
+			return;
 		}
 		await this.events.emit({ type: 'share_link.revoked', linkId: id, ...actorOf(ctx) });
 	}

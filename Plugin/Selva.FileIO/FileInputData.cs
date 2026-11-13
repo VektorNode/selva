@@ -20,6 +20,26 @@ public class FileInputData
     [JsonProperty("fileEnding")]
     public string FileEnding { get; set; }
 
+    /// <summary>
+    ///     Null when a solve request may name this file, otherwise why not. On Compute a path
+    ///     (type "path", or no type) is opened with the server's rights by whoever can solve,
+    ///     share-link visitors included: a file on its disk, or a UNC share that then receives
+    ///     the server's credentials. A request names only data it sends or a URL. Paths the
+    ///     definition's author wired in do not come through here.
+    /// </summary>
+    public string ProblemAsRequestInput(bool onCompute)
+    {
+        if (!onCompute)
+        {
+            return null;
+        }
+
+        var type = Type?.ToLowerInvariant();
+        return type == "base64" || type == "url"
+            ? null
+            : "A file path is not accepted in a solve request. Upload the file or pass a URL.";
+    }
+
     public static FileInputData FromPath(string path)
     {
         return new FileInputData

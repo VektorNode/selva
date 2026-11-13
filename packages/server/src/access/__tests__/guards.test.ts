@@ -2,9 +2,17 @@ import { describe, it, expect } from 'vitest';
 import {
 	narrowApiTokenContext,
 	type PlatformPermission,
+	type Project,
 	type RequestContext
 } from '@selvajs/platform';
-import { assertCanGrantPlatformPermissions, requireActingOrg } from '../guards.js';
+import {
+	assertCanGrantPlatformPermissions,
+	requireActingOrg,
+	requireCanEditProjectSettings,
+	requireCanManage,
+	requireCanReclaim,
+	requireCanViewProject
+} from '../guards.js';
 import { ApiError } from '../../api/errors.js';
 
 const ORG_A = 'org-a';
@@ -149,5 +157,73 @@ describe('assertCanGrantPlatformPermissions', () => {
 		expect(
 			refusal(() => assertCanGrantPlatformPermissions(key, ['manage_updates'], []))
 		).toMatchObject({ status: 403 });
+	});
+});
+
+// The data layer shows an instance admin's own session no more tenant content
+// than anyone else's (on Supabase, RLS hides a private project they are not in).
+describe("project gates when the caller's session cannot see the project", () => {
+	const hidden = { id: 'p1', orgId: ORG_B, visibility: 'private' } as Project;
+
+	/** A store that answers only the service role, as RLS does for an outsider. */
+	function locals(ctx: RequestContext) {
+		const seenAs: boolean[] = [];
+		const deps = {
+			projects: {
+				getProject: async (readAs: RequestContext) => {
+					seenAs.push(readAs.system === true);
+					return readAs.system ? hidden : null;
+				}
+			},
+			flag: () => false
+		};
+		return { locals: { user: { id: ctx.userId }, ctx, deps } as never, seenAs };
+	}
+
+	async function refused(run: () => Promise<unknown>): Promise<ApiError> {
+		try {
+			await run();
+		} catch (err) {
+			if (err instanceof ApiError) return err;
+			throw err;
+		}
+		throw new Error('expected the guard to refuse');
+	}
+
+	it('lets an instance admin manage it, reading the row as system', async () => {
+		const admin = locals(session(['instance_admin']));
+		await requireCanManage(admin.locals, 'p1');
+		const { project } = await requireCanEditProjectSettings(admin.locals, 'p1');
+		expect(project).toBe(hidden);
+		expect(admin.seenAs).toEqual([true, true]);
+	});
+
+	it('gives an instance admin no way to view it: content has no bypass', async () => {
+		const admin = locals(session(['instance_admin']));
+		expect(await refused(() => requireCanViewProject(admin.locals, 'p1'))).toMatchObject({
+			status: 404
+		});
+		expect(admin.seenAs).toEqual([false]);
+	});
+
+	it('answers 404 to anyone else, without a system read', async () => {
+		const member = locals(session());
+		expect(await refused(() => requireCanManage(member.locals, 'p1'))).toMatchObject({
+			status: 404
+		});
+		expect(member.seenAs).toEqual([false]);
+	});
+
+	it('lets an instance admin reclaim it from outside their acting org', async () => {
+		const admin = locals(session(['instance_admin']));
+		const { project } = await requireCanReclaim(admin.locals, 'p1');
+		expect(project).toBe(hidden);
+	});
+
+	it('hides it from a reclaim by anyone outside its org', async () => {
+		const outsider = locals(session());
+		expect(await refused(() => requireCanReclaim(outsider.locals, 'p1'))).toMatchObject({
+			status: 404
+		});
 	});
 });

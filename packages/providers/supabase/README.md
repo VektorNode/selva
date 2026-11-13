@@ -68,7 +68,11 @@ MFA methods on `IPasswordAuth` are currently undefined — MFA is deferred. If a
 
 ### Data + RLS
 
-Every client is constructed with `db: { schema: 'selva' }`, so a bare `client.from('orgs')` resolves to `selva.orgs`. Every store goes through `ClientBundle.forRequest(ctx)` ([src/data/client.ts](src/data/client.ts)):
+Every client is constructed with `db: { schema: 'selva' }`, so a bare `client.from('orgs')` resolves to `selva.orgs`.
+
+**Sessions read, the app writes.** The anon key is publishable, so a signed-in user can call PostgREST with their own JWT and skip Selva. `anon` and `authenticated` therefore hold SELECT only on `selva`, scoped by RLS, and no EXECUTE on a function that writes. Every store write goes through `ClientBundle.serviceClient` after the app's own checks (`access/rules.ts`). Write policies are gone on purpose: they had to restate each app rule in SQL and kept disagreeing with it, in both directions, and a direct write never emitted its audit event. A new table starts with no grants and adds its own SELECT. `rls-boundary.test.ts` holds this on PGlite.
+
+Reads go through `ClientBundle.forRequest(ctx)` ([src/data/client.ts](src/data/client.ts)):
 
 - `ctx.system` → service-role client (bypasses RLS)
 - `ctx.adapterContext.sessionToken` → anon client with `Authorization: Bearer <jwt>` (RLS enforces per-user visibility)

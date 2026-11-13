@@ -46,7 +46,7 @@ pnpm dev:selva
 # http://localhost:5199
 ```
 
-On first boot, visit `/setup` to create the platform admin. Then register your Compute server at `/admin/compute`; nothing solves until you do.
+On first boot, visit `/setup` to create the platform admin. The dev server offers a link past the setup token; a deployment needs the link from `npx selva setup-url`. Then register your Compute server at `/admin/compute`; nothing solves until you do.
 
 ## Plugin UI (optional)
 

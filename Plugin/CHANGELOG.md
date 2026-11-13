@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- On Rhino.Compute, Get File and Get Image refuse a file path that arrives in the solve request. A caller could name any file on the server's disk, or a UNC share that then received the server's credentials; share-link visitors could too. A request now names only data it sends or a URL. Paths wired into the component on the canvas, and files picked in Rhino, work as before.
+
 ## [0.25.1-beta.1] - 2026-11-13
 
 ### Added

@@ -75,6 +75,8 @@ A definition's script components (C#, Python, VB) run on the Compute server with
 - **Anyone with an API token scoped `upload` or `write`**, such as the Grasshopper plugin ([Signing in from apps](../../packages/build/signing-in-from-apps.md)). A token reaches only what its owner could from the browser.
 - **Anyone who can solve a remote definition**: any signed-in user or org-wide `solve` token can pass a `definitionUrl`. The [URL guard](#guard-on-remote-definition-urls) protects your network, not Compute from the file's scripts.
 
+A solve request cannot name a file on the Compute server: Get File and Get Image take uploaded data or a URL there, and refuse a path (plugin releases after 0.25.1). A path the definition's author wired in on the canvas is still read with Compute's rights.
+
 Selva doesn't sandbox scripts. Run Compute on its own machine with an unprivileged account, no Selva database credentials, `SELVA_*` keys or cloud credentials, and only the network access definitions need.
 
 ## Secrets

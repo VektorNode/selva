@@ -8,7 +8,7 @@ import type {
 } from '@selvajs/platform';
 import { ERASED_ACTOR_ID, NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
 import { readAtRestKeys } from '@selvajs/platform/computeServer';
-import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
+import { EXPECTED_MIGRATION_HEAD, REQUIRED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle, clientBundleFromEnv } from './client.js';
 import { SupabaseEventSink } from './SupabaseEventSink.js';
@@ -162,8 +162,10 @@ export class SupabaseDataProvider implements IDataProvider {
 	 * package's migrations) and compares it to the head this build expects.
 	 * Three failure shapes: the RPC is missing (handshake migration never
 	 * applied), the head is empty (no migrations pushed), or the head is
-	 * lexicographically behind (operator upgraded the app but skipped
-	 * `supabase db push`). Never throws — boot health consumes the report.
+	 * lexicographically behind {@link REQUIRED_MIGRATION_HEAD} (operator upgraded
+	 * the app but skipped `supabase db push`). A head between that and the newest
+	 * is ok, with a message naming what is pending. Never throws — boot health
+	 * consumes the report.
 	 */
 	async verifySchemaVersion(): Promise<SchemaVersionReport> {
 		const expected = EXPECTED_MIGRATION_HEAD;
@@ -194,14 +196,24 @@ export class SupabaseDataProvider implements IDataProvider {
 			// Timestamp prefixes are fixed-width, so string comparison is chronological.
 			// A head ahead of the app (rolled-back app, newer DB) is tolerated — schema
 			// changes are append-only by convention.
-			const ok = actual >= expected;
+			if (actual < REQUIRED_MIGRATION_HEAD) {
+				return {
+					ok: false,
+					expected,
+					actual,
+					message:
+						`Database migration head ${actual} is behind ${REQUIRED_MIGRATION_HEAD}, ` +
+						`the oldest this app runs on. ${pushHint}`
+				};
+			}
 			return {
-				ok,
+				ok: true,
 				expected,
 				actual,
-				message: ok
-					? undefined
-					: `Database migration head ${actual} is behind the app's expected ${expected}. ${pushHint}`
+				message:
+					actual < expected
+						? `Migrations after ${actual} are pending; the app runs without them. ${pushHint}`
+						: undefined
 			};
 		} catch (err) {
 			return {

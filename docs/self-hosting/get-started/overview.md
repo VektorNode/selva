@@ -25,7 +25,7 @@ Install the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d), Se
 
 Run `npx @selvajs/cli my-deployment`, then `npm run doctor` and `npm start` from the new directory. The [CLI guide](./cli.md) has the details.
 
-Open `/setup` to create the admin account, register your Compute server at `/admin/compute`, upload a definition, share the link. Set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` to pin who may claim it; unset, whoever finishes `/setup` first becomes the admin, so do it before the host is reachable by anyone else.
+Open the setup link the scaffold printed (`npx selva setup-url` prints it again) to create the admin account, register your Compute server at `/admin/compute`, upload a definition, share the link. OAuth, email-link and proxy sign-ins need the link too, unless `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` names the admin: then signing in with that address is enough.
 
 Auth, data, and storage default to the `local` provider, which needs no setup. See [Providers](../providers/overview.md) and [Deployment prerequisites](../deployment/prerequisites.md).
 

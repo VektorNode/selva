@@ -12,6 +12,9 @@ Each maps to a vite `--mode`, so vite layers `packages/selva/.env.dev-<provider>
 over the base `.env`. Every provider gets its own `DATA_PATH`, so switching never
 leaves one provider reading another's store.
 
+These run the dev server. For the built app as an operator installs it (pm2,
+Caddy, self-updates), see [STAGING.md](./STAGING.md).
+
 These do not replace `pnpm dev:selva`. That one stays the day-to-day server: your
 own `.env`, your real compute server, and the `.selva-data/` you have been
 building up. These three pin a provider and point at empty throwaway data, which

@@ -480,6 +480,19 @@ function parseDeadline(text) {
 		Math.floor(Number(`0${fraction}`) * 1e3)
 	);
 }
+// ../platform/src/config/setup-token.ts
+/**
+ * The secret in the first-run setup link. Derived from `SELVA_HMAC_KEY`, so
+ * claiming an instance that has no admin takes read access to its `.env`.
+ * Stateless: every instance and the CLI compute the same value.
+ */
+function setupToken(hmacKey) {
+	return createHmac('sha256', hmacKey.trim()).update('selva:setup:v1').digest('base64url');
+}
+/** Where the operator claims the instance. `origin` has no trailing slash. */
+function setupUrl(origin, hmacKey) {
+	return `${origin.replace(/\/+$/, '')}/setup?token=${setupToken(hmacKey)}`;
+}
 // ../server/src/config/settings.ts
 var flag = (key, label, description, impact) =>
 	defineSetting({
@@ -1093,6 +1106,15 @@ var APP_SETTINGS = composeManifest([
 			'Deployment directory the admin updater runs in. Defaults to the working directory.'
 	}),
 	defineSetting({
+		key: 'NPM_CONFIG_REGISTRY',
+		label: 'npm registry',
+		type: 'url',
+		onInvalid: 'fail',
+		class: 'bootstrap',
+		description:
+			'Registry updates are checked against and installed from. Defaults to registry.npmjs.org.'
+	}),
+	defineSetting({
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
 		label: 'Solve event callback address',
 		type: 'url',
@@ -1260,5 +1282,6 @@ export {
 	keyRotationStatus,
 	legacyValue,
 	resolveConfig,
+	setupUrl,
 	takeSnapshot
 };

@@ -53,6 +53,7 @@ export {
 	removeProjectMember
 } from './projectMembers.js';
 export { getOrgCompute, updateOrgCompute } from './orgCompute.js';
+export { orgHasAnotherOwner, serializeOwnerChanges } from './ownerChanges.js';
 export {
 	listInvites,
 	createInvite,

@@ -22,7 +22,7 @@ const EXECUTE_GRANTS = {
 	'selva.get_invite_by_token_hash(text)': ANYONE,
 	'selva.handle_new_auth_user()': SERVER,
 	'selva.has_org_permission(uuid,text)': ANYONE,
-	'selva.increment_run_count(uuid)': SIGNED_IN,
+	'selva.increment_run_count(uuid)': SERVER,
 	'selva.is_instance_admin()': ANYONE,
 	'selva.is_org_admin(uuid)': ANYONE,
 	'selva.is_org_member(uuid)': ANYONE,
@@ -36,23 +36,25 @@ const EXECUTE_GRANTS = {
 	'selva.is_definition_editor(uuid)': ANYONE,
 	'selva.is_project_editor(uuid)': ANYONE,
 	'selva.is_unfinished_commons_upload(uuid)': ANYONE,
+	'selva.keep_project_org()': SERVER,
 	'selva.leads_definition_org(uuid)': ANYONE,
 	'selva.may_issue_invite(uuid,text,text[])': ANYONE,
 	'selva.may_set_org_role(uuid,text)': ANYONE,
 	'selva.may_upload_to_commons(uuid,uuid)': ANYONE,
 	'selva.org_share_link_roster(uuid,integer,integer)': SIGNED_IN,
-	'selva.remove_org_member(uuid,uuid)': SIGNED_IN,
+	'selva.remove_org_member(uuid,uuid,uuid)': SERVER,
 	'selva.shares_org_with(uuid)': ANYONE,
 	'selva.migration_head()': SERVER,
 	'selva.redact_audit_event_email(text)': SERVER,
 	'selva.refuse_disabled_caller()': ANYONE,
-	'selva.save_org_compute_servers(uuid,jsonb,boolean,uuid)': SIGNED_IN,
-	'selva.save_platform_compute_servers(jsonb,jsonb,uuid)': SIGNED_IN,
-	'selva.reserve_next_version_number(uuid)': SIGNED_IN,
+	'selva.save_org_compute_servers(uuid,jsonb,boolean,uuid)': SERVER,
+	'selva.save_platform_compute_servers(jsonb,jsonb,uuid)': SERVER,
+	'selva.reserve_next_version_number(uuid)': SERVER,
 	'selva.set_platform_permissions(uuid,text[])': SERVER,
 	'selva.set_updated_at()': SERVER,
 	'selva.sync_auth_user_disabled()': SERVER,
 	'selva.try_increment_share_link_solve_count(uuid)': SERVER,
+	'selva.version_file_key_is_own()': SERVER,
 	'selva.visible_project(uuid)': ANYONE
 };
 
@@ -111,7 +113,7 @@ describe('selva function privileges', () => {
 		expect(rows).toHaveLength(1);
 	});
 
-	it('still runs RLS helpers and updated_at triggers for a signed-in owner', async () => {
+	it('still runs RLS helpers for a signed-in owner, and updated_at triggers for the app', async () => {
 		const owner = await seedUser(db);
 		const orgId = crypto.randomUUID();
 		await db.query(
@@ -124,15 +126,22 @@ describe('selva function privileges', () => {
 			[orgId, owner]
 		);
 
-		const updated = await asRole<{ bumped: boolean }>(
+		const seen = await asRole<{ name: string }>(
 			db,
 			'authenticated',
-			`update selva.orgs set name = 'Renamed' where id = $1
-			 returning updated_at > '2000-01-02' as bumped`,
+			`select name from selva.orgs where id = $1`,
 			[orgId],
 			{ sub: owner }
 		);
+		const updated = await asRole<{ bumped: boolean }>(
+			db,
+			'service_role',
+			`update selva.orgs set name = 'Renamed' where id = $1
+			 returning updated_at > '2000-01-02' as bumped`,
+			[orgId]
+		);
 
+		expect(seen).toEqual([{ name: 'Acme' }]);
 		expect(updated).toEqual([{ bumped: true }]);
 	});
 });

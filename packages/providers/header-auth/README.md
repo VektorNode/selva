@@ -151,7 +151,7 @@ export default defineConfig((env) => ({
 
 ¹ Either `HEADER_AUTH_DATA_DIR` or `DATA_PATH` must be set — `fromEnv` throws if neither is.
 
-² Required for `SELVA_TENANCY=multi`. Optional for `SELVA_TENANCY=single`: leave it unset to get "first proxy-authed visitor wins" (fine for self-hosted fresh installs); set it to lock the bootstrap to a specific UPN/email.
+² Optional. Unset, only a visitor whose browser opened the setup link (`npx selva setup-url`) can bootstrap; set, only that UPN/email can.
 
 ### Header names must match what reaches Selva
 
@@ -187,14 +187,16 @@ first proxy-authed visitor would normally just bounce off the strict
 The runtime resolves this via a one-shot **bootstrap allowlist policy**. On
 every authed request, `@selvajs/selva` checks whether an instance admin already
 exists; until one does, it asks the provider whether the incoming UPN/email
-matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`. A match auto-allowlists the user and
-grants them every platform permission in the same request. The next visit is a
+matches `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, or, with that unset, whether the
+browser opened the setup link. A match auto-allowlists the user and grants them
+every platform permission in the same request. The next visit is a
 normal allowlisted login; the bootstrap window has closed.
 
 ```text
 fresh install → unrecognized UPN arrives at proxy
    ↓
 hasInstanceAdmin? ── no ──► UPN/email == BOOTSTRAP_INSTANCE_ADMIN_EMAIL?
+   │                         (unset: setup-link cookie present?)
    │                            │
    │ yes                        ├── yes → auto-allowlist + grant admin
    │                            └── no  → reject (null user)
@@ -202,15 +204,9 @@ hasInstanceAdmin? ── no ──► UPN/email == BOOTSTRAP_INSTANCE_ADMIN_EMAI
 strict allowlist-only path (policy returns false from now on)
 ```
 
-Tenancy interactions:
-
-- **`SELVA_TENANCY=single` + env var unset** → first proxy-authed visitor
-  wins. Fine for self-hosted fresh installs where you control who can
-  reach the proxy at all.
-- **`SELVA_TENANCY=single` + env var set** → only that UPN/email can
-  bootstrap. Use this if multiple people might hit the box during setup.
-- **`SELVA_TENANCY=multi`** → the env var is **required**. Without it,
-  the first random multi-tenant signup would silently become Selva staff.
+Without the env var, open the setup link (`npx selva setup-url`) first, then
+continue through the proxy in the same browser. The same rule holds in either
+tenancy, so a visitor who merely reaches the proxy never bootstraps.
 
 Doubles as the break-glass recovery path: if you lose admin to a backup
 restore or migration drift, set the env var, demote/delete every

@@ -29,57 +29,13 @@ import {
 	type OrgPermission,
 	type OrgRole,
 	type Project,
-	SYSTEM_CONTEXT,
-	type RequestContext
+	SYSTEM_CONTEXT
 } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
 import { revokeUserApiTokens } from './apiTokens.js';
-import { serializeOwnerChanges } from './ownerChanges.js';
+import { orgHasAnotherOwner, serializeOwnerChanges } from './ownerChanges.js';
 
 const ROSTER_PAGE_LIMIT = 200;
-// Runaway guard against an adapter returning a non-advancing cursor. Matches
-// `listAllOrgMembers`; 100 pages is 20k members, past any real org here.
-const MAX_ROSTER_PAGES = 100;
-
-/**
- * Whether anyone other than `exceptUserId` still owns the org.
- *
- * Both branches below need this and both used to scan the roster themselves —
- * the sole-owner invariant is one rule, so it reads from one place.
- *
- * Pages rather than reading one 200-row window: a second owner sitting past the
- * first page read as "no other owner", so the invariant refused a demotion or
- * removal that was in fact safe. That failed closed, but it made the org
- * unadministrable exactly when it had grown enough to need administering.
- * Returns on the first owner found, so the common case is still one round-trip.
- */
-async function hasAnotherOwner(
-	req: ApiRequest,
-	ctx: RequestContext,
-	orgId: string,
-	exceptUserId: string
-): Promise<boolean> {
-	let cursor: string | undefined;
-	for (let page = 0; page < MAX_ROSTER_PAGES; page++) {
-		const result = await req.deps.orgs.listOrgMembers(ctx, orgId, {
-			limit: ROSTER_PAGE_LIMIT,
-			cursor
-		});
-		if (result.items.some((m) => m.role === 'owner' && m.userId !== exceptUserId && !m.deletedAt)) {
-			return true;
-		}
-		cursor = result.nextCursor;
-		if (!cursor) return false;
-	}
-	// Cap hit without finding one: report "no other owner" so the caller refuses.
-	// Failing closed on an incomplete read is the safe direction for an invariant
-	// whose whole job is preventing an unadministrable org.
-	req.log.warn('hasAnotherOwner hit the page cap — treating as sole owner', {
-		orgId,
-		pages: MAX_ROSTER_PAGES
-	});
-	return false;
-}
 
 /**
  * Projects in `orgId` where `userId` is the only live owner — the ones that
@@ -164,7 +120,7 @@ export const updateOrgMember: ApiHandler = async (req) => {
 			if (
 				target.role === 'owner' &&
 				patch.role !== 'owner' &&
-				!(await hasAnotherOwner(req, ctx, orgId, target.userId))
+				!(await orgHasAnotherOwner(req.deps, ctx, orgId, target.userId))
 			) {
 				apiError(
 					409,
@@ -235,7 +191,10 @@ export const removeOrgMember: ApiHandler = async (req) => {
 			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can remove another owner.');
 		}
 
-		if (target.role === 'owner' && !(await hasAnotherOwner(req, ctx, orgId, target.userId))) {
+		if (
+			target.role === 'owner' &&
+			!(await orgHasAnotherOwner(req.deps, ctx, orgId, target.userId))
+		) {
 			apiError(
 				409,
 				ApiErrorCode.CONFLICT,

@@ -16,6 +16,7 @@ const COMMANDS = {
 	update: () => import('./commands/pm2.js').then((m) => m.runUpdate),
 	migrate: () => import('./commands/migrate.js').then((m) => m.runMigrate),
 	'setup-proxy': () => import('./commands/proxy.js').then((m) => m.runSetupProxy),
+	'setup-url': () => import('./commands/setup-url.js').then((m) => m.runSetupUrl),
 	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m)),
 	config: () => import('./commands/config.js').then((m) => m.runConfig)
 };
@@ -66,6 +67,11 @@ const USAGE = {
 			['--domain', 'Domain to serve. Prompts (defaulting to ORIGIN) when omitted.'],
 			['--acme-email', "Address Let's Encrypt sends expiry notices to."]
 		]
+	},
+	'setup-url': {
+		usage: 'selva setup-url',
+		blurb:
+			'Print the link that opens /setup with its token. The password form needs it\nto create the first admin; it stops working once an admin exists.'
 	},
 	config: {
 		usage: 'selva config <show [--all] | set KEY=VALUE | unset KEY>',
@@ -155,6 +161,7 @@ function printHelp() {
 			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
 			'  setup-proxy             Install + configure Caddy with TLS for this deployment',
+			'  setup-url               Print the link that creates the first admin',
 			'  config show|set|unset   What .env sets; change one key safely',
 			'  keys rotate <hmac|at-rest>   Rotate a secret; the old one keeps working',
 			'',

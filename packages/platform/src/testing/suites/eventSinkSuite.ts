@@ -401,7 +401,7 @@ function makeVersion(overrides: {
 		definitionId: overrides.definitionId,
 		versionNumber: 1,
 		fileExt: 'gh',
-		fileKey: `defs/${overrides.definitionId}/v/${overrides.id}/file.gh`,
+		fileKey: `definitions/${overrides.definitionId}/versions/v1.gh`,
 		uploadedBy: overrides.uploadedBy,
 		uploadedAt: nowIso()
 	};

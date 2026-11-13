@@ -26,11 +26,10 @@ Any of `instance_admin`, `manage_compute`, `manage_instance_users` or `manage_up
 
 With no users, non-public pages redirect to `/setup` and `/api` calls return 503 `SETUP_REQUIRED`.
 
-- **Password / local:** `/setup` creates the first user with all platform permissions (and, single-tenant, the default org and project). It renders only while no admin exists. With `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` set, only that email may claim it; unset, whoever reaches it first becomes admin, so finish it before the host is public.
-- **OAuth / email-link / header-auth:** no form. Set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`; the first matching sign-in becomes admin (header-auth matches the email, else the UPN).
-  - `single`, unset: the first sign-in becomes admin.
-  - `single`, set: only that email.
-  - `multi`: the variable is **required**.
+- **Password / local:** `/setup` creates the first user with all platform permissions (and, single-tenant, the default org and project). It works only while no admin exists, and only through the setup link: `npx selva setup-url` prints it on the server. The link carries a token derived from `SELVA_HMAC_KEY`, because a password form cannot prove the email typed into it. With `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` set, the email must match as well.
+- **OAuth / email-link / header-auth:** no form. The first sign-in that proves it is the operator becomes admin:
+  - `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` set: a sign-in with that email. The identity provider has proven it; header-auth matches the email, else the UPN.
+  - Unset: a sign-in from a browser that opened the setup link first. The link is remembered in a cookie for an hour, so an email link has to be opened in the same browser. Anyone else gets no admin.
 
 On those providers the variable also restores access: while no instance admin exists, the next matching sign-in is promoted. Local password auth never runs the bootstrap.
 

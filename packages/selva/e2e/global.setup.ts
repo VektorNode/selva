@@ -12,7 +12,7 @@ import { ADMIN } from '../playwright.config';
 // credentials. Either way we end authenticated, then persist storageState.
 
 setup('authenticate as admin', async ({ page }) => {
-	await page.goto('/setup');
+	await page.goto(ADMIN.setupPath);
 
 	if (new URL(page.url()).pathname === '/setup') {
 		await page.getByLabel('Company name').fill(ADMIN.company);

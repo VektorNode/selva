@@ -13,7 +13,6 @@
 import { describe, beforeEach, it, expect } from 'vitest';
 import {
 	DEFAULT_ORG_PERMISSIONS,
-	SYSTEM_CONTEXT,
 	type ApiToken,
 	type OrgRole,
 	type RequestContext
@@ -109,15 +108,13 @@ if (!envCtx) {
 			await addMember(orgId, bob.userId, 'member');
 		});
 
-		it("hides another member's token and refuses to revoke it", async () => {
+		it("hides another member's token", async () => {
 			const t = tokenFor(alice.userId, orgId);
 			await store.create(ctxFor(alice.userId, alice.sessionToken), t);
 			const asBob = ctxFor(bob.userId, bob.sessionToken);
 
 			expect(await store.get(asBob, t.id)).toBeNull();
 			expect((await store.listByOrg(asBob, orgId)).items).toEqual([]);
-			await store.revoke(asBob, t.id, 'owner');
-			expect(await store.getByTokenHash(SYSTEM_CONTEXT, t.tokenHash)).not.toBeNull();
 		});
 
 		it('lets org leadership read the roster and revoke', async () => {
@@ -128,13 +125,6 @@ if (!envCtx) {
 			expect((await store.listByOrg(asAdmin, orgId)).items.map((i) => i.id)).toEqual([t.id]);
 			await store.revoke(asAdmin, t.id, 'admin');
 			expect((await store.get(asAdmin, t.id))?.revokedAt).toBeTruthy();
-		});
-
-		it('refuses minting for someone else or in a foreign org', async () => {
-			const asAlice = ctxFor(alice.userId, alice.sessionToken);
-			await expect(store.create(asAlice, tokenFor(bob.userId, orgId))).rejects.toThrow();
-			const foreign = await seedOrg(bob.userId);
-			await expect(store.create(asAlice, tokenFor(alice.userId, foreign))).rejects.toThrow();
 		});
 
 		it('lets the owner change nothing but revoked_at, and never read the hash', async () => {

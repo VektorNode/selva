@@ -29,9 +29,9 @@ const ORG_MEMBER_COLUMNS =
 	'org_id, user_id, role, permissions, joined_at, updated_at, updated_by, deleted_at';
 
 /**
- * Org + org-membership store backed by Postgres. The queries rely on RLS
- * for per-user visibility; the service-role client bypasses those policies
- * for admin paths (setup, janitor, tests).
+ * Org + org-membership store backed by Postgres. Reads run as the caller, so
+ * RLS decides what they see. Writes run as the service role: the app has
+ * already decided, and sessions hold no write privilege.
  */
 export class SupabaseOrgStore implements IOrgStore {
 	private readonly events: IEventSink;
@@ -83,12 +83,12 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async createOrg(ctx: RequestContext, org: Organization): Promise<void> {
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const { error } = await client.from('orgs').insert(orgToRow(org));
 		if (error) throw mapPostgrestError(error);
 
-		// Seed owner membership: under user-scoped RLS the creator can't see an
-		// org they're not a member of, even one they just created. Upsert so a
+		// Seed owner membership: RLS hides an org from anyone who is not a member,
+		// its creator included. Upsert so a
 		// stale soft-deleted row from a prior org with the same id is reactivated
 		// rather than blocking creation.
 		const { error: memberError } = await client.from('org_members').upsert(
@@ -122,8 +122,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// system contexts would violate the `on delete set null` FK).
 		Object.assign(row, stampUpdate(ctx));
 
-		const { error, data } = await this.clients
-			.forRequest(ctx)
+		const { error, data } = await this.clients.serviceClient
 			.from('orgs')
 			.update(row)
 			.eq('id', id)
@@ -137,7 +136,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Soft-delete with cascade, mirroring LocalOrgStore: org → org_members,
 		// projects → project_members, definitions. Hard delete is reserved for
 		// the background janitor; user-facing deletes preserve the audit trail.
-		const client = this.clients.forRequest(ctx);
+		const client = this.clients.serviceClient;
 		const stampRow = stampSoftDelete(ctx);
 
 		const { error: orgErr, data: orgData } = await client
@@ -318,8 +317,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			deleted_at: null,
 			...stampUpdate(ctx)
 		};
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const { error } = await this.clients.serviceClient
 			.from('org_members')
 			.upsert(row, { onConflict: 'org_id,user_id' });
 		if (error) throw mapPostgrestError(error);
@@ -343,8 +341,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			permissions: [...DEFAULT_ORG_PERMISSIONS[role]],
 			...stampUpdate(ctx)
 		};
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('org_members')
 			.update(row)
 			.eq('org_id', orgId)
@@ -372,8 +369,7 @@ export class SupabaseOrgStore implements IOrgStore {
 		// Distinct from updateOrgMemberRole so callers can grant a finer-grained
 		// set without re-seeding defaults from the role. Matches LocalOrgStore.
 		const row: Record<string, unknown> = { permissions: [...permissions], ...stampUpdate(ctx) };
-		const { data, error } = await this.clients
-			.forRequest(ctx)
+		const { data, error } = await this.clients.serviceClient
 			.from('org_members')
 			.update(row)
 			.eq('org_id', orgId)
@@ -393,11 +389,19 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		// An RPC because RLS hides private projects from an admin who is not in them,
-		// so a cascade run from here would leave the leaver's access intact.
-		const { error } = await this.clients
-			.forRequest(ctx)
-			.rpc('remove_org_member', { o: orgId, u: userId });
+		// An RPC so the membership and the leaver's project memberships end in one
+		// transaction.
+		const svc = this.clients.serviceClient;
+		let { error } = await svc.rpc('remove_org_member', {
+			o: orgId,
+			u: userId,
+			actor: ctx.userId || null
+		});
+		// The app updates before `20261113120000` is pushed, and the function it
+		// replaces takes no actor. Drop this once that migration is the floor.
+		if (error?.code === 'PGRST202') {
+			({ error } = await svc.rpc('remove_org_member', { o: orgId, u: userId }));
+		}
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.removed',

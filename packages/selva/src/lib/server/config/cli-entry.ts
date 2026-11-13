@@ -7,6 +7,7 @@ export {
 	PREVIOUS_KEY_DAYS,
 	legacyValue,
 	resolveConfig,
+	setupUrl,
 	takeSnapshot
 } from '@selvajs/platform/config';
 export {

@@ -1,7 +1,6 @@
 /**
- * Stores whose writes depend on what RLS lets the caller reach. A PostgREST write
- * that RLS filters out returns no rows and no error, so these fail on that shape
- * rather than reporting success.
+ * What the stores send and how they read the answer. Writes go out on the
+ * service client: the app has already decided, and RLS has no write to filter.
  */
 
 import { describe, expect, it, vi } from 'vitest';
@@ -15,7 +14,8 @@ const LINK_ID = '11111111-1111-4111-8111-111111111111';
 
 function rpcBundle(result: { data: unknown; error: unknown }) {
 	const rpc = vi.fn(async () => result);
-	const bundle = { forRequest: () => ({ rpc }) } as unknown as ClientBundle;
+	const client = { rpc };
+	const bundle = { serviceClient: client, forRequest: () => client } as unknown as ClientBundle;
 	return { bundle, rpc };
 }
 
@@ -44,7 +44,7 @@ function revokeBundle(updated: unknown[], existing: unknown) {
 		return chain;
 	}
 	const from = vi.fn(() => chain);
-	const bundle = { forRequest: () => ({ from }) } as unknown as ClientBundle;
+	const bundle = { serviceClient: { from } } as unknown as ClientBundle;
 	return Object.assign(bundle, { filters, from });
 }
 
@@ -54,13 +54,25 @@ function recordingEvents() {
 }
 
 describe('SupabaseOrgStore.removeOrgMember', () => {
-	it('removes through the definer RPC, which reaches private projects', async () => {
+	it('removes through the RPC, which ends the project memberships too', async () => {
 		const { bundle, rpc } = rpcBundle({ data: null, error: null });
 		const events = recordingEvents();
 		await new SupabaseOrgStore(bundle, events).removeOrgMember(CTX, 'org', 'leaver');
 
-		expect(rpc).toHaveBeenCalledWith('remove_org_member', { o: 'org', u: 'leaver' });
+		expect(rpc).toHaveBeenCalledWith('remove_org_member', {
+			o: 'org',
+			u: 'leaver',
+			actor: 'admin'
+		});
 		expect(events.emit).toHaveBeenCalledOnce();
+	});
+
+	it('falls back to the actorless function on a schema that predates it', async () => {
+		const { bundle, rpc } = rpcBundle({ data: null, error: null });
+		rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'not found' } });
+		await new SupabaseOrgStore(bundle, recordingEvents()).removeOrgMember(CTX, 'org', 'leaver');
+
+		expect(rpc).toHaveBeenLastCalledWith('remove_org_member', { o: 'org', u: 'leaver' });
 	});
 
 	it('maps a missing member to 404 and emits nothing', async () => {
@@ -162,14 +174,7 @@ describe('SupabaseShareLinkStore.revoke', () => {
 		expect(events.emit).not.toHaveBeenCalled();
 	});
 
-	it('fails when RLS filtered the write out', async () => {
-		const events = recordingEvents();
-		const store = new SupabaseShareLinkStore(revokeBundle([], { revoked_at: null }), events);
-		await expect(store.revoke(CTX, LINK_ID)).rejects.toMatchObject({ statusCode: 403 });
-		expect(events.emit).not.toHaveBeenCalled();
-	});
-
-	it('fails on a link the caller cannot see', async () => {
+	it('fails on a link that does not exist', async () => {
 		const store = new SupabaseShareLinkStore(revokeBundle([], null), recordingEvents());
 		await expect(store.revoke(CTX, LINK_ID)).rejects.toMatchObject({ statusCode: 404 });
 	});

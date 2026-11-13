@@ -271,6 +271,25 @@ async function loadProjectOr404(
 	return project;
 }
 
+/**
+ * The project for a management gate. `instance_admin` passes those gates for
+ * any project, so its row has to load whatever the caller's own session can
+ * see: the data layer shows staff no more tenant content than anyone else.
+ * Content gates keep `loadProjectOr404`, where an unseen project is a 404.
+ */
+async function loadProjectForManagement(
+	ctx: RequestContext,
+	projectId: string,
+	src: HasDeps
+): Promise<Project> {
+	const readAs = hasPermission(ctx, 'instance_admin') ? SYSTEM_CONTEXT : ctx;
+	const project = await projectsOf(src).getProject(readAs, projectId);
+	if (!project || outsideTokenOrg(ctx, project.orgId)) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
+	return project;
+}
+
 // Rule-input assembly (the "which rows does each visibility need" knowledge)
 // lives in `@selvajs/server/access`; this binding wires it to the provider set
 // the caller carries.
@@ -388,13 +407,14 @@ export async function requireCanReclaim(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	// Reclaim exists for projects the caller cannot see, and RLS hides those from
-	// their own session. Only the org's leadership may learn that one exists.
+	// their own session. Only the org's leadership, or staff, may learn that one
+	// exists: an instance admin's acting org is just the first one they belong to.
 	const visible = await projectsOf(locals).getProject(ctx, projectId);
 	const project = visible ?? (await projectsOf(locals).getProject(SYSTEM_CONTEXT, projectId));
 	if (
 		!project ||
 		outsideTokenOrg(ctx, project.orgId) ||
-		(!visible && project.orgId !== ctx.actingOrgId)
+		(!visible && project.orgId !== ctx.actingOrgId && !hasPermission(ctx, 'instance_admin'))
 	) {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 	}
@@ -523,7 +543,7 @@ export async function requireCanManage(
 	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId, locals);
+	const project = await loadProjectForManagement(ctx, projectId, locals);
 	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
 		canManage(await buildProjectAccessInput(ctx, project, locals))
 	);
@@ -546,7 +566,7 @@ export async function requireCanEditProjectSettings(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId, locals);
+	const project = await loadProjectForManagement(ctx, projectId, locals);
 	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
 		canEditProjectSettings(await buildProjectAccessInput(ctx, project, locals))
 	);

@@ -22,7 +22,12 @@ import {
 	UpdateProjectMemberBodySchema
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
-import { checkOwnerRemoval, type ProjectMember, type ProjectRole } from '@selvajs/platform';
+import {
+	SYSTEM_CONTEXT,
+	checkOwnerRemoval,
+	type ProjectMember,
+	type ProjectRole
+} from '@selvajs/platform';
 import { requireCanManage, requireTargetIsOrgMember } from '../access/index.js';
 import { serializeOwnerChanges } from './ownerChanges.js';
 
@@ -41,7 +46,9 @@ export const addProjectMember: ApiHandler = async (req) => {
 
 	const input = await parseBody(req.request, AddProjectMemberBodySchema);
 
-	const project = await req.deps.projects.getProject(ctx, id);
+	// As system: the gate above has passed, and an instance admin's own session
+	// does not see a private project it is not in.
+	const project = await req.deps.projects.getProject(SYSTEM_CONTEXT, id);
 	if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 	await requireTargetIsOrgMember(req, project.orgId, input.userId);
 

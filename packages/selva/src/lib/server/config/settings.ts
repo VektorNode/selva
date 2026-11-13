@@ -147,6 +147,15 @@ export const APP_SETTINGS = composeManifest([
 			'Deployment directory the admin updater runs in. Defaults to the working directory.'
 	}),
 	defineSetting({
+		key: 'NPM_CONFIG_REGISTRY',
+		label: 'npm registry',
+		type: 'url',
+		onInvalid: 'fail',
+		class: 'bootstrap',
+		description:
+			'Registry updates are checked against and installed from. Defaults to registry.npmjs.org.'
+	}),
+	defineSetting({
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
 		label: 'Solve event callback address',
 		type: 'url',

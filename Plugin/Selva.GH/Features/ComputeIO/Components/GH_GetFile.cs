@@ -5,6 +5,7 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
+using Rhino;
 using Selva.FileIO;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
@@ -44,7 +45,8 @@ public class GetFileParameter : SelvaContextualParameter<IGH_GeometricGoo>
     protected override IEnumerable<IGH_GeometricGoo> FromContextual(object value)
     {
         var fileData = FileInputParser.Parse(value);
-        var problem = FileInputParser.Validate(fileData, AcceptedFileFormats.Values);
+        var problem = FileInputParser.Validate(fileData, AcceptedFileFormats.Values)
+                      ?? fileData.ProblemAsRequestInput(RhinoApp.IsRunningHeadless);
         if (problem != null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, problem);

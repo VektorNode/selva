@@ -80,4 +80,13 @@ describe('channel → npm tag mapping', () => {
 		expect(channelRegistryUrl('stable')).toBe('https://registry.npmjs.org/@selvajs%2Fselva/latest');
 		expect(channelRegistryUrl('beta')).toBe('https://registry.npmjs.org/@selvajs%2Fselva/beta');
 	});
+
+	it('asks the registry npm is configured to install from', () => {
+		env.NPM_CONFIG_REGISTRY = 'http://npm.internal:4873/';
+		try {
+			expect(channelRegistryUrl('stable')).toBe('http://npm.internal:4873/@selvajs%2Fselva/latest');
+		} finally {
+			delete env.NPM_CONFIG_REGISTRY;
+		}
+	});
 });

@@ -9,6 +9,7 @@ import pc from 'picocolors';
 import { collectConfig, collectConfigFromEnv } from '../prompts.js';
 import { generateKey } from '../secrets.js';
 import { writeEnvFile } from '../env.js';
+import { setupUrlFor } from './setup-url.js';
 import { isEmptyOrMissing, requiredNodeRange, runtimeTemplatePath } from '../paths.js';
 import {
 	buildDeploymentPackageJson,
@@ -151,13 +152,29 @@ function nextSteps({ rawDir, values, supabase }) {
 
 	lines.push(
 		'',
-		values.ORIGIN
-			? `Then visit ${pc.cyan(values.ORIGIN)} and open ${pc.cyan('/setup')} to claim admin.`
-			: `Then visit ${pc.cyan('http://localhost:3000')} and open ${pc.cyan('/setup')} to claim admin.`,
+		...claimAdminLines(values),
 		'',
 		pc.dim('`npm run doctor --fix` repairs what it can, including pm2 boot persistence.')
 	);
 	return lines;
+}
+
+/**
+ * A password form cannot prove the email typed into it, so it takes the token
+ * in this link. Proxy sign-in proves the email, and has no form.
+ */
+function claimAdminLines(values) {
+	if (values.SELVA_AUTH_PROVIDER === 'header') {
+		return [
+			`Then sign in through your proxy as ${pc.cyan(values.BOOTSTRAP_INSTANCE_ADMIN_EMAIL ?? 'the admin')} to claim admin.`
+		];
+	}
+	const { url } = setupUrlFor(values);
+	return [
+		'Then open the setup link to claim admin:',
+		`  ${pc.cyan(url)}`,
+		pc.dim('  `npx selva setup-url` prints it again. It stops working once an admin exists.')
+	];
 }
 
 function targetDirLabel(rawDir) {

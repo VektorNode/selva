@@ -144,7 +144,7 @@ npm run doctor
 npm start
 ```
 
-`doctor` checks the credentials and compares migration heads, so a green run confirms the keys work and the schema from step 3 is at the expected head. Then open `/setup`: the first user through becomes instance admin.
+`doctor` checks the credentials and compares migration heads, so a green run confirms the keys work and the schema from step 3 is at the expected head. Then open the setup link that `npx selva setup-url` prints to create the instance admin.
 
 Three things `doctor` can't see: the buckets from step 4; the email setup in step 6 (a broken template only shows up when someone clicks a link); and `ORIGIN`, which must match the URL you serve on, or form posts get a 403 and email callbacks point at the wrong host.
 
@@ -171,6 +171,8 @@ Skipping the first line is the trap: `selva-supabase` copies from whatever provi
 `db push` applies only what the database hasn't recorded yet, and `npm run doctor` tells you an upgrade is pending: it reports the expected head against the actual one.
 
 The migrations are not all additive. The `20261101*` set revokes `EXECUTE` on `selva` functions, revokes `UPDATE` on `invites` and `SELECT` on `compute_servers` (re-granting only some columns), replaces RLS policies, and makes the owner column on `orgs`, `projects` and `definitions`, and the uploader column on `definition_versions`, nullable with `ON DELETE SET NULL`. An older app that relies on a privilege or policy this removes fails until it is updated. Run `db push` right before the app update, or schedule a short window.
+
+**`20261113120000` goes the other way round: update the app first, then `db push`.** It takes every write on `selva` tables away from signed-in sessions; from 4.21 the app writes with the secret key instead. The new app runs on the old schema and reports the two migrations as pending on `/admin/system` until you push them. An older app on the new schema has each of its writes refused, which is why the updater will not install a release below this one afterwards.
 
 A sync may report `conflict` on a file you already have. It is refusing to overwrite an already-applied migration, which is correct: rewriting one would break the history it is recorded under. Diff the two copies before reaching for `--force`; a difference that is only comments or whitespace is harmless.
 

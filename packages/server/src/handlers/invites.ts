@@ -29,6 +29,7 @@ import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	SYSTEM_CONTEXT,
+	canChangeOrgRole,
 	type IAuthProvider,
 	type Invite,
 	type IOrgStore,
@@ -206,6 +207,9 @@ export const resendInvite: ApiHandler = async (req) => {
 		...existing,
 		id: randomUUID(),
 		tokenHash: codec.hashToken(rawToken),
+		// The resender passed the minter's gates above, so they vouch for it now.
+		// Accepting re-checks the sender, so the original one, once gone, would void it.
+		invitedBy: requireCaller(req).user.id,
 		createdAt: now.toISOString(),
 		expiresAt: new Date(now.getTime() + INVITE_TTL_MS).toISOString()
 	};
@@ -222,12 +226,14 @@ export const resendInvite: ApiHandler = async (req) => {
 };
 
 /**
- * Whether the person who sent `invite` may still bring someone in: enabled and
- * still a member of the invite's org. Checked at acceptance, so disabling or
- * removing someone also kills the invites they sent.
+ * Whether the person who sent `invite` could still send it today: enabled, and
+ * still passing every gate `createInvite` ran. Checked at acceptance, so
+ * disabling, removing or demoting someone also kills the invites they sent.
+ * Without the demotion half, an owner about to lose the role could park it in
+ * an invite to a second address and take it back within the invite's 7 days.
  */
 export async function inviterStillVouches(
-	invite: Pick<Invite, 'orgId' | 'invitedBy'>,
+	invite: Pick<Invite, 'orgId' | 'invitedBy' | 'orgRole' | 'platformPermissions'>,
 	deps: {
 		auth: Pick<IAuthProvider, 'getUser'>;
 		orgs: Pick<IOrgStore, 'getOrgMember'>;
@@ -239,6 +245,12 @@ export async function inviterStillVouches(
 		deps.orgs.getOrgMember(SYSTEM_CONTEXT, invite.orgId, invite.invitedBy),
 		deps.permissions.getFor(SYSTEM_CONTEXT, invite.invitedBy)
 	]);
-	// An instance admin may invite into an org they don't belong to.
-	return !!inviter && !inviter.disabled && (!!member || platform.includes('instance_admin'));
+	if (!inviter || inviter.disabled) return false;
+
+	const instanceAdmin = platform.includes('instance_admin');
+	if (invite.platformPermissions?.length && !instanceAdmin) return false;
+	// An instance admin may invite into an org they don't belong to, but the
+	// owner boundary has no bypass: only an owner hands out owner or admin.
+	const managesMembers = instanceAdmin || !!member?.permissions.includes('manage_org_members');
+	return managesMembers && canChangeOrgRole({ actorMember: member, role: invite.orgRole });
 }

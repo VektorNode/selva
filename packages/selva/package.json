@@ -32,7 +32,7 @@
 		"node": ">=24.0.0"
 	},
 	"selva": {
-		"dataFormat": 2
+		"dataFormat": 3
 	},
 	"scripts": {
 		"dev": "vite dev",

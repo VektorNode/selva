@@ -39,8 +39,13 @@ export interface ForRequestOptions {
  * connection — without leaking auth across requests.
  */
 export interface ClientBundle {
-	/** Long-lived service-role client, pinned to the `'selva'` schema. Bypasses RLS. */
+	/**
+	 * Long-lived service-role client, pinned to the `'selva'` schema. Bypasses RLS.
+	 * Every write to `selva` goes through it: `anon` and `authenticated` hold
+	 * SELECT only, so the caller's own client cannot write.
+	 */
 	serviceClient: SelvaSchemaClient;
+	/** The caller's client, for reads: RLS decides what comes back. */
 	forRequest(ctx: RequestContext, opts?: ForRequestOptions): SchemaClient;
 }
 

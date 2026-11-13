@@ -22,6 +22,7 @@
 		"dev:local": "node scripts/develop/dev-provider.mjs local",
 		"dev:supabase": "node scripts/develop/dev-provider.mjs supabase",
 		"dev:header": "node scripts/develop/dev-provider.mjs header",
+		"stage": "node scripts/develop/stage.mjs",
 		"dev:ui": "pnpm --filter @selvajs/ui dev",
 		"dev:website": "pnpm --filter @selvajs/website dev",
 		"generate": "turbo run generate",
