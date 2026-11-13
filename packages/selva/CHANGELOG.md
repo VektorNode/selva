@@ -1,5 +1,36 @@
 # @selvajs/selva
 
+## 4.21.0-beta.10
+
+### Minor Changes
+
+- 62435f1: The `/setup` password form now needs the setup link. `npx selva setup-url` prints it on the server, and the scaffold prints it at the end; the link carries a token derived from `SELVA_HMAC_KEY` and stops working once an admin exists. Before, the form accepted any visitor on an unpinned instance, and on a pinned one it accepted whoever typed `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, which the page itself served. **Scripted first-run setups must post the token** (`token` form field). The page no longer serves the pinned email outside proxy-only auth, and two setups posted together now mint one admin. `@selvajs/platform/config` gains `setupToken`, `isSetupToken` and `setupUrl`.
+
+  **OAuth, email-link and proxy sign-ins need the setup link too when `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is unset.** Before, the first of them to arrive became instance admin on a single-tenant instance. Now an unpinned instance goes only to a sign-in from a browser that opened the setup link, which `/setup` remembers in a cookie for an hour, so an email link has to be opened in that browser. The same holds multi-tenant, where an unpinned instance could not be claimed at all before. A pinned email works as before. **Unpinned OAuth or proxy installs must open `npx selva setup-url` before the first sign-in.**
+
+- 62435f1: **Supabase: signed-in sessions can no longer write to `selva` tables.** The anon key is publishable, so a user could call PostgREST with their own session JWT, and the RLS write policies allowed more than the app does: a version row naming another tenant's `.gh` (which Selva then solved or deleted with the service role), a project moved into another org or made public, a user added to an org without an invite, a removed project creator re-seated as owner, org compute servers written past the feature flag and the URL guard, and self-minted API tokens. Migration `20261113120000` revokes INSERT, UPDATE and DELETE from `anon` and `authenticated`, drops the write policies, and revokes EXECUTE on the functions that write. The stores now write with the service role after the app's checks; reads still run as the caller under RLS.
+
+  Fixed along the way, because they came from the same split: deleting a project left its definitions live with working share links; revoking an invite an admin could not have issued answered 204 and did nothing; org branding changed the stored image before a refused update; a project slug clash was never retried with a suffix; a deleted org's slug could not be reused.
+
+  Migration `20261113130000` takes tenant content away from `instance_admin` at the database: a staff session could read every tenant's private projects, definitions and schemas through PostgREST with no audit event, although the access rules give staff no bypass on content. Management data (orgs, rosters, invites, the share-link roster) stays readable, and the management guards now load a project as system for an instance admin.
+
+  New in the schema: a version's `file_key` must be `definitions/{guid}/versions/v{n}.{ext}` (existing rows are not checked), a project cannot change org, and new tables start with no grants.
+
+  **Upgrade order: update the app, then `npx supabase db push`.** The new app runs on the old schema and shows the migrations as pending in `/admin/system` until they are pushed. An older app on the new schema has every write refused, so `selva.dataFormat` goes to 3 and the updater will not install an earlier release afterwards. Host apps that write `selva` tables through the stores need no change; one that wrote them with a user-scoped client must use the stores or the service role.
+
+### Patch Changes
+
+- 62435f1: An invite stops working once its sender could no longer send it. Acceptance used to check only that the sender was enabled and still in the org, so an owner or instance admin could park that authority in an invite to a second address, be demoted, and take it back within the invite's 7 days. `inviterStillVouches` now re-runs the mint gates: `manage_org_members`, the owner boundary for owner and admin invites, and `instance_admin` for platform permissions. A resent invite now names the resender as its sender, so resending after the original sender left produces a link that works. The self-update launcher writes its runner with `mktemp` instead of the fixed `/tmp/selva-update-runner.sh`, which another local account could plant and have run as the app user.
+- 62435f1: The in-app update no longer dies halfway under pm2 7, and the app stops when asked. Two faults, both found by running a real update on a Linux host:
+
+  - The update runner called `pm2 stop` while still a child of the app. pm2 7 lists the app's descendants at that moment and SIGKILLs whatever outlives its kill timeout, so the runner was killed after stopping the app and before installing anything: the app stayed down on the old version until someone ran `selva update` by hand. It only showed when the registry answered within a second. The runner is now orphaned before it runs a line.
+  - The app never exited on SIGINT or SIGTERM. adapter-node closes the HTTP server and waits for the event loop to empty, which timers kept from happening, so every stop, restart and update waited out pm2's 10 second kill timeout and ended in SIGKILL, losing the solve-metric sink's last batch. The app now flushes and exits once the server has closed: a stop takes about a second.
+
+- 62435f1: The admin update check asks the registry in `NPM_CONFIG_REGISTRY` when it is set. It always asked registry.npmjs.org, while the install went through npm and so through a configured mirror: behind a private registry the page could offer a version the install would not fetch.
+- 62435f1: Deleting or disabling a user no longer leaves a gap nobody can repair. Disable now refuses an org's only owner, as delete does, and neither they nor an owner stepping down or being removed count a disabled co-owner as the one who stays. Both run their owner check inside the org's member-change queue, so an owner stepping down while their co-owner is deleted cannot leave the org without one. A disable or delete that fails gives the target their `instance_admin` grant back. Delete erases the user's data before the identity, so a retry after a failed erasure finishes the job instead of answering 404 with the data still there, then erases again for what the user's live session wrote meanwhile. `@selvajs/server/handlers` exports `serializeOwnerChanges` and `orgHasAnotherOwner`.
+
+  Supabase: a sign-out, disable or delete on one instance now ends that user's sessions there on their next request, instead of up to 60 seconds later. Other instances still take up to `revalidateMs`.
+
 ## 4.21.0-beta.9
 
 ### Minor Changes

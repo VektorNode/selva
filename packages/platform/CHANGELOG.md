@@ -1,5 +1,25 @@
 # @selvajs/platform
 
+## 1.1.0-beta.5
+
+### Minor Changes
+
+- 62435f1: The `/setup` password form now needs the setup link. `npx selva setup-url` prints it on the server, and the scaffold prints it at the end; the link carries a token derived from `SELVA_HMAC_KEY` and stops working once an admin exists. Before, the form accepted any visitor on an unpinned instance, and on a pinned one it accepted whoever typed `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, which the page itself served. **Scripted first-run setups must post the token** (`token` form field). The page no longer serves the pinned email outside proxy-only auth, and two setups posted together now mint one admin. `@selvajs/platform/config` gains `setupToken`, `isSetupToken` and `setupUrl`.
+
+  **OAuth, email-link and proxy sign-ins need the setup link too when `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is unset.** Before, the first of them to arrive became instance admin on a single-tenant instance. Now an unpinned instance goes only to a sign-in from a browser that opened the setup link, which `/setup` remembers in a cookie for an hour, so an email link has to be opened in that browser. The same holds multi-tenant, where an unpinned instance could not be claimed at all before. A pinned email works as before. **Unpinned OAuth or proxy installs must open `npx selva setup-url` before the first sign-in.**
+
+### Patch Changes
+
+- 62435f1: **Supabase: signed-in sessions can no longer write to `selva` tables.** The anon key is publishable, so a user could call PostgREST with their own session JWT, and the RLS write policies allowed more than the app does: a version row naming another tenant's `.gh` (which Selva then solved or deleted with the service role), a project moved into another org or made public, a user added to an org without an invite, a removed project creator re-seated as owner, org compute servers written past the feature flag and the URL guard, and self-minted API tokens. Migration `20261113120000` revokes INSERT, UPDATE and DELETE from `anon` and `authenticated`, drops the write policies, and revokes EXECUTE on the functions that write. The stores now write with the service role after the app's checks; reads still run as the caller under RLS.
+
+  Fixed along the way, because they came from the same split: deleting a project left its definitions live with working share links; revoking an invite an admin could not have issued answered 204 and did nothing; org branding changed the stored image before a refused update; a project slug clash was never retried with a suffix; a deleted org's slug could not be reused.
+
+  Migration `20261113130000` takes tenant content away from `instance_admin` at the database: a staff session could read every tenant's private projects, definitions and schemas through PostgREST with no audit event, although the access rules give staff no bypass on content. Management data (orgs, rosters, invites, the share-link roster) stays readable, and the management guards now load a project as system for an instance admin.
+
+  New in the schema: a version's `file_key` must be `definitions/{guid}/versions/v{n}.{ext}` (existing rows are not checked), a project cannot change org, and new tables start with no grants.
+
+  **Upgrade order: update the app, then `npx supabase db push`.** The new app runs on the old schema and shows the migrations as pending in `/admin/system` until they are pushed. An older app on the new schema has every write refused, so `selva.dataFormat` goes to 3 and the updater will not install an earlier release afterwards. Host apps that write `selva` tables through the stores need no change; one that wrote them with a user-scoped client must use the stores or the service role.
+
 ## 1.1.0-beta.4
 
 ### Minor Changes
