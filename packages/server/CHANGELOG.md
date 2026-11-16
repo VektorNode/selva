@@ -1,5 +1,36 @@
 # @selvajs/server
 
+## 3.0.0-beta.9
+
+### Minor Changes
+
+- 37f3062: Definition versions show what is inside the file, not only its form. Checking or uploading a version lists the plugins it was saved with and which the Compute server lacks or runs at another version, obsolete components, and scripts or panels that look like they hold a secret. A plugin the server lacks blocks the upload, because its components would be dropped and solves would succeed with outputs missing; the uploader can override it, and the version list then shows "needs <plugin>" until the version is read again with the plugin installed. Comparing two versions shows, to editors only, plugins added or updated, components added and removed by type, scripts edited with lines added and removed and their code diff on request, values set on the canvas that changed, and rewiring. Script code is never stored: the inventory keeps per-line fingerprints and the diff reads both stored files through Compute.
+
+  - `@selvajs/schemas`: `DocumentInventory` and its parts in `wire-schema.json`; `inventoryWarnings`, `inventoryWarningText`, `summarizeInventory`, `diffInventories`, `inventoryDiffToMarkdown`, `countLineChanges` and `diffLines`.
+  - `@selvajs/compute`: `readSchemaResults` passes `inventory` through.
+  - `@selvajs/platform`: `DefinitionVersion.inventory` and `inventorySummary`, and `IDefinitionStore.setVersionInventory`. Lists carry the summary, never the inventory.
+  - `@selvajs/supabase-provider`: migration `20261116120000_selva_definition_version_inventory` adds `definition_versions.inventory` and `inventory_summary`.
+  - `@selvajs/server`: `extractSchemaForUpload` returns `{ schema, inventory }`; `fetchExtraction`, `fetchScriptSources`; handlers `refreshVersionInventory` and `getVersionScriptDiff`. Check, upload and changes responses carry `inventory`.
+  - `@selvajs/selva`: `POST /api/v1/definitions/{guid}/versions/{versionId}/inventory`, `GET /api/v1/definitions/{guid}/versions/{versionId}/scripts/{scriptId}`, and `acceptMissingPlugins` on definition and version uploads.
+
+  Needs the VektorNode Compute fork with FORK_CHANGES §26 and a Selva plugin that has `InventoryExtractor`. Older servers keep working without the inventory.
+
+- 1bc53ef: Definition versions show what they change. Uploading a new version checks the file through Compute before anything is saved and lists its changes against the version it follows: inputs and outputs added, removed or changed, sorted into breaking, notable and cosmetic. Breaking changes (a removed input, a changed type, a removed option or a narrower range) need a confirmation before the upload. Release notes take Markdown up to 10,000 characters, with a preview and a one-click insert of the detected changes, and every version in the list opens to its notes and its changes against the version before, or any other version.
+
+  - `@selvajs/schemas`: `diffSchemas(before, after)` and `schemaDiffToMarkdown(diff)`. Inputs and outputs match by parameter id, so a rename is a change and a recreated parameter is a removal plus an addition.
+  - `@selvajs/platform`: `MAX_CHANGE_NOTE_LENGTH`.
+  - `@selvajs/server`: `checkVersion` and `getVersionChanges` handlers. `uploadVersion` returns `base` and `changes` beside `version`, refuses a note over the limit instead of cutting it at 1,000 characters, and stores notes with LF line endings.
+  - `@selvajs/selva`: `POST /api/v1/definitions/{guid}/versions/check` and `GET /api/v1/definitions/{guid}/versions/{versionId}/changes?against=`.
+
+### Patch Changes
+
+- Updated dependencies [37f3062]
+- Updated dependencies [1bc53ef]
+  - @selvajs/schemas@5.4.0-beta.3
+  - @selvajs/compute@5.1.0-beta.2
+  - @selvajs/platform@1.1.0-beta.6
+  - @selvajs/notifications@0.3.1-beta.6
+
 ## 3.0.0-beta.8
 
 ### Patch Changes
