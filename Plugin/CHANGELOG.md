@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- On Rhino.Compute, the plugin reads what a definition holds beyond its form, for Selva's version history: the plugins it was saved with and which the server loaded, its components and whether they are obsolete, values set on the canvas, script fingerprints and wiring. It also reads a script's code on request for a code diff. Scripts and panels that look like they hold a credential are flagged by rule name; the matched text never leaves the file.
+
 ### Security
 
 - On Rhino.Compute, Get File and Get Image refuse a file path that arrives in the solve request. A caller could name any file on the server's disk, or a UNC share that then received the server's credentials; share-link visitors could too. A request now names only data it sends or a URL. Paths wired into the component on the canvas, and files picked in Rhino, work as before.

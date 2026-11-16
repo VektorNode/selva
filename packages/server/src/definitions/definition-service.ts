@@ -6,15 +6,20 @@ import type {
 	DefinitionRecord,
 	DefinitionFileExt,
 	DefinitionVersion,
+	DocumentInventory,
 	UpdateMetadataInput,
 	UISchema
 } from '@selvajs/platform';
+import { summarizeInventory } from '@selvajs/schemas';
 import {
 	ProviderError,
 	definitionPaths,
 	toSourceDocumentId,
 	withCacheBust
 } from '@selvajs/platform';
+
+const inventoryFields = (inventory: DocumentInventory | null | undefined) =>
+	inventory ? { inventory, inventorySummary: summarizeInventory(inventory) } : {};
 
 /**
  * Not the HTTP body — that's `CreateDefinitionInputSchema` in
@@ -54,7 +59,8 @@ export class DefinitionService {
 		ctx: RequestContext,
 		input: CreateDefinitionRecord,
 		file: Uint8Array,
-		schema: UISchema
+		schema: UISchema,
+		inventory?: DocumentInventory | null
 	): Promise<{ record: DefinitionRecord; version: DefinitionVersion }> {
 		const now = new Date().toISOString();
 		const actor = ctx.userId || input.ownerId;
@@ -101,7 +107,8 @@ export class DefinitionService {
 			uploadedBy: actor,
 			uploadedAt: now,
 			schema,
-			schemaExtractedAt: now
+			schemaExtractedAt: now,
+			...inventoryFields(inventory)
 		};
 		await this.data.definitions.createVersion(ctx, version);
 
@@ -127,7 +134,8 @@ export class DefinitionService {
 		ext: DefinitionFileExt,
 		originalName: string,
 		schema: UISchema,
-		changeNote?: string
+		changeNote?: string,
+		inventory?: DocumentInventory | null
 	): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
@@ -154,7 +162,8 @@ export class DefinitionService {
 			uploadedAt: now,
 			changeNote: changeNote?.trim() || undefined,
 			schema,
-			schemaExtractedAt: now
+			schemaExtractedAt: now,
+			...inventoryFields(inventory)
 		};
 		await this.data.definitions.createVersion(ctx, version);
 		await this.data.definitions.setDraftVersion(ctx, guid, versionId);

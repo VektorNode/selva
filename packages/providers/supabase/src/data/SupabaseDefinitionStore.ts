@@ -10,7 +10,9 @@ import type {
 	DefinitionListOptions,
 	ListOptions,
 	Page,
-	UISchema
+	UISchema,
+	DocumentInventory,
+	InventorySummary
 } from '@selvajs/platform';
 import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
@@ -22,15 +24,15 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 const DEFINITION_COLUMNS =
 	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, source_document_id, created_at, updated_at, deleted_at';
 /**
- * Explicit column list for `definition_versions`, minus the `schema` JSONB.
- * `schema` can be hundreds of KB per row, so the list projection leaves it out
- * and `listVersions` returns rows with `schema: undefined`; only `getVersion`
- * (which reads one row, for a caller that needs the schema) pulls it in.
+ * Explicit column list for `definition_versions`, minus the `schema` and `inventory` JSONB.
+ * Each can be hundreds of KB per row, so the list projection leaves them out
+ * and `listVersions` returns rows without them; only `getVersion`
+ * (which reads one row, for a caller that needs them) pulls them in.
  */
 const DEFINITION_VERSION_COLUMNS =
-	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at';
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, inventory_summary';
 /**
- * `getVersion`'s projection — the list columns plus the `schema` JSONB. Spelled
+ * `getVersion`'s projection — the list columns plus the `schema` and `inventory` JSONB. Spelled
  * out rather than built with a template literal: supabase-js infers the row
  * type from the literal column string, and a template literal degrades it to
  * `string`.
@@ -39,7 +41,7 @@ const DEFINITION_VERSION_COLUMNS =
 const VERSIONS_PAGE = 1000;
 
 const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
-	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
+	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, inventory_summary, schema, inventory';
 
 /**
  * Definition metadata + version store backed by Postgres. `definitions` carries
@@ -332,6 +334,19 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (error) throw mapPostgrestError(error);
 	}
 
+	async setVersionInventory(
+		_ctx: RequestContext,
+		versionId: string,
+		inventory: DocumentInventory,
+		summary: InventorySummary
+	): Promise<void> {
+		const { error } = await this.clients.serviceClient
+			.from('definition_versions')
+			.update({ inventory, inventory_summary: summary })
+			.eq('id', versionId);
+		if (error) throw mapPostgrestError(error);
+	}
+
 	async deleteVersion(ctx: RequestContext, versionId: string): Promise<void> {
 		// live_version_id / draft_version_id are ON DELETE RESTRICT — if the
 		// version is referenced by either channel, Postgres raises 23503 →
@@ -483,6 +498,8 @@ interface DefinitionVersionRow {
 	change_note?: string | null;
 	schema?: UISchema | null;
 	schema_extracted_at?: string | null;
+	inventory?: DocumentInventory | null;
+	inventory_summary?: InventorySummary | null;
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
@@ -575,7 +592,9 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		uploadedAt: row.uploaded_at,
 		changeNote: row.change_note ?? undefined,
 		schema: row.schema ?? undefined,
-		schemaExtractedAt: row.schema_extracted_at ?? undefined
+		schemaExtractedAt: row.schema_extracted_at ?? undefined,
+		inventory: row.inventory ?? undefined,
+		inventorySummary: row.inventory_summary ?? undefined
 	};
 }
 
@@ -593,6 +612,8 @@ function versionToRow(v: DefinitionVersion): Record<string, unknown> {
 	if (v.changeNote !== undefined) row.change_note = v.changeNote;
 	if (v.schema !== undefined) row.schema = v.schema;
 	if (v.schemaExtractedAt !== undefined) row.schema_extracted_at = v.schemaExtractedAt;
+	if (v.inventory !== undefined) row.inventory = v.inventory;
+	if (v.inventorySummary !== undefined) row.inventory_summary = v.inventorySummary;
 	return row;
 }
 

@@ -6,6 +6,11 @@ export interface SchemaEndpointResult<TSchema = unknown> {
 	schemas?: TSchema[];
 	/** Per-file diagnosis. Compute reports this and still answers 200. */
 	error?: string;
+	/**
+	 * What the file holds beyond its schema (Selva's `DocumentInventory`). Absent from servers
+	 * or plugins that predate it. Not inspected.
+	 */
+	inventory?: unknown;
 }
 
 /**
@@ -24,6 +29,7 @@ export function readSchemaResults<TSchema = unknown>(
 	const entries = Array.isArray(raw) ? raw : [raw];
 	return entries.map((entry) => ({
 		schemas: readField<TSchema[]>(entry, 'schemas'),
-		error: readField<string>(entry, 'error')
+		error: readField<string>(entry, 'error'),
+		inventory: readField<unknown>(entry, 'inventory')
 	}));
 }

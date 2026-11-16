@@ -2,9 +2,11 @@
 	import type { DefinitionVersion } from '@selvajs/platform';
 	import type { SchemaDiff } from '@selvajs/schemas';
 	import { LoaderCircle } from '@lucide/svelte';
-	import { FilterableDropdown, type FilterableDropdownItem } from '@selvajs/ui';
+	import { Button, FilterableDropdown, toast, type FilterableDropdownItem } from '@selvajs/ui';
 	import MarkdownNote from './MarkdownNote.svelte';
 	import VersionChanges from './VersionChanges.svelte';
+	import InventorySection from './InventorySection.svelte';
+	import { refreshInventory, type InventoryReport } from './inventory.js';
 
 	interface Props {
 		definitionGuid: string;
@@ -22,13 +24,27 @@
 				state: 'done';
 				base: { id: string; versionNumber: number } | null;
 				changes: SchemaDiff | null;
+				/** Absent for callers who may only run the definition; null when not read yet. */
+				inventory?: InventoryReport | null;
 		  };
 
 	/** '' = the version just before. */
 	let against = $state('');
 	let loaded = $state<Loaded>({ state: 'loading' });
+	/** Bumped to fetch again after an inventory is read. */
+	let reload = $state(0);
+	let reading = $state(false);
+
+	async function read(versionId: string) {
+		reading = true;
+		const error = await refreshInventory(definitionGuid, versionId);
+		reading = false;
+		if (error) toast.error(error);
+		else reload++;
+	}
 
 	$effect(() => {
+		void reload;
 		const url = `/api/v1/definitions/${definitionGuid}/versions/${version.id}/changes${against ? `?against=${against}` : ''}`;
 		let cancelled = false;
 		loaded = { state: 'loading' };
@@ -102,4 +118,26 @@
 			<VersionChanges diff={loaded.changes} />
 		{/if}
 	</div>
+
+	{#if loaded.state === 'done' && loaded.inventory !== undefined}
+		{#if loaded.inventory}
+			{@const base = loaded.base}
+			<InventorySection
+				report={loaded.inventory}
+				baseNumber={base?.versionNumber}
+				code={{ definitionGuid, versionId: version.id, against: against || undefined }}
+				onReadBase={base ? () => read(base.id) : undefined}
+				readingBase={reading}
+			/>
+		{:else}
+			<div class="flex flex-wrap items-center gap-2">
+				<p class="text-muted-foreground text-sm">
+					v{version.versionNumber} was uploaded before Selva read what is inside a file.
+				</p>
+				<Button size="sm" variant="outline" onclick={() => read(version.id)} disabled={reading}>
+					{reading ? 'Reading…' : 'Read it now'}
+				</Button>
+			</div>
+		{/if}
+	{/if}
 </div>

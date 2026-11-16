@@ -7,7 +7,13 @@
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
-import { seedAcme, seedDefinition, actAs, callHandler } from '../../testing/index.js';
+import {
+	seedAcme,
+	seedDefinition,
+	seedProjectMember,
+	actAs,
+	callHandler
+} from '../../testing/index.js';
 import { SYSTEM_CONTEXT, type ComputeServerConfig } from '@selvajs/platform';
 import { checkVersion, getVersionChanges, uploadVersion } from '../definitionVersions.js';
 
@@ -23,19 +29,43 @@ afterEach(async () => {
 
 const width = { id: 'w', nickname: 'Width', paramType: 'number', default: 10 };
 
-function mockSchema(schema: Record<string, unknown>): void {
+function mockSchema(schema: Record<string, unknown>, inventory?: unknown): void {
 	vi.spyOn(globalThis, 'fetch').mockImplementation(
 		async () =>
-			new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [schema] }]), {
+			new Response(JSON.stringify([{ fileName: 'def.gh', schemas: [schema], inventory }]), {
 				status: 200,
 				headers: { 'Content-Type': 'application/json' }
 			})
 	);
 }
 
+function inventory(opts: { charts?: 'missing' | 'loaded'; gap?: string } = {}) {
+	return {
+		extractedWith: '1.0.0.0',
+		libraries: opts.charts
+			? [
+					{
+						id: '2e872be7-90c2-496a-b80c-f2623c249347',
+						name: 'Charts',
+						author: 'VN',
+						version: '1.3',
+						core: false,
+						...(opts.charts === 'loaded' && { serverVersion: '1.3' })
+					}
+				]
+			: [],
+		components: [{ id: 'c1', type: 't', name: 'Loft', obsolete: false }],
+		values: [
+			{ id: 's1', kind: 'slider', label: 'Gap', text: opts.gap ?? '1', sha256: opts.gap ?? '1' }
+		],
+		scripts: [],
+		wires: { count: 0, sha256: '' }
+	};
+}
+
 async function setup() {
 	tp = await freshHarness();
-	const { alice, alicesPrivate } = await seedAcme(tp);
+	const { alice, bob, alicesPrivate } = await seedAcme(tp);
 	const server: ComputeServerConfig = {
 		id: 'srv-1',
 		label: 'Test',
@@ -46,13 +76,14 @@ async function setup() {
 	await tp.config.data.computeServer.savePlatformServers(SYSTEM_CONTEXT, [server], server.id);
 	const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 	const locals = await actAs(tp, alice.id);
-	return { def, locals, guid: def.record.guid };
+	return { def, locals, bob, guid: def.record.guid };
 }
 
-function form(note?: string): FormData {
+function form(note?: string, acceptMissingPlugins = false): FormData {
 	const f = new FormData();
 	f.append('file', new Blob([new Uint8Array([1, 2, 3])]), 'def.gh');
 	if (note !== undefined) f.append('changeNote', note);
+	if (acceptMissingPlugins) f.append('acceptMissingPlugins', 'true');
 	return f;
 }
 
@@ -154,6 +185,71 @@ describe('version changes', () => {
 			locals,
 			params: { guid, versionId: def.version.id }
 		});
-		expect(res.json).toEqual({ base: null, changes: null });
+		expect(res.json).toEqual({ base: null, changes: null, inventory: null });
+	});
+});
+
+describe('inventory', () => {
+	it('blocks a file whose plugin the server lacks, unless the uploader accepts it', async () => {
+		const { locals, guid } = await setup();
+		mockSchema({ name: 'Test', inputs: [], outputs: [] }, inventory({ charts: 'missing' }));
+
+		const check = await callHandler(checkVersion, { locals, params: { guid }, body: form() });
+		expect((check.json as { inventory: { warnings: unknown[] } }).inventory.warnings).toEqual([
+			{ kind: 'missingPlugin', plugin: 'Charts', version: '1.3' }
+		]);
+
+		const refused = await callHandler(uploadVersion, { locals, params: { guid }, body: form() });
+		expect(refused.status).toBe(422);
+		expect((await tp!.config.data.definitions.listVersions(locals.ctx, guid)).items).toHaveLength(
+			1
+		);
+
+		const accepted = await callHandler(uploadVersion, {
+			locals,
+			params: { guid },
+			body: form(undefined, true)
+		});
+		expect(accepted.status).toBe(201);
+		const listed = (await tp!.config.data.definitions.listVersions(locals.ctx, guid)).items[0];
+		expect(listed.inventorySummary).toEqual({ missingPlugins: ['Charts'], obsoleteComponents: 0 });
+		expect(listed.inventory).toBeUndefined();
+	});
+
+	it('says what changed inside, to editors only', async () => {
+		const { def, locals, bob, guid } = await setup();
+		mockSchema({ name: 'Test', inputs: [], outputs: [] }, inventory({ charts: 'loaded' }));
+		await callHandler(uploadVersion, { locals, params: { guid }, body: form() });
+		mockSchema(
+			{ name: 'Test', inputs: [], outputs: [] },
+			inventory({ charts: 'loaded', gap: '2' })
+		);
+		const up = await callHandler(uploadVersion, { locals, params: { guid }, body: form() });
+		const v3 = (up.json as { version: { id: string } }).version.id;
+
+		const res = await callHandler(getVersionChanges, { locals, params: { guid, versionId: v3 } });
+		const body = res.json as { inventory: { diff: { values: unknown[] }; missing: null } };
+		expect(body.inventory.missing).toBeNull();
+		expect(body.inventory.diff.values).toMatchObject([{ label: 'Gap', before: '1', after: '2' }]);
+
+		// The seeded v1 predates inventories: the compare names the side that has none.
+		const old = await callHandler(getVersionChanges, {
+			locals,
+			params: { guid, versionId: v3 },
+			url: `http://test.local/x?against=${def.version.id}`
+		});
+		expect((old.json as { inventory: { missing: string } }).inventory.missing).toBe('base');
+
+		await seedProjectMember(tp!, {
+			projectId: def.record.projectId,
+			userId: bob.id,
+			role: 'viewer'
+		});
+		const viewer = await callHandler(getVersionChanges, {
+			locals: await actAs(tp!, bob.id),
+			params: { guid, versionId: v3 }
+		});
+		expect(viewer.status).toBe(200);
+		expect(viewer.json).not.toHaveProperty('inventory');
 	});
 });

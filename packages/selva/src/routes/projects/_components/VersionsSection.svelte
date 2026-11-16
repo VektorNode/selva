@@ -200,6 +200,23 @@
 										draft
 									</span>
 								{/if}
+								{#if version.inventorySummary?.missingPlugins.length}
+									<span
+										class="bg-destructive/10 text-destructive text-2xs rounded-full px-2 py-0.5"
+										title="The Compute server had not loaded these plugins at the last check. Open the version and read it again once they are installed."
+									>
+										needs {version.inventorySummary.missingPlugins.join(', ')}
+									</span>
+								{/if}
+								{#if version.inventorySummary?.obsoleteComponents}
+									<span
+										class="bg-warning/10 text-warning text-2xs rounded-full px-2 py-0.5"
+										title="Open and re-save the file in Grasshopper to upgrade them."
+									>
+										{version.inventorySummary.obsoleteComponents} obsolete
+										{version.inventorySummary.obsoleteComponents === 1 ? 'component' : 'components'}
+									</span>
+								{/if}
 							</div>
 							{#if version.changeNote}
 								<p class="mt-1 truncate text-sm font-medium">{markdownTitle(version.changeNote)}</p>

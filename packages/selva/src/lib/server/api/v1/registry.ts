@@ -119,7 +119,13 @@ export const V1_ENDPOINTS: Endpoint[] = [
 			{ field: 'category', required: false, description: 'Grouping label.' },
 			{ field: 'tags', required: false, description: 'Comma-separated tags.' },
 			{ field: 'image', required: false, description: 'Cover image.' },
-			{ field: 'computeServerId', required: false, description: 'Pin to a compute server.' }
+			{ field: 'computeServerId', required: false, description: 'Pin to a compute server.' },
+			{
+				field: 'acceptMissingPlugins',
+				required: false,
+				description:
+					'`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422.'
+			}
 		],
 		errors: [400, 403, 422, 503]
 	},
@@ -190,6 +196,12 @@ export const V1_ENDPOINTS: Endpoint[] = [
 				field: 'changeNote',
 				required: false,
 				description: 'Markdown, at most 10,000 characters. Longer is refused with 400.'
+			},
+			{
+				field: 'acceptMissingPlugins',
+				required: false,
+				description:
+					'`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422.'
 			}
 		],
 		errors: [400, 404, 422, 503]
@@ -199,7 +211,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		path: '/definitions/{guid}/versions/check',
 		scope: 'upload',
 		summary:
-			'Dry run of an upload: validates the file through Compute and diffs it against the version it would follow. Writes nothing.',
+			'Dry run of an upload: validates the file through Compute and diffs it against the version it would follow, form and inventory. Writes nothing.',
 		response: 'object',
 		multipart: [{ field: 'file', required: true, description: 'The `.gh` or `.ghx` file.' }],
 		errors: [400, 404, 422, 503]
@@ -234,8 +246,28 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'read',
 		summary:
 			'What this version changed in inputs, outputs and settings, against `?against=<versionId>` or the version before it.',
+		returns:
+			'Editors also get `inventory`: warnings about the file and what changed inside it (plugins, components, values, scripts, wiring).',
 		response: 'object',
 		errors: [404]
+	},
+	{
+		method: 'POST',
+		path: '/definitions/{guid}/versions/{versionId}/inventory',
+		scope: 'upload',
+		summary:
+			"Re-read a version's inventory from its stored file through Compute: for versions uploaded before inventories, or after installing a missing plugin.",
+		response: 'object',
+		errors: [404, 422, 503]
+	},
+	{
+		method: 'GET',
+		path: '/definitions/{guid}/versions/{versionId}/scripts/{scriptId}',
+		scope: 'upload',
+		summary:
+			"One script component's code in this version and in `?against=<versionId>` or the version before, with a line diff. Read from the stored files through Compute, never kept.",
+		response: 'object',
+		errors: [404, 422, 503]
 	},
 	{
 		method: 'POST',

@@ -8,7 +8,12 @@ import {
 	readSchemaResults as readWrapper,
 	type SchemaEndpointResult
 } from '@selvajs/compute/grasshopper';
-import { UI_SCHEMA_VERSION, type UISchema } from '@selvajs/schemas';
+import {
+	UI_SCHEMA_VERSION,
+	type DocumentInventory,
+	type ScriptSource,
+	type UISchema
+} from '@selvajs/schemas';
 import type { ComputeServerConfig } from '@selvajs/platform';
 import { applySavedValues, savedValuesFrom } from './saved-values.js';
 import { withTimeout } from './with-timeout.js';
@@ -167,6 +172,20 @@ export async function fetchSchemaFromCompute(
 	definitionBytes: Uint8Array,
 	server: ComputeServerConfig
 ): Promise<UISchema> {
+	return (await fetchExtraction(definitionBytes, server)).schema;
+}
+
+/** A file's schema and, from a plugin that builds one, its inventory. */
+export interface Extraction {
+	schema: UISchema;
+	inventory: DocumentInventory | null;
+}
+
+/** `fetchSchemaFromCompute` with the inventory Compute returns beside the schema. */
+export async function fetchExtraction(
+	definitionBytes: Uint8Array,
+	server: ComputeServerConfig
+): Promise<Extraction> {
 	const formData = new FormData();
 	const blob = new Blob([new Uint8Array(definitionBytes)], { type: 'application/octet-stream' });
 	formData.append('file', blob, 'definition.gh');
@@ -193,7 +212,23 @@ export async function fetchSchemaFromCompute(
 
 	assertSupportedSchemaVersion(schemas[0]);
 	assertCamelCaseSchema(schemas[0]);
-	return schemas[0];
+	const inventory = results.find((r) => r.schemas?.length)?.inventory;
+	return { schema: schemas[0], inventory: isInventory(inventory) ? inventory : null };
+}
+
+// Shape check only: the plugin built it from the same wire schema. A malformed one is dropped, not
+// fatal, because the schema alone still gates the upload.
+function isInventory(value: unknown): value is DocumentInventory {
+	const v = value as Partial<DocumentInventory> | null;
+	return (
+		!!v &&
+		typeof v === 'object' &&
+		Array.isArray(v.libraries) &&
+		Array.isArray(v.components) &&
+		Array.isArray(v.values) &&
+		Array.isArray(v.scripts) &&
+		typeof v.wires?.count === 'number'
+	);
 }
 
 /**
@@ -213,7 +248,7 @@ const SAVED_VALUES_TIMEOUT_MS = 120_000;
 export async function extractSchemaForUpload(
 	definitionBytes: Uint8Array,
 	server: ComputeServerConfig
-): Promise<UISchema> {
+): Promise<Extraction> {
 	const values = fetchParsedDefinitionIO(definitionBytes, {
 		serverUrl: server.serverUrl,
 		...(server.apiKey && { apiKey: server.apiKey }),
@@ -221,11 +256,57 @@ export async function extractSchemaForUpload(
 	}).then((io) => savedValuesFrom(io.inputs));
 	values.catch(() => {});
 
-	const schema = await fetchSchemaFromCompute(definitionBytes, server);
+	const { schema, inventory } = await fetchExtraction(definitionBytes, server);
 	const saved = await withTimeout(
 		values,
 		SAVED_VALUES_GRACE_MS,
 		() => new Error('saved values not read in time')
 	).catch(() => null);
-	return saved ? applySavedValues(schema, saved) : schema;
+	return { schema: saved ? applySavedValues(schema, saved) : schema, inventory };
+}
+
+/**
+ * The source of the named script components, read by Compute from a stored file. The inventory
+ * keeps fingerprints only, so this is how a code diff gets the code. Throws 'unsupported' when the
+ * server's plugin cannot read scripts.
+ */
+export async function fetchScriptSources(
+	definitionBytes: Uint8Array,
+	ids: readonly string[],
+	server: ComputeServerConfig
+): Promise<ScriptSource[]> {
+	const form = new FormData();
+	form.append('file', new Blob([new Uint8Array(definitionBytes)]), 'definition.gh');
+	form.append('ids', ids.join(','));
+	const headers: Record<string, string> = {};
+	if (server.apiKey) headers['RhinoComputeKey'] = server.apiKey;
+
+	let response: Response;
+	try {
+		response = await fetch(new URL('/grasshopper/scripts', server.serverUrl), {
+			method: 'POST',
+			headers,
+			body: form
+		});
+	} catch (err) {
+		throw new SchemaExtractionError(
+			'unreachable',
+			`Compute server is unreachable: ${err instanceof Error ? err.message : String(err)}`
+		);
+	}
+	// A server without the endpoint answers 404; one whose plugin predates it, 422.
+	if (response.status === 404 || response.status === 422) {
+		throw new SchemaExtractionError(
+			'unsupported',
+			'This Compute server cannot read script source. Update the server and its Selva plugin.'
+		);
+	}
+	if (!response.ok) {
+		throw new SchemaExtractionError(
+			'unreachable',
+			`Scripts endpoint returned ${response.status}: ${response.statusText}`
+		);
+	}
+	const body = (await response.json()) as ScriptSource[];
+	return Array.isArray(body) ? body : [];
 }

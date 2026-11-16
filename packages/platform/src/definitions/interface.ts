@@ -1,6 +1,6 @@
 import type { RequestContext } from '../context.js';
 import type { ListOptions, Page } from '../pagination.js';
-import type { UISchema } from '@selvajs/schemas';
+import type { DocumentInventory, InventorySummary, UISchema } from '@selvajs/schemas';
 import type {
 	DefinitionListOptions,
 	DefinitionRecord,
@@ -65,9 +65,9 @@ export interface IDefinitionStore {
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
 	/**
-	 * Newest first by `versionNumber`. `schema` is always `undefined` on listed
-	 * rows regardless of what's stored — it's a large blob no list caller needs.
-	 * Use `getVersion` for the schema.
+	 * Newest first by `versionNumber`. `schema` and `inventory` are always `undefined` on
+	 * listed rows regardless of what's stored: large blobs no list caller needs. Use
+	 * `getVersion` for them.
 	 */
 	listVersions(
 		ctx: RequestContext,
@@ -76,14 +76,14 @@ export interface IDefinitionStore {
 	): Promise<Page<DefinitionVersion>>;
 	/**
 	 * Every version of each definition in one read, keyed by definition id, newest first, with
-	 * `schema` left out as in `listVersions`. Every id asked for is a key; one with no versions
+	 * `schema` and `inventory` left out as in `listVersions`. Every id asked for is a key; one with no versions
 	 * maps to an empty list.
 	 */
 	listVersionsFor(
 		ctx: RequestContext,
 		definitionIds: readonly string[]
 	): Promise<Map<string, DefinitionVersion[]>>;
-	/** The full row, including the cached `schema` when one has been extracted. */
+	/** The full row, including the cached `schema` and `inventory` when extracted. */
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 
 	/**
@@ -92,6 +92,16 @@ export interface IDefinitionStore {
 	 * No-op if the version doesn't exist.
 	 */
 	setVersionSchema(ctx: RequestContext, versionId: string, schema: UISchema): Promise<void>;
+	/**
+	 * Sets a version's inventory and its summary, at upload or when a check re-reads the stored
+	 * file. No-op if the version doesn't exist.
+	 */
+	setVersionInventory(
+		ctx: RequestContext,
+		versionId: string,
+		inventory: DocumentInventory,
+		summary: InventorySummary
+	): Promise<void>;
 	/**
 	 * Throws 409 if the version is referenced by `liveVersionId` or
 	 * `draftVersionId`. Caller deletes the blob separately.

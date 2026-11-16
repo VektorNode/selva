@@ -10,7 +10,9 @@ import type {
 	DefinitionListOptions,
 	ListOptions,
 	Page,
-	UISchema
+	UISchema,
+	DocumentInventory,
+	InventorySummary
 } from '@selvajs/platform';
 import {
 	ERASED_ACTOR_ID,
@@ -366,13 +368,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		const config = await this.readConfig();
 		const parent = config.definitions[definitionId];
 		if (!this.live(parent)) return paginate([], opts);
-		// `schema` is stripped to match the interface contract (and Supabase, which
-		// leaves the column out of the list projection): listed rows are metadata
-		// only, and callers who need the schema go through `getVersion`.
+		// `schema` and `inventory` are stripped to match the interface contract (and Supabase,
+		// which leaves those columns out of the list projection): listed rows are metadata only,
+		// and callers who need them go through `getVersion`.
 		const rows = Object.values(config.definitionVersions)
 			.filter((v) => v.definitionId === definitionId)
 			.sort((a, b) => b.versionNumber - a.versionNumber)
-			.map(({ schema: _schema, ...rest }) => rest);
+			.map(({ schema: _schema, inventory: _inventory, ...rest }) => rest);
 		return paginate(rows, opts);
 	}
 
@@ -382,7 +384,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 	): Promise<Map<string, DefinitionVersion[]>> {
 		const config = await this.readConfig();
 		const byDefinition = new Map<string, DefinitionVersion[]>(definitionIds.map((id) => [id, []]));
-		for (const { schema: _schema, ...version } of Object.values(config.definitionVersions)) {
+		for (const { schema: _schema, inventory: _inventory, ...version } of Object.values(
+			config.definitionVersions
+		)) {
 			if (this.live(config.definitions[version.definitionId])) {
 				byDefinition.get(version.definitionId)?.push(version);
 			}
@@ -404,6 +408,20 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		if (!version) return;
 		version.schema = schema;
 		version.schemaExtractedAt = new Date().toISOString();
+		await this.writeConfig(config);
+	}
+
+	async setVersionInventory(
+		_ctx: RequestContext,
+		versionId: string,
+		inventory: DocumentInventory,
+		summary: InventorySummary
+	): Promise<void> {
+		const config = await this.readConfig();
+		const version = config.definitionVersions[versionId];
+		if (!version) return;
+		version.inventory = inventory;
+		version.inventorySummary = summary;
 		await this.writeConfig(config);
 	}
 

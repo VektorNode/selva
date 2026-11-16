@@ -43,6 +43,7 @@ import {
 	resolveAccessibleProjects
 } from '../definitions/index.js';
 import { definitionService } from './services.js';
+import { guardPlugins } from './definitionVersions.js';
 
 const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
 
@@ -160,7 +161,8 @@ export const createDefinition: ApiHandler = async (req) => {
 	const server = await resolveServerForOrg(ctx, project.orgId, req.deps.computeServer, {
 		definitionPin: parsed.data.computeServerId ?? null
 	});
-	const schema = await extractSchemaForUpload(fileData, server);
+	const { schema, inventory } = await extractSchemaForUpload(fileData, server);
+	guardPlugins(inventory, formText(form, 'acceptMissingPlugins') === 'true');
 
 	const service = definitionService(req.deps);
 	const { record, version } = await service.create(
@@ -179,7 +181,8 @@ export const createDefinition: ApiHandler = async (req) => {
 			coverImage: parsed.data.coverImage
 		},
 		fileData,
-		schema
+		schema,
+		inventory
 	);
 
 	let coverImage = record.coverImage;
@@ -198,7 +201,8 @@ export const createDefinition: ApiHandler = async (req) => {
 		}
 	}
 
-	return created({ guid, version, coverImage });
+	const { inventory: _inventory, ...listed } = version;
+	return created({ guid, version: listed, coverImage });
 };
 
 /** `schema` is a large blob, served on demand by `/versions/{versionId}/schema`. */

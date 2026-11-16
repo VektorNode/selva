@@ -74,6 +74,7 @@
 		<Compile Include="..\Selva.Setup\PackagePayload.cs" Link="Linked\PackagePayload.cs"/>
 		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
+		<Compile Include="..\Selva.GH\Features\Inventory\Services\*.cs" Link="Linked\Inventory\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\DevMode.cs" Link="Linked\DevMode.cs"/>
 		<Compile Include="..\Selva.Panel\DevInstall.cs" Link="Linked\DevInstall.cs"/>

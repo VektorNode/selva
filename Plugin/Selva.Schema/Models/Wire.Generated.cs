@@ -19,6 +19,7 @@ namespace Selva.Schema.Models
     // String-enum types are represented as 'string' in C# for compatibility
     // GeometryKind valid values: "point", "pointCloud", "curve", "surface", "polysurface", "extrusion", "mesh", "subd", "block"
     // SolveEndedKind valid values: "ok", "blocked", "aborted", "error"
+    // InventoryValueKind valid values: "slider", "panel", "toggle", "valueList", "persistent"
 
 // ============================================================================
     // RUNTIME DATA
@@ -619,6 +620,234 @@ namespace Selva.Schema.Models
 
         [JsonProperty("cancelled")]
         public bool? Cancelled { get; set; }
+    }
+
+    public class DocumentInventory
+    {
+
+/// <summary>
+/// Selva plugin version that built it.
+/// </summary>
+        [JsonProperty("extractedWith")]
+        public string ExtractedWith { get; set; }
+
+        [JsonProperty("libraries")]
+        public List<InventoryLibrary> Libraries { get; set; } = new List<InventoryLibrary>();
+
+        [JsonProperty("components")]
+        public List<InventoryComponent> Components { get; set; } = new List<InventoryComponent>();
+
+        [JsonProperty("values")]
+        public List<InventoryValue> Values { get; set; } = new List<InventoryValue>();
+
+        [JsonProperty("scripts")]
+        public List<InventoryScript> Scripts { get; set; } = new List<InventoryScript>();
+
+        [JsonProperty("wires")]
+        public InventoryWires Wires { get; set; }
+    }
+
+    public class InventoryLibrary
+    {
+
+/// <summary>
+/// GH_AssemblyInfo id. Empty GUID for Grasshopper itself.
+/// </summary>
+        [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Id { get; set; }
+
+/// <summary>
+/// Plugin name.
+/// </summary>
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+/// <summary>
+/// Plugin author.
+/// </summary>
+        [JsonProperty("author")]
+        public string Author { get; set; }
+
+/// <summary>
+/// Version the author saved the file with.
+/// </summary>
+        [JsonProperty("version")]
+        public string Version { get; set; }
+
+/// <summary>
+/// Part of Grasshopper or Rhino, so always present.
+/// </summary>
+        [JsonProperty("core")]
+        public bool Core { get; set; }
+
+/// <summary>
+/// Version loaded on the Compute server that built the inventory. Absent when the server has not loaded the plugin.
+/// </summary>
+        [JsonProperty("serverVersion")]
+        public string ServerVersion { get; set; }
+    }
+
+    public class InventoryComponent
+    {
+
+/// <summary>
+/// InstanceGuid: survives saves, so it matches the same object across versions.
+/// </summary>
+        [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Id { get; set; }
+
+/// <summary>
+/// ComponentGuid of its type.
+/// </summary>
+        [JsonProperty("type")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Type { get; set; }
+
+/// <summary>
+/// Type name.
+/// </summary>
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+/// <summary>
+/// Nickname, when it differs from the name.
+/// </summary>
+        [JsonProperty("nickname")]
+        public string Nickname { get; set; }
+
+/// <summary>
+/// Id of the library that provides it; empty when unknown.
+/// </summary>
+        [JsonProperty("library")]
+        public string Library { get; set; }
+
+/// <summary>
+/// An outdated component that Grasshopper only upgrades when the file is opened and re-saved.
+/// </summary>
+        [JsonProperty("obsolete")]
+        public bool Obsolete { get; set; }
+    }
+
+    public class InventoryValue
+    {
+
+/// <summary>
+/// InstanceGuid of the object, or "componentId/i2" for data internalised in a component's input 2: headless loads regenerate some parameter ids.
+/// </summary>
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+/// <summary>
+/// The component an input parameter belongs to.
+/// </summary>
+        [JsonProperty("owner")]
+        public string Owner { get; set; }
+
+        [JsonProperty("kind")]
+        public string Kind { get; set; }
+
+/// <summary>
+/// Nickname of the object, or "Component › Input".
+/// </summary>
+        [JsonProperty("label")]
+        public string Label { get; set; }
+
+/// <summary>
+/// The value as text, cut at 500 characters. Empty when it looks like a secret.
+/// </summary>
+        [JsonProperty("text")]
+        public string Text { get; set; }
+
+/// <summary>
+/// Hash of the full text, so a change past the cut is still seen.
+/// </summary>
+        [JsonProperty("sha256")]
+        public string Sha256 { get; set; }
+
+        [JsonProperty("min")]
+        public double? Min { get; set; }
+
+        [JsonProperty("max")]
+        public double? Max { get; set; }
+
+/// <summary>
+/// Names of the secret rules the text matched. Never the matched text.
+/// </summary>
+        [JsonProperty("secrets")]
+        public List<string> Secrets { get; set; } = new List<string>();
+    }
+
+    public class InventoryScript
+    {
+
+        [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Id { get; set; }
+
+/// <summary>
+/// Nickname of the component.
+/// </summary>
+        [JsonProperty("label")]
+        public string Label { get; set; }
+
+/// <summary>
+/// csharp, python3, ironpython2, vb or unknown.
+/// </summary>
+        [JsonProperty("language")]
+        public string Language { get; set; }
+
+/// <summary>
+/// Hash of the source.
+/// </summary>
+        [JsonProperty("sha256")]
+        public string Sha256 { get; set; }
+
+        [JsonProperty("lineCount")]
+        public int LineCount { get; set; }
+
+/// <summary>
+/// First 8 hex characters of each line's sha256 (trailing whitespace trimmed), enough to count added and removed lines.
+/// </summary>
+        [JsonProperty("lineHashes")]
+        public List<string> LineHashes { get; set; } = new List<string>();
+
+/// <summary>
+/// Names of the secret rules the source matched. Never the matched text.
+/// </summary>
+        [JsonProperty("secrets")]
+        public List<string> Secrets { get; set; } = new List<string>();
+    }
+
+    public class InventoryWires
+    {
+
+        [JsonProperty("count")]
+        public int Count { get; set; }
+
+/// <summary>
+/// Hash of the sorted source→target id pairs.
+/// </summary>
+        [JsonProperty("sha256")]
+        public string Sha256 { get; set; }
+    }
+
+    public class ScriptSource
+    {
+
+        [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Id { get; set; }
+
+        [JsonProperty("label")]
+        public string Label { get; set; }
+
+        [JsonProperty("language")]
+        public string Language { get; set; }
+
+        [JsonProperty("source")]
+        public string Source { get; set; }
     }
 
 // ============================================================================

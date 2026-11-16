@@ -1,4 +1,4 @@
-import type { UISchema } from '@selvajs/schemas';
+import type { DocumentInventory, InventorySummary, UISchema } from '@selvajs/schemas';
 import type { z } from 'zod';
 import type { ListOptions } from '../pagination.js';
 import type { DefinitionChannelSchema, DefinitionStatusSchema } from './schemas.js';
@@ -80,6 +80,14 @@ export interface DefinitionVersion {
 	schema?: UISchema;
 	/** ISO timestamp of when `schema` was extracted. */
 	schemaExtractedAt?: string;
+	/**
+	 * What the file holds beyond its form: plugins, components, values, script fingerprints.
+	 * Left out of list projections like `schema`. Absent on versions uploaded before it existed,
+	 * or through a Compute server whose plugin cannot build it.
+	 */
+	inventory?: DocumentInventory;
+	/** The part of `inventory` the version list shows; kept in list projections. */
+	inventorySummary?: InventorySummary;
 }
 
 export interface DefinitionRecord {

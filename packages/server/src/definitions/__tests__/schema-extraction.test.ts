@@ -221,16 +221,39 @@ describe('extractSchemaForUpload', () => {
 	const json = { 'content-type': 'application/json' };
 	const embedded = { ...schema(UI_SCHEMA_VERSION), inputs: [{ id: 'a', default: 1 }] };
 
-	function routeCompute(io: () => Response) {
+	function routeCompute(io: () => Response, inventory?: unknown) {
 		fetchMock.mockImplementation(async (url: string | URL) =>
 			String(url).endsWith('/io')
 				? io()
-				: new Response(JSON.stringify([{ fileName: 'definition.gh', schemas: [embedded] }]), {
-						status: 200,
-						headers: json
-					})
+				: new Response(
+						JSON.stringify([{ fileName: 'definition.gh', schemas: [embedded], inventory }]),
+						{ status: 200, headers: json }
+					)
 		);
 	}
+
+	const failingIo = () => new Response('boom', { status: 500 });
+
+	it('passes the inventory through, and drops one that is not an inventory', async () => {
+		const inventory = {
+			extractedWith: '1.0',
+			libraries: [],
+			components: [],
+			values: [],
+			scripts: [],
+			wires: { count: 0, sha256: '' }
+		};
+		routeCompute(failingIo, inventory);
+		expect((await extractSchemaForUpload(new Uint8Array([1]), server)).inventory).toEqual(
+			inventory
+		);
+
+		routeCompute(failingIo, { libraries: 'nope' });
+		expect((await extractSchemaForUpload(new Uint8Array([1]), server)).inventory).toBeNull();
+
+		routeCompute(failingIo);
+		expect((await extractSchemaForUpload(new Uint8Array([1]), server)).inventory).toBeNull();
+	});
 
 	it('stores the values saved in the file as input defaults', async () => {
 		routeCompute(
@@ -248,7 +271,7 @@ describe('extractSchemaForUpload', () => {
 
 		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
 
-		expect(result.inputs[0]).toMatchObject({ id: 'a', default: 5 });
+		expect(result.schema.inputs[0]).toMatchObject({ id: 'a', default: 5 });
 	});
 
 	it('keeps the embedded defaults when /io fails: only the schema gates the upload', async () => {
@@ -256,6 +279,6 @@ describe('extractSchemaForUpload', () => {
 
 		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
 
-		expect(result.inputs[0]).toMatchObject({ id: 'a', default: 1 });
+		expect(result.schema.inputs[0]).toMatchObject({ id: 'a', default: 1 });
 	});
 });

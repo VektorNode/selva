@@ -30,11 +30,21 @@ Three things go wrong silently in a hosted definition, and an inventory catches 
 
 - **Warnings about the file itself**, whatever it is compared with:
   - obsolete components, by name and plugin, with "open and re-save in Grasshopper to upgrade";
-  - plugins the file needs that this Compute server has not loaded, or has at a different version.
+  - plugins the file needs that this Compute server has not loaded, or has at a different version;
+  - scripts that look like they hold a secret (key patterns, `password =`, bearer tokens):
+    anyone who can download the `.gh` can read them.
+
+**A plugin missing on the server blocks the upload.** Its components would be dropped and every
+solve would succeed with outputs missing. An explicit override still uploads: the author ticks
+"I understand solves will fail until the plugin is installed", for the case where the plugin goes
+on the server second. The override is recorded on the version, and the version list shows it as
+"needs plugin X" until a check finds the plugin loaded. A different version of a plugin warns only:
+most plugin updates are compatible, and blocking them would train people to tick the override.
+
 - **What changed inside it** against the version it follows:
   - plugins added, removed or at another version;
   - components added and removed, counted by type ("+3 Loft, −1 Boolean Union");
-  - scripts edited, with a line diff;
+  - scripts edited, as "+12 −3 lines", with the line diff one click away (see Script source);
   - internal values changed: sliders, panels, toggles, value lists and internalised input data
     that are not form inputs (form inputs are already in the form diff);
   - how many wires were added or removed.
@@ -57,32 +67,44 @@ DocumentInventory
                      id, name, author, version, loadedOnServer: version | null
   components[]       id (InstanceGuid), type (ComponentGuid), name, nickname, library id,
                      obsolete: bool
-  values[]           id, kind (slider | panel | toggle | valueList | persistent), value text,
-                     slider min/max
-  scripts[]          id, language, sha256, source (see the open decision on storing source)
+  values[]           id, kind (slider | panel | toggle | valueList | persistent), value text
+                     (cut at 500, empty when it looks like a secret), sha256, slider min/max
+  scripts[]          id, language, sha256, line count, line hashes, secret findings
+                     (rule names only, never the matched text). No source: see Script source.
   wires              count, plus sha256 of the sorted source→target pairs
 ```
 
+The version row also keeps `inventorySummary` (missing plugins, obsolete count), the part the
+version list shows, so the list never loads the inventory.
+
 Identity is the `InstanceGuid`, as in the form diff: Grasshopper keeps it across saves, so a
-component that survives an edit matches itself, and copy-pasted ones are new.
+component that survives an edit matches itself, and copy-pasted ones are new. Parameters are the
+exception: a source whose plugin is missing loads as a dangling parameter with a new id every
+time. Wire ends are therefore "component/o2" or "component/i0" (Grasshopper binds by index
+anyway), "missing" for such a source, and data internalised in an input is keyed the same way.
 
 Library versions come from the archive (`GHALibraries` chunk), not from what the server loaded,
 because a missing plugin's components never load and would be invisible to a walk of the
 document. The server's loaded version sits beside it, which is what makes "missing" and "different
 version" checkable.
 
-Obsolete: `IGH_DocumentObject.Obsolete`. Selva's `OBSOLETE_*` snapshots must return true there;
-check each one does, since the warning depends on it.
+Obsolete: `IGH_DocumentObject.Obsolete`. Every `OBSOLETE_*` snapshot, Selva's and other plugins',
+returns true there (checked in Rhino 9).
 
 ## Where it is built
 
 **The plugin builds it; the fork carries it.** `ExtractSchemaFromArchive` in the fork already
 opens the document and calls into the Selva plugin for the schema (`UISchemaGoo.ToComputeJson`,
 by reflection, so compute never depends on Selva at compile time). It calls a second entry point,
-`DocumentInventory.ToComputeJson(doc, archive)`, and adds `inventory` beside `schemas` in each
-result. A plugin without the entry point leaves it out; Selva treats a missing inventory as
-"not available", never as an error. One fork change (a new `FORK_CHANGES` section, on both
-`9.x.selva` and `8.x.selva`), one plugin change.
+`InventoryExtractor.ToComputeJson(doc, archive)`, and adds `inventory` beside `schemas` in each
+result; `POST grasshopper/scripts` calls `InventoryExtractor.ScriptSourcesJson` for the code diff.
+A plugin without them leaves the inventory out; Selva treats that as "not available", never as an
+error. One fork change (`FORK_CHANGES` §26, on both `9.x.selva` and `8.x.selva`), one plugin
+change.
+
+Script source is read by member name, since Selva cannot reference the script plugins:
+RhinoCode's `IScriptComponent.Text` and `LanguageSpec` (Rhino 8+ C#, Python 3, IronPython 2),
+the Roslyn C#/VB components' `ScriptSource`, and GhPython's `Code`.
 
 The builder splits as the Grasshopper code in the repo already does: a thin reader that walks the
 `GH_Document` and archive into plain records, and Rhino-free code that turns records into the JSON,
@@ -105,7 +127,11 @@ re-save would carry a stale one.
   The store conformance suite covers both.
 - `diffInventories(before, after)` and `inventoryWarnings(inventory)` in `@selvajs/schemas`, pure
   and tested like `diffSchemas`.
-- The check, upload and changes responses gain `inside` (the inventory diff) and `warnings`.
+- The check, upload and changes responses gain `inventory`: summary, warnings, the diff, and
+  `missing: 'base'` when the version compared with has none yet.
+- `POST …/versions/{id}/inventory` re-reads a stored version: the lazy path for older versions,
+  and how "needs plugin X" clears.
+- `GET …/versions/{id}/scripts/{scriptId}?against=` returns both sources and a line diff.
 
 ## Who sees it
 
@@ -116,19 +142,33 @@ obsolete components and missing plugins are operator-relevant and go to editors 
 
 ## Versions uploaded before this
 
-They have no inventory. The file is stored, so a compare can extract one lazily on first need
-(the same bridge the schema used), costing one Compute call per old version. Until then the
-section reads "not available for this version".
+They have no inventory. The file is stored, so an editor's **Read it now** extracts one, costing
+one Compute call per old version. Until then the section says the version predates it.
 
-## Open decisions
+## Script source
 
-1. **Script source: store it or only its hash.** Storing makes a line diff possible. Hash-only
-   says "edited" and nothing more, but keeps code that may hold API keys out of the database. The
-   source is already in the stored `.gh`, so storing it adds no new exposure for whoever can read
-   that; the editor-only gate above covers the API.
-2. **A missing plugin: warn or block.** A version whose plugin the server lacks will solve with
-   components dropped. Blocking the upload is safest, but an author may upload first and install
-   the plugin second. Proposed: block publishing, not uploading.
-3. **Upgrading obsolete components automatically.** Compute could run the `IGH_UpgradeObject`s and
-   offer the upgraded file as a new draft. Useful, but it rewrites an author's file without their
-   canvas; out of scope here, worth its own decision.
+The inventory keeps a fingerprint of each script, never its code. Per-line hashes are enough to
+count added and removed lines, so the list can say "+12 −3 lines" with no Compute call. The code
+itself is fetched when an editor asks: "Show code changes" reads both versions' stored `.gh`
+files and has Compute extract those two scripts, and the diff is returned and not kept.
+
+- **No second copy of the code.** The `.gh` stays the only place it lives, so deleting a version
+  deletes it, and erasure has nothing else to reach.
+- **Works for versions uploaded before the inventory**, because their files are stored.
+- **Costs one Compute call per click**, not per upload.
+
+**Rejected: storing the source in the inventory.** It makes the diff instant, but copies code that
+often holds API keys into a database column that backups, exports and logs then carry too.
+
+**Rejected: hash only.** "Edited" without what or how much is not worth showing.
+
+Secret detection runs in the plugin while the scripts are open, on the same pass. It records which
+rule matched and in which script, never the text, and warns at upload. It is a hint, not a scanner:
+a clean result does not mean a script holds no secret.
+
+## Explored later
+
+**Upgrading obsolete components automatically.** Compute could run the `IGH_UpgradeObject`s and
+offer the upgraded file as a new draft. Useful, but it rewrites an author's file without them
+seeing the canvas, and an upgrade can change behaviour. It needs its own decision and its own
+check that the upgraded version solves the same.

@@ -462,6 +462,9 @@ paths:
                 computeServerId:
                   type: string
                   description: Pin to a compute server.
+                acceptMissingPlugins:
+                  type: string
+                  description: "`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422."
               required:
                 - file
                 - projectId
@@ -977,6 +980,9 @@ paths:
                 changeNote:
                   type: string
                   description: "Markdown, at most 10,000 characters. Longer is refused with 400."
+                acceptMissingPlugins:
+                  type: string
+                  description: "`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422."
               required:
                 - file
       responses:
@@ -1036,7 +1042,7 @@ paths:
                 $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/versions/check":
     post:
-      summary: "Dry run of an upload: validates the file through Compute and diffs it against the version it would follow. Writes nothing."
+      summary: "Dry run of an upload: validates the file through Compute and diffs it against the version it would follow, form and inventory. Writes nothing."
       operationId: postDefinitionsByGuidVersionsCheck
       tags:
         - Definitions
@@ -1318,6 +1324,67 @@ paths:
             type: string
       responses:
         "200":
+          description: "Editors also get `inventory`: warnings about the file and what changed inside it (plugins, components, values, scripts, wiring)."
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/versions/{versionId}/inventory":
+    post:
+      summary: "Re-read a version's inventory from its stored file through Compute: for versions uploaded before inventories, or after installing a missing plugin."
+      operationId: postDefinitionsByGuidVersionsByVersionIdInventory
+      tags:
+        - Definitions
+      x-scope: upload
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
           description: Success.
           content:
             application/json:
@@ -1337,6 +1404,84 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/definitions/{guid}/versions/{versionId}/scripts/{scriptId}":
+    get:
+      summary: "One script component's code in this version and in `?against=<versionId>` or the version before, with a line diff. Read from the stored files through Compute, never kept."
+      operationId: getDefinitionsByGuidVersionsByVersionIdScriptsByScriptId
+      tags:
+        - Definitions
+      x-scope: upload
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: scriptId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Well-formed but not processable.
           content:
             application/json:
               schema:

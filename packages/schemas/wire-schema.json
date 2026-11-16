@@ -505,6 +505,236 @@
 			},
 			"required": ["ok", "live"],
 			"additionalProperties": false
+		},
+		"DocumentInventory": {
+			"type": "object",
+			"description": "What a .gh holds beyond its form: plugins, components, internal values, scripts and wiring. Built by the plugin on Compute when a version is checked or uploaded, so it describes the file as that server loaded it.",
+			"properties": {
+				"extractedWith": {
+					"type": "string",
+					"description": "Selva plugin version that built it."
+				},
+				"libraries": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/InventoryLibrary"
+					}
+				},
+				"components": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/InventoryComponent"
+					}
+				},
+				"values": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/InventoryValue"
+					}
+				},
+				"scripts": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/InventoryScript"
+					}
+				},
+				"wires": {
+					"$ref": "#/definitions/InventoryWires"
+				}
+			},
+			"required": ["extractedWith", "libraries", "components", "values", "scripts", "wires"],
+			"additionalProperties": false
+		},
+		"InventoryLibrary": {
+			"type": "object",
+			"description": "A plugin the file was saved with, from the archive's own library list: a plugin missing on the server still shows here.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "GH_AssemblyInfo id. Empty GUID for Grasshopper itself."
+				},
+				"name": {
+					"type": "string",
+					"description": "Plugin name."
+				},
+				"author": {
+					"type": "string",
+					"description": "Plugin author."
+				},
+				"version": {
+					"type": "string",
+					"description": "Version the author saved the file with."
+				},
+				"core": {
+					"type": "boolean",
+					"description": "Part of Grasshopper or Rhino, so always present."
+				},
+				"serverVersion": {
+					"type": "string",
+					"description": "Version loaded on the Compute server that built the inventory. Absent when the server has not loaded the plugin."
+				}
+			},
+			"required": ["id", "name", "author", "version", "core"],
+			"additionalProperties": false
+		},
+		"InventoryComponent": {
+			"type": "object",
+			"description": "One top-level object on the canvas.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "InstanceGuid: survives saves, so it matches the same object across versions."
+				},
+				"type": {
+					"type": "string",
+					"format": "guid",
+					"description": "ComponentGuid of its type."
+				},
+				"name": {
+					"type": "string",
+					"description": "Type name."
+				},
+				"nickname": {
+					"type": "string",
+					"description": "Nickname, when it differs from the name."
+				},
+				"library": {
+					"type": "string",
+					"description": "Id of the library that provides it; empty when unknown."
+				},
+				"obsolete": {
+					"type": "boolean",
+					"description": "An outdated component that Grasshopper only upgrades when the file is opened and re-saved."
+				}
+			},
+			"required": ["id", "type", "name", "obsolete"],
+			"additionalProperties": false
+		},
+		"InventoryValueKind": {
+			"type": "string",
+			"enum": ["slider", "panel", "toggle", "valueList", "persistent"]
+		},
+		"InventoryValue": {
+			"type": "object",
+			"description": "A value set on the canvas rather than computed: a slider, panel, toggle, value list or internalised parameter data.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "InstanceGuid of the object, or \"componentId/i2\" for data internalised in a component's input 2: headless loads regenerate some parameter ids."
+				},
+				"owner": {
+					"type": "string",
+					"description": "The component an input parameter belongs to."
+				},
+				"kind": {
+					"$ref": "#/definitions/InventoryValueKind"
+				},
+				"label": {
+					"type": "string",
+					"description": "Nickname of the object, or \"Component › Input\"."
+				},
+				"text": {
+					"type": "string",
+					"description": "The value as text, cut at 500 characters. Empty when it looks like a secret."
+				},
+				"sha256": {
+					"type": "string",
+					"description": "Hash of the full text, so a change past the cut is still seen."
+				},
+				"min": {
+					"type": "number"
+				},
+				"max": {
+					"type": "number"
+				},
+				"secrets": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Names of the secret rules the text matched. Never the matched text."
+				}
+			},
+			"required": ["id", "kind", "label", "text", "sha256"],
+			"additionalProperties": false
+		},
+		"InventoryScript": {
+			"type": "object",
+			"description": "A script component, fingerprinted. The source stays in the .gh and is read on demand.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid"
+				},
+				"label": {
+					"type": "string",
+					"description": "Nickname of the component."
+				},
+				"language": {
+					"type": "string",
+					"description": "csharp, python3, ironpython2, vb or unknown."
+				},
+				"sha256": {
+					"type": "string",
+					"description": "Hash of the source."
+				},
+				"lineCount": {
+					"type": "integer"
+				},
+				"lineHashes": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "First 8 hex characters of each line's sha256 (trailing whitespace trimmed), enough to count added and removed lines."
+				},
+				"secrets": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Names of the secret rules the source matched. Never the matched text."
+				}
+			},
+			"required": ["id", "label", "language", "sha256", "lineCount", "lineHashes", "secrets"],
+			"additionalProperties": false
+		},
+		"InventoryWires": {
+			"type": "object",
+			"properties": {
+				"count": {
+					"type": "integer"
+				},
+				"sha256": {
+					"type": "string",
+					"description": "Hash of the sorted source→target id pairs."
+				}
+			},
+			"required": ["count", "sha256"],
+			"additionalProperties": false
+		},
+		"ScriptSource": {
+			"type": "object",
+			"description": "One script's source, read from a stored .gh on request.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid"
+				},
+				"label": {
+					"type": "string"
+				},
+				"language": {
+					"type": "string"
+				},
+				"source": {
+					"type": "string"
+				}
+			},
+			"required": ["id", "label", "language", "source"],
+			"additionalProperties": false
 		}
 	}
 }

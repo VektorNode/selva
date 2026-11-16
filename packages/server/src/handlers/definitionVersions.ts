@@ -1,6 +1,6 @@
 /**
  * Version handlers: list, upload and its dry-run check, read, delete, a version's cached schema,
- * and what it changed.
+ * what it changed, its inventory and its scripts' code.
  *
  * Reads resolve through `getVisibleDefinition` / `loadVisibleVersion`, which
  * return `null` rather than throwing, so an invisible definition answers 404.
@@ -29,12 +29,28 @@ import {
 	type DefinitionVersion,
 	type RequestContext
 } from '@selvajs/platform';
-import { diffSchemas, type SchemaDiff, type UISchema } from '@selvajs/schemas';
+import {
+	diffInventories,
+	diffLines,
+	diffSchemas,
+	inventoryWarnings,
+	summarizeInventory,
+	type DocumentInventory,
+	type InventoryDiff,
+	type InventorySummary,
+	type InventoryWarning,
+	type SchemaDiff,
+	type UISchema
+} from '@selvajs/schemas';
 import { resolveServerForOrg } from '../compute/index.js';
 import {
 	extractSchemaForUpload,
+	fetchExtraction,
+	fetchScriptSources,
 	getVisibleDefinition,
-	loadVisibleVersion
+	loadVisibleDefinition,
+	loadVisibleVersion,
+	mayUploadToDefinition
 } from '../definitions/index.js';
 import { definitionService } from './services.js';
 
@@ -71,6 +87,56 @@ const changesFrom = (
 	schema: UISchema | undefined
 ): SchemaDiff | null => (base?.schema && schema ? diffSchemas(base.schema, schema) : null);
 
+// ============================================================================
+// Inventory: what the file holds beyond its form
+// ============================================================================
+
+/**
+ * The inventory side of a check, upload or compare. `null` when the newer file has none (a
+ * server or plugin that predates it). `diff` is null without a base, or when `missing` says the
+ * base has no inventory yet.
+ */
+interface InventoryReport {
+	summary: InventorySummary;
+	warnings: InventoryWarning[];
+	diff: InventoryDiff | null;
+	missing: 'base' | null;
+}
+
+function inventoryReport(
+	inventory: DocumentInventory | null | undefined,
+	schema: UISchema | undefined,
+	base: DefinitionVersion | null
+): InventoryReport | null {
+	if (!inventory) return null;
+	const formIds = [...(schema?.inputs ?? []), ...(base?.schema?.inputs ?? [])].map((i) => i.id);
+	return {
+		summary: summarizeInventory(inventory),
+		warnings: inventoryWarnings(inventory),
+		diff: base?.inventory ? diffInventories(base.inventory, inventory, { formIds }) : null,
+		missing: base && !base.inventory ? 'base' : null
+	};
+}
+
+/**
+ * A plugin the server lacks makes every solve drop its components and succeed with outputs
+ * missing, so it blocks the upload unless the caller accepts that, e.g. while the plugin is still
+ * being installed. The version's summary keeps saying so until a check finds the plugin.
+ */
+export function guardPlugins(inventory: DocumentInventory | null, accepted: boolean): void {
+	const missing = inventory ? summarizeInventory(inventory).missingPlugins : [];
+	if (!missing.length || accepted) return;
+	apiError(
+		422,
+		ApiErrorCode.UNPROCESSABLE,
+		`The Compute server does not have ${missing.join(', ')} installed, so solves would drop ` +
+			`those components and miss their outputs. Install the plugin first, or upload anyway with ` +
+			`acceptMissingPlugins=true.`,
+		undefined,
+		{ missingPlugins: missing.join(', ') }
+	);
+}
+
 /** The version an upload follows: the draft it replaces, else the live one. */
 async function loadBase(
 	req: ApiRequest,
@@ -101,14 +167,25 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
 			`Change notes are limited to ${MAX_CHANGE_NOTE_LENGTH.toLocaleString('en')} characters`
 		);
 	}
+	const acceptMissingPlugins = formText(form, 'acceptMissingPlugins') === 'true';
 
 	const { ctx, record, project } = await requireEditableDefinition(req, guid);
 	const data = new Uint8Array(await file.arrayBuffer());
 	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
 		definitionPin: record.computeServerId ?? null
 	});
-	const schema = await extractSchemaForUpload(data, server);
-	return { ctx, record, file, extension, data, schema, changeNote };
+	const { schema, inventory } = await extractSchemaForUpload(data, server);
+	return {
+		ctx,
+		record,
+		file,
+		extension,
+		data,
+		schema,
+		inventory,
+		changeNote,
+		acceptMissingPlugins
+	};
 }
 
 /**
@@ -117,7 +194,7 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
  */
 export const checkVersion: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { ctx, record, schema } = await readVersionUpload(req, guid);
+	const { ctx, record, schema, inventory } = await readVersionUpload(req, guid);
 	const base = await loadBase(req, ctx, record);
 	return {
 		body: {
@@ -127,7 +204,8 @@ export const checkVersion: ApiHandler = async (req) => {
 				outputs: schema.outputs?.length ?? 0
 			},
 			base: refOf(base),
-			changes: changesFrom(base, schema)
+			changes: changesFrom(base, schema),
+			inventory: inventoryReport(inventory, schema, base)
 		}
 	};
 };
@@ -135,27 +213,36 @@ export const checkVersion: ApiHandler = async (req) => {
 /** Upload a new version. Advances `draft`; `live` is unchanged until publish. */
 export const uploadVersion: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { ctx, record, file, extension, data, schema, changeNote } = await readVersionUpload(
-		req,
-		guid
-	);
+	const upload = await readVersionUpload(req, guid);
+	const { ctx, record, file, extension, data, schema, inventory, changeNote } = upload;
+	guardPlugins(inventory, upload.acceptMissingPlugins);
 	// Before the upload: it moves the draft pointer to the new version.
 	const base = await loadBase(req, ctx, record);
 
-	const version = await definitionService(req.deps).uploadVersion(
+	const { inventory: _stored, ...version } = await definitionService(req.deps).uploadVersion(
 		ctx,
 		guid,
 		data,
 		extension.slice(1) as 'gh' | 'ghx',
 		file.name,
 		schema,
-		changeNote
+		changeNote,
+		inventory
 	);
-	return created({ version, base: refOf(base), changes: changesFrom(base, schema) });
+	return created({
+		version,
+		base: refOf(base),
+		changes: changesFrom(base, schema),
+		inventory: inventoryReport(inventory, schema, base)
+	});
 };
 
+// ============================================================================
+// What a version changed
+// ============================================================================
+
 /**
- * What a version changed, from the schemas cached at upload. `?against=` names the version to
+ * What a version changed, from what was cached at upload. `?against=` names the version to
  * compare with; without it, the one numbered just before. The first version has no base.
  */
 export const getVersionChanges: ApiHandler = async (req) => {
@@ -165,26 +252,122 @@ export const getVersionChanges: ApiHandler = async (req) => {
 
 	const version = await loadVisibleVersion(ctx, guid, versionId, req.deps);
 	if (!version) apiError(404, ApiErrorCode.NOT_FOUND, 'Version not found');
+	const base = await loadCompareBase(req, ctx, guid, version);
 
+	// Components, internal values and script changes show how a definition works, which someone
+	// who may only run it is not entitled to: editors only. `inventory` is absent otherwise.
+	const visible = await loadVisibleDefinition(ctx, guid, req.deps);
+	const editor = !!visible && mayUploadToDefinition(ctx, visible, req.deps);
+	return {
+		body: {
+			base: refOf(base),
+			changes: changesFrom(base, version.schema),
+			...(editor && { inventory: inventoryReport(version.inventory, version.schema, base) })
+		}
+	};
+};
+
+/** `?against=` when given, else the version numbered just before. Null for the first version. */
+async function loadCompareBase(
+	req: ApiRequest,
+	ctx: RequestContext,
+	guid: string,
+	version: DefinitionVersion
+): Promise<DefinitionVersion | null> {
 	const against = req.url.searchParams.get('against');
-	let base: DefinitionVersion | null = null;
 	if (against) {
 		const againstId = parseParam(against, GuidSchema, 'against');
-		base = await loadVisibleVersion(ctx, guid, againstId, req.deps);
+		const base = await loadVisibleVersion(ctx, guid, againstId, req.deps);
 		if (!base) apiError(404, ApiErrorCode.NOT_FOUND, 'Version to compare against not found');
-	} else {
-		// Newest first, so the first lower number is the one just before.
-		const all = (await req.deps.definitionMeta.listVersionsFor(ctx, [guid])).get(guid) ?? [];
-		const previous = all.find((v) => v.versionNumber < version.versionNumber);
-		base = previous ? await req.deps.definitionMeta.getVersion(ctx, previous.id) : null;
+		return base;
 	}
+	// Newest first, so the first lower number is the one just before.
+	const all = (await req.deps.definitionMeta.listVersionsFor(ctx, [guid])).get(guid) ?? [];
+	const previous = all.find((v) => v.versionNumber < version.versionNumber);
+	return previous ? req.deps.definitionMeta.getVersion(ctx, previous.id) : null;
+}
 
-	return { body: { base: refOf(base), changes: changesFrom(base, version.schema) } };
+// ============================================================================
+// Reading a stored file again
+// ============================================================================
+
+/** An editable definition's version, and the Compute server it solves on. */
+async function loadEditableVersion(req: ApiRequest, guid: string, versionId: string) {
+	const { ctx, record, project } = await requireEditableDefinition(req, guid);
+	const version = await req.deps.definitionMeta.getVersion(ctx, versionId);
+	if (!version || version.definitionId !== record.guid) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Version not found');
+	}
+	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
+		definitionPin: record.computeServerId ?? null
+	});
+	return { ctx, version, server };
+}
+
+async function readStoredFile(req: ApiRequest, version: DefinitionVersion): Promise<Uint8Array> {
+	const bytes = await req.deps.storage.get(version.fileKey);
+	if (!bytes) apiError(404, ApiErrorCode.NOT_FOUND, "The version's file is missing from storage");
+	return bytes;
+}
+
+/**
+ * Re-reads a stored version's inventory through Compute: for a version uploaded before
+ * inventories existed, and to clear "needs plugin" once the plugin is installed.
+ */
+export const refreshVersionInventory: ApiHandler = async (req) => {
+	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
+	const versionId = parseParam(req.params.versionId, GuidSchema, 'version ID');
+	const { ctx, version, server } = await loadEditableVersion(req, guid, versionId);
+
+	const { inventory } = await fetchExtraction(await readStoredFile(req, version), server);
+	if (!inventory) {
+		apiError(
+			422,
+			ApiErrorCode.UNPROCESSABLE,
+			'This Compute server cannot build an inventory. Update the server and its Selva plugin.'
+		);
+	}
+	const summary = summarizeInventory(inventory);
+	await req.deps.definitionMeta.setVersionInventory(ctx, version.id, inventory, summary);
+	return { body: { summary, warnings: inventoryWarnings(inventory) } };
 };
 
 /**
- * Version metadata. `schema` is excluded and served by the `/schema`
- * sub-resource, so a version read never carries a several-hundred-KB blob.
+ * One script's code in this version and the one it is compared with, and the line diff between
+ * them. Read from the stored files through Compute on each call and never kept: the inventory
+ * holds fingerprints only, so the code lives in one place, the `.gh`.
+ */
+export const getVersionScriptDiff: ApiHandler = async (req) => {
+	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
+	const versionId = parseParam(req.params.versionId, GuidSchema, 'version ID');
+	const scriptId = parseParam(req.params.scriptId, GuidSchema, 'script ID');
+	const { ctx, version, server } = await loadEditableVersion(req, guid, versionId);
+	const base = await loadCompareBase(req, ctx, guid, version);
+
+	const read = async (v: DefinitionVersion | null) =>
+		v
+			? ((await fetchScriptSources(await readStoredFile(req, v), [scriptId], server))[0] ?? null)
+			: null;
+	const [before, after] = await Promise.all([read(base), read(version)]);
+	if (!before && !after) apiError(404, ApiErrorCode.NOT_FOUND, 'No script with that id');
+
+	return {
+		body: {
+			base: refOf(base),
+			before,
+			after,
+			lines: diffLines(before?.source ?? '', after?.source ?? '')
+		}
+	};
+};
+
+// ============================================================================
+// Read and delete
+// ============================================================================
+
+/**
+ * Version metadata. `schema` and `inventory` are excluded (`/schema` and `/changes` serve them),
+ * so a version read never carries a several-hundred-KB blob.
  */
 export const getVersion: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
@@ -193,7 +376,7 @@ export const getVersion: ApiHandler = async (req) => {
 
 	const version = await loadVisibleVersion(ctx, guid, versionId, req.deps);
 	if (!version) apiError(404, ApiErrorCode.NOT_FOUND, 'Version not found');
-	const { schema: _schema, ...rest } = version;
+	const { schema: _schema, inventory: _inventory, ...rest } = version;
 	return { body: rest };
 };
 

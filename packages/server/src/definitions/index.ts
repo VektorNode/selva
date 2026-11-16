@@ -2,6 +2,8 @@ export { DefinitionService, type CreateDefinitionRecord } from './definition-ser
 
 export {
 	fetchSchemaFromCompute,
+	fetchExtraction,
+	fetchScriptSources,
 	extractSchemaForUpload,
 	postSchemaFormData,
 	assertSupportedSchemaVersion,
@@ -9,7 +11,7 @@ export {
 	readSchemaResults,
 	SchemaExtractionError
 } from './schema-extraction.js';
-export type { SchemaExtractionResult } from './schema-extraction.js';
+export type { Extraction, SchemaExtractionResult } from './schema-extraction.js';
 
 export {
 	createDefinitionLoader,

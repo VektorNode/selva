@@ -39,7 +39,9 @@ export {
 	deleteVersion,
 	getVersionSchema,
 	checkVersion,
-	getVersionChanges
+	getVersionChanges,
+	refreshVersionInventory,
+	getVersionScriptDiff
 } from './definitionVersions.js';
 export {
 	listProjects,

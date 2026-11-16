@@ -3,9 +3,11 @@
 	import { Upload, FileUp, LoaderCircle, CircleCheck } from '@lucide/svelte';
 	import { refreshAll } from '$app/navigation';
 	import { MAX_CHANGE_NOTE_LENGTH } from '@selvajs/platform';
-	import { schemaDiffToMarkdown, type SchemaDiff } from '@selvajs/schemas';
+	import { inventoryDiffToMarkdown, schemaDiffToMarkdown, type SchemaDiff } from '@selvajs/schemas';
 	import VersionChanges from './VersionChanges.svelte';
 	import NoteEditor from './NoteEditor.svelte';
+	import InventorySection from './InventorySection.svelte';
+	import { refreshInventory, type InventoryReport } from './inventory.js';
 
 	interface Props {
 		definitionGuid: string;
@@ -21,6 +23,8 @@
 		schema: { name: string; inputs: number; outputs: number };
 		base: { id: string; versionNumber: number } | null;
 		changes: SchemaDiff | null;
+		/** Null when the Compute server or its plugin cannot read what is inside a file. */
+		inventory: InventoryReport | null;
 	}
 
 	type Check =
@@ -42,6 +46,8 @@
 	let check = $state<Check>({ state: 'idle' });
 	let uploading = $state(false);
 	let breakingAcknowledged = $state(false);
+	let pluginsAccepted = $state(false);
+	let readingBase = $state(false);
 	// A newer pick supersedes a check still in flight.
 	let checkRun = 0;
 
@@ -55,6 +61,7 @@
 		check = { state: 'idle' };
 		uploading = false;
 		breakingAcknowledged = false;
+		pluginsAccepted = false;
 		checkRun++;
 		if (fileInput) fileInput.value = '';
 	}
@@ -67,6 +74,7 @@
 	async function onFilePick() {
 		file = fileInput?.files?.[0] ?? null;
 		breakingAcknowledged = false;
+		pluginsAccepted = false;
 		if (!file) {
 			check = { state: 'idle' };
 			return;
@@ -90,14 +98,32 @@
 	}
 
 	const diff = $derived(check.state === 'valid' ? check.result.changes : null);
+	const inventory = $derived(check.state === 'valid' ? check.result.inventory : null);
 	const breaking = $derived(diff?.counts.breaking ?? 0);
-	const suggestion = $derived(diff && !diff.identical ? schemaDiffToMarkdown(diff) : null);
+	const missingPlugins = $derived(inventory?.summary.missingPlugins ?? []);
+	const suggestion = $derived.by(() => {
+		const form = diff && !diff.identical ? schemaDiffToMarkdown(diff) : '';
+		const inside = inventory?.diff ? inventoryDiffToMarkdown(inventory.diff) : '';
+		const text = [form, inside && `### Inside the definition\n\n${inside}`]
+			.filter(Boolean)
+			.join('\n\n');
+		return text || null;
+	});
 	const canUpload = $derived(
 		check.state === 'valid' &&
 			!uploading &&
 			changeNote.length <= MAX_CHANGE_NOTE_LENGTH &&
-			(breaking === 0 || breakingAcknowledged)
+			(breaking === 0 || breakingAcknowledged) &&
+			(missingPlugins.length === 0 || pluginsAccepted)
 	);
+
+	async function readBase(baseId: string) {
+		readingBase = true;
+		const error = await refreshInventory(definitionGuid, baseId);
+		readingBase = false;
+		if (error) toast.error(error);
+		else await onFilePick();
+	}
 
 	async function submit() {
 		if (!file || !canUpload) return;
@@ -105,6 +131,7 @@
 		const formData = new FormData();
 		formData.append('file', file);
 		if (changeNote.trim()) formData.append('changeNote', changeNote.trim());
+		if (pluginsAccepted) formData.append('acceptMissingPlugins', 'true');
 		try {
 			const res = await fetch(`/api/v1/definitions/${definitionGuid}/versions`, {
 				method: 'POST',
@@ -202,7 +229,38 @@
 					{:else}
 						<p class="text-muted-foreground text-sm">The first version: nothing to compare with.</p>
 					{/if}
+					{#if inventory}
+						<InventorySection
+							report={inventory}
+							baseNumber={base?.versionNumber}
+							onReadBase={base ? () => readBase(base.id) : undefined}
+							{readingBase}
+						/>
+					{:else}
+						<p class="text-muted-foreground text-xs">
+							This Compute server does not report what is inside the file (plugins, components,
+							scripts). Update the server and its Selva plugin to see it.
+						</p>
+					{/if}
 				</div>
+
+				{#if missingPlugins.length}
+					<Callout
+						tone="danger"
+						title="The Compute server does not have {missingPlugins.join(', ')}"
+					>
+						<p class="text-sm">
+							Grasshopper drops components it cannot load, so solves would succeed with outputs
+							missing. Install the plugin on the server first.
+						</p>
+						<label class="mt-2 flex items-start gap-2 text-sm">
+							<input type="checkbox" class="mt-0.5" bind:checked={pluginsAccepted} />
+							<span>
+								Upload anyway. I understand solves will fail until the plugin is installed.
+							</span>
+						</label>
+					</Callout>
+				{/if}
 
 				{#if breaking > 0}
 					<Callout

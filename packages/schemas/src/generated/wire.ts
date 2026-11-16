@@ -18,6 +18,7 @@ export type GeometryKind =
 	| 'subd'
 	| 'block';
 export type SolveEndedKind = 'ok' | 'blocked' | 'aborted' | 'error';
+export type InventoryValueKind = 'slider' | 'panel' | 'toggle' | 'valueList' | 'persistent';
 
 /**
  * Messages and runtime state the plugin, the Selva server and the browser exchange. Never saved into a .gh, so it carries no schemaVersion: the fixtures in fixtures/wire/ pin it instead.
@@ -355,4 +356,133 @@ export interface SelvaUploadResult {
 	url?: string;
 	error?: string;
 	cancelled?: boolean;
+}
+export interface DocumentInventory {
+	/**
+	 * Selva plugin version that built it.
+	 */
+	extractedWith: string;
+	libraries: InventoryLibrary[];
+	components: InventoryComponent[];
+	values: InventoryValue[];
+	scripts: InventoryScript[];
+	wires: InventoryWires;
+}
+export interface InventoryLibrary {
+	/**
+	 * GH_AssemblyInfo id. Empty GUID for Grasshopper itself.
+	 */
+	id: string;
+	/**
+	 * Plugin name.
+	 */
+	name: string;
+	/**
+	 * Plugin author.
+	 */
+	author: string;
+	/**
+	 * Version the author saved the file with.
+	 */
+	version: string;
+	/**
+	 * Part of Grasshopper or Rhino, so always present.
+	 */
+	core: boolean;
+	/**
+	 * Version loaded on the Compute server that built the inventory. Absent when the server has not loaded the plugin.
+	 */
+	serverVersion?: string;
+}
+export interface InventoryComponent {
+	/**
+	 * InstanceGuid: survives saves, so it matches the same object across versions.
+	 */
+	id: string;
+	/**
+	 * ComponentGuid of its type.
+	 */
+	type: string;
+	/**
+	 * Type name.
+	 */
+	name: string;
+	/**
+	 * Nickname, when it differs from the name.
+	 */
+	nickname?: string;
+	/**
+	 * Id of the library that provides it; empty when unknown.
+	 */
+	library?: string;
+	/**
+	 * An outdated component that Grasshopper only upgrades when the file is opened and re-saved.
+	 */
+	obsolete: boolean;
+}
+export interface InventoryValue {
+	/**
+	 * InstanceGuid of the object, or "componentId/i2" for data internalised in a component's input 2: headless loads regenerate some parameter ids.
+	 */
+	id: string;
+	/**
+	 * The component an input parameter belongs to.
+	 */
+	owner?: string;
+	kind: InventoryValueKind;
+	/**
+	 * Nickname of the object, or "Component › Input".
+	 */
+	label: string;
+	/**
+	 * The value as text, cut at 500 characters. Empty when it looks like a secret.
+	 */
+	text: string;
+	/**
+	 * Hash of the full text, so a change past the cut is still seen.
+	 */
+	sha256: string;
+	min?: number;
+	max?: number;
+	/**
+	 * Names of the secret rules the text matched. Never the matched text.
+	 */
+	secrets?: string[];
+}
+export interface InventoryScript {
+	id: string;
+	/**
+	 * Nickname of the component.
+	 */
+	label: string;
+	/**
+	 * csharp, python3, ironpython2, vb or unknown.
+	 */
+	language: string;
+	/**
+	 * Hash of the source.
+	 */
+	sha256: string;
+	lineCount: number;
+	/**
+	 * First 8 hex characters of each line's sha256 (trailing whitespace trimmed), enough to count added and removed lines.
+	 */
+	lineHashes: string[];
+	/**
+	 * Names of the secret rules the source matched. Never the matched text.
+	 */
+	secrets: string[];
+}
+export interface InventoryWires {
+	count: number;
+	/**
+	 * Hash of the sorted source→target id pairs.
+	 */
+	sha256: string;
+}
+export interface ScriptSource {
+	id: string;
+	label: string;
+	language: string;
+	source: string;
 }

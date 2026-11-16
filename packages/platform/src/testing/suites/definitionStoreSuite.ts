@@ -508,6 +508,36 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got?.schemaExtractedAt).toBeTypeOf('string');
 		});
 
+		it('setVersionInventory persists it, and lists carry only the summary', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+
+			const inventory = {
+				extractedWith: '1.0.0.0',
+				libraries: [],
+				components: [],
+				values: [],
+				scripts: [],
+				wires: { count: 0, sha256: 'x' }
+			};
+			const summary = { missingPlugins: ['Charts'], obsoleteComponents: 2 };
+			await store.setVersionInventory(ctx(scope.ownerId), v1.id, inventory, summary);
+
+			const got = await store.getVersion(ctx(scope.ownerId), v1.id);
+			expect(got?.inventory).toEqual(inventory);
+			expect(got?.inventorySummary).toEqual(summary);
+
+			const listed = (await store.listVersions(ctx(scope.ownerId), guid)).items[0];
+			expect(listed?.inventory).toBeUndefined();
+			expect(listed?.inventorySummary).toEqual(summary);
+			const byDefinition = await store.listVersionsFor(ctx(scope.ownerId), [guid]);
+			expect(byDefinition.get(guid)?.[0]?.inventory).toBeUndefined();
+		});
+
 		it('setVersionSchema is a no-op for a missing version', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
