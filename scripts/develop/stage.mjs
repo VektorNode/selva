@@ -20,9 +20,17 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderCaddyfile } from '../../packages/cli/src/caddyfile.js';
 import { readWorkspacePackages } from '../release/publishable-packages.mjs';
-import { mixEnv, mixLabel, parseMix, supabaseEnv, usesSupabase } from './provider-mix.mjs';
+import {
+	mixEnv,
+	mixLabel,
+	parseEnv,
+	parseMix,
+	supabaseEnv,
+	usesSupabase
+} from './provider-mix.mjs';
+import { LOCAL_COMPUTE_PORT, localComputeKey, seedExamples } from './seed-examples.mjs';
 
-export { parseEnv } from './provider-mix.mjs';
+export { parseEnv };
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stageDir = path.join(rootDir, '.selva-data', 'stage');
@@ -509,6 +517,7 @@ async function up(mode, argv) {
 
 	scaffold(state);
 	await startApp();
+	if (argv.includes('--examples')) await examples(state);
 
 	const url = `http://localhost:${PORT}`;
 	console.info(`\nSelva ${version} (${mixLabel(mix)}) is running under pm2 behind Caddy.\n`);
@@ -575,15 +584,32 @@ function shell() {
 	spawnSync('docker', ['exec', '-it', HOST, 'bash'], { stdio: 'inherit' });
 }
 
+/** Uploads examples/definitions through Caddy, as a browser would; Compute is the host's. */
+async function examples(state) {
+	const deployEnv = parseEnv(inHost('cat .env', { quiet: true }));
+	const failed = await seedExamples({
+		appUrl: `http://localhost:${PORT}`,
+		auth: state.mode,
+		tenancy: stateMix(state).tenancy,
+		hmacKey: deployEnv.SELVA_HMAC_KEY,
+		computeUrl: `http://host.docker.internal:${LOCAL_COMPUTE_PORT}`,
+		computeKey: localComputeKey()
+	});
+	if (failed > 0) fail(`${failed} example(s) did not upload.`);
+}
+
 const USAGE = `Usage:
   pnpm stage local|supabase|header [--data local|supabase] [--storage local|supabase]
                                    [--tenancy single|multi] [--persona <name>] [--no-build]
+                                   [--examples]
+  pnpm stage examples        upload examples/definitions to the running deployment
   pnpm stage publish [--broken] [--no-build]
   pnpm stage persona <name>
   pnpm stage logs | sh | down`;
 
 async function main([command, ...argv]) {
 	if (MODES.has(command)) return up(command, argv);
+	if (command === 'examples') return examples(requireState());
 	if (command === 'publish') return publish(argv);
 	if (command === 'persona') return persona(argv[0]);
 	if (command === 'logs') return logs();

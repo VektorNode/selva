@@ -16,7 +16,15 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mixEnv, mixLabel, parseMix, supabaseEnv, usesSupabase } from './provider-mix.mjs';
+import {
+	mixEnv,
+	mixLabel,
+	parseEnv,
+	parseMix,
+	supabaseEnv,
+	usesSupabase
+} from './provider-mix.mjs';
+import { LOCAL_COMPUTE_PORT, localComputeKey, seedExamples } from './seed-examples.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const supabaseDir = path.join(rootDir, 'packages', 'providers', 'supabase');
@@ -44,7 +52,7 @@ const provider = argv[0];
 if (!PROVIDERS.has(provider)) {
 	console.error(
 		`Usage: node scripts/develop/dev-provider.mjs <${[...PROVIDERS].join('|')}> [--persona <name>]\n` +
-			'       [--data local|supabase] [--storage local|supabase] [--tenancy single|multi]'
+			'       [--data local|supabase] [--storage local|supabase] [--tenancy single|multi] [--examples]'
 	);
 	process.exit(1);
 }
@@ -262,3 +270,36 @@ const app = run(
 );
 
 app.on('exit', (code) => shutdown(code ?? 0));
+
+if (argv.includes('--examples')) {
+	// Vite answers its first request only after compiling the app; wait it out.
+	const health = `http://localhost:${APP_PORT}/api/health`;
+	let up = false;
+	for (let i = 0; i < 120 && !up; i++) {
+		up = await fetch(health).then(
+			(res) => res.ok,
+			() => false
+		);
+		if (!up) await new Promise((resolve) => setTimeout(resolve, 1000));
+	}
+	if (!up) {
+		console.error(`\n${health} did not answer within 120 s: examples not seeded.`);
+	} else {
+		const modeEnv = parseEnv(
+			fs.readFileSync(path.join(rootDir, 'packages', 'selva', `.env.dev-${provider}`), 'utf8')
+		);
+		try {
+			const failed = await seedExamples({
+				appUrl: url,
+				auth: mix.auth,
+				tenancy: mix.tenancy,
+				hmacKey: process.env.SELVA_HMAC_KEY ?? modeEnv.SELVA_HMAC_KEY,
+				computeUrl: `http://localhost:${LOCAL_COMPUTE_PORT}`,
+				computeKey: localComputeKey()
+			});
+			if (failed > 0) console.error(`\n${failed} example(s) did not upload.`);
+		} catch (err) {
+			console.error(`\nSeeding examples failed: ${err.message}`);
+		}
+	}
+}

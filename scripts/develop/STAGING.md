@@ -16,7 +16,9 @@ pnpm stage header      # forward-auth, the path Entra reaches
 
 `--data`, `--storage` and `--tenancy` mix the slots, as for the dev server
 ([Mixing providers](./DEV-PROVIDERS.md#mixing-providers)):
-`pnpm stage header --data supabase --tenancy multi`.
+`pnpm stage header --data supabase --tenancy multi`. `--examples` uploads
+`examples/definitions` once it is up, or later with `pnpm stage examples`
+([Example definitions](./DEV-PROVIDERS.md#example-definitions)).
 
 Each builds the tree, publishes it, scaffolds and starts it, then prints the
 address (`http://localhost:8180`) and how to claim admin. Starting one replaces

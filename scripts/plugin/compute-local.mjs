@@ -1,11 +1,11 @@
 // Selva's Rhino.Compute server, run in Docker on this machine: the same image, Selva build,
 // Yak packages and limits `pnpm run compute:deploy` ships to the GCP VM.
 //
-//   pnpm compute:local [up|status|logs|down] [--no-build] [--fresh] [--branch <name>]
+//   pnpm compute:local [up|status|logs|down] [--no-build] [--fresh] [--branch <name>] [--local]
 //
 // Settings come from infra/compute/.env (SERVER_<NAME> over <NAME>, as deploy-server.sh reads
 // them), else its .env.example. The image is built from compute.rhino3d's pushed branch on
-// GitHub, as on the server, so the local checkout's branch doesn't matter.
+// GitHub, as on the server; `--local` rebuilds Compute over it from the checkout's working tree.
 
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -25,6 +25,10 @@ const PORT = process.env.SELVA_COMPUTE_LOCAL_PORT ?? '6510';
 // The GCP VM is an e2-standard-2: 2 vCPUs. Pinned rather than capped: `--cpus 2` only limits CPU
 // time, so Rhino still sees every host core and its core-hour billing counts them all.
 const MACHINE_CPUSET = '0-1';
+
+// The one setting that departs from the server: a local instance sits idle between checks, and
+// every idle minute with a child alive is billed. The next solve respawns it (~2 s warm-up).
+const LOCAL_IDLE_SPAN = process.env.SELVA_COMPUTE_LOCAL_IDLE_SPAN ?? '60';
 
 // What docker-launch builds the image from. Dockerfile, .dockerignore and start.sh are the build
 // context; the rest is the launcher.
@@ -170,6 +174,58 @@ function stagePlugins(settings) {
 	return staged;
 }
 
+// Over the pushed image, so the apt, .NET and Rhino layers stay what the server gets. Files
+// deleted locally linger from the pushed tree; `--fresh` doesn't help, it rebuilds the base.
+// --no-incremental: COPY keeps the checkout's mtimes, which are older than the base image's build
+// output, so an incremental build calls the edited sources up to date and compiles nothing.
+const SOURCE_DOCKERFILE = `FROM ${CONTAINER}
+COPY . /home/rhino-compute-src/src/
+RUN cd /home/rhino-compute-src/src && dotnet build compute.sln -c Release --no-incremental
+`;
+const SOURCE_DOCKERIGNORE = '**/bin\n**/obj\n**/.vs\n.idea\n';
+
+/**
+ * The checkout's working tree, uncommitted edits included, built into the image. For testing a
+ * fork change before it is pushed; without `--local` the image is what the server builds.
+ */
+function buildFromCheckout() {
+	const checkedOut = git(['rev-parse', '--abbrev-ref', 'HEAD']).toString().trim();
+	if (checkedOut !== branch) {
+		console.warn(`    WARNING: compute.rhino3d has ${checkedOut} checked out, not ${branch}.`);
+	}
+	console.log(`==> Image from origin/${branch}`);
+	must('docker', [
+		'build',
+		'--platform',
+		'linux/amd64',
+		'-t',
+		CONTAINER,
+		'--build-arg',
+		`BRANCH=${branch}`,
+		...(flag('fresh') ? ['--no-cache'] : []),
+		setupDir
+	]);
+
+	console.log(`==> Rebuilding Compute from ${path.join(computeRepo, 'src')} (${checkedOut})`);
+	// BuildKit reads <Dockerfile>.dockerignore next to the Dockerfile; the context's own
+	// .dockerignore belongs to upstream's Windows image.
+	const dockerfile = path.join(workDir, 'source.Dockerfile');
+	fs.writeFileSync(dockerfile, SOURCE_DOCKERFILE);
+	fs.writeFileSync(`${dockerfile}.dockerignore`, SOURCE_DOCKERIGNORE);
+	const image = `${CONTAINER}:local-source`;
+	must('docker', [
+		'build',
+		'--platform',
+		'linux/amd64',
+		'-t',
+		image,
+		'-f',
+		dockerfile,
+		path.join(computeRepo, 'src')
+	]);
+	return image;
+}
+
 function up() {
 	const settings = serverSettings();
 	const token = rhinoToken(settings);
@@ -184,12 +240,14 @@ function up() {
 	exportSetup();
 	const plugins = stagePlugins(settings);
 	const key = computeKey(settings);
+	const image = flag('local') ? buildFromCheckout() : CONTAINER;
 
 	const env = {
 		...process.env,
 		RHINO_TOKEN: token,
 		RHINO_COMPUTE_KEY: key,
-		IMAGE_NAME: CONTAINER,
+		IMAGE_NAME: image,
+		...(flag('local') && { NO_BUILD: '1' }),
 		CONTAINER_NAME: CONTAINER,
 		PORT,
 		BRANCH: branch,
@@ -198,7 +256,7 @@ function up() {
 		CPUSET: settings.value('CPUSET') || MACHINE_CPUSET,
 		MEMORY: settings.value('MEMORY'),
 		CACHE_LIMIT_PERCENT: settings.value('CACHE_LIMIT_PERCENT'),
-		IDLE_SPAN: settings.value('IDLE_SPAN'),
+		IDLE_SPAN: LOCAL_IDLE_SPAN,
 		...(flag('fresh') && { FRESH: '1' })
 	};
 	// Empty values would override the launcher's own defaults with nothing.
@@ -278,7 +336,7 @@ switch (command) {
 		break;
 	default:
 		console.error(
-			'Usage: pnpm compute:local [up|status|logs|down] [--no-build] [--fresh] [--branch <name>]'
+			'Usage: pnpm compute:local [up|status|logs|down] [--no-build] [--fresh] [--branch <name>] [--local]'
 		);
 		process.exit(1);
 }

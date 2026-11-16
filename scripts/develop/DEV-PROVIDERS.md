@@ -46,6 +46,14 @@ Any Supabase slot starts the stack and takes its keys from `.env.dev-supabase`.
 A mix gets its own folder, `.selva-data/dev-<auth>+data-supabase+…`. `pnpm stage`
 takes the same flags.
 
+## Example definitions
+
+`--examples` fills the app once it answers: it claims a fresh instance as
+`admin@dev.local` / `selva-examples` (or signs in as it), registers
+`pnpm compute:local` when no Compute server is set, and uploads every
+`examples/definitions` file not already there. Start Compute first: uploads
+extract their schema through it. Another admin password: `SELVA_SEED_PASSWORD`.
+
 ## Entra without Entra
 
 `HeaderAuthProvider` does no crypto and validates no token. It reads three plain
