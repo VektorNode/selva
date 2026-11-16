@@ -31,6 +31,21 @@ SELVA_DEV_PORT=5300 SELVA_DEV_PROXY_PORT=8090 pnpm dev:header
 `dev:local` and `dev:selva` run the same provider — they differ only in whose
 data they open. See [Where the data goes](#where-the-data-goes).
 
+## Mixing providers
+
+The command names the auth provider. Data and storage follow it (local under
+header), tenancy is single; flags change any of them:
+
+```bash
+pnpm dev:header --data supabase                  # Entra-style sign-in over Supabase data
+pnpm dev:supabase --storage local --tenancy multi
+pnpm dev:local --data supabase --storage supabase
+```
+
+Any Supabase slot starts the stack and takes its keys from `.env.dev-supabase`.
+A mix gets its own folder, `.selva-data/dev-<auth>+data-supabase+…`. `pnpm stage`
+takes the same flags.
+
 ## Entra without Entra
 
 `HeaderAuthProvider` does no crypto and validates no token. It reads three plain

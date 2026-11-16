@@ -5,6 +5,7 @@
 //   node scripts/develop/dev-provider.mjs local
 //   node scripts/develop/dev-provider.mjs supabase
 //   node scripts/develop/dev-provider.mjs header [--persona member]
+//   node scripts/develop/dev-provider.mjs header --data supabase --storage local --tenancy multi
 //
 // Each provider maps to a vite `--mode`, so vite loads packages/selva/.env.<mode>
 // on top of the base .env. Provider-specific backing services are started first:
@@ -15,6 +16,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mixEnv, mixLabel, parseMix, supabaseEnv, usesSupabase } from './provider-mix.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const supabaseDir = path.join(rootDir, 'packages', 'providers', 'supabase');
@@ -41,8 +43,17 @@ const provider = argv[0];
 
 if (!PROVIDERS.has(provider)) {
 	console.error(
-		`Usage: node scripts/develop/dev-provider.mjs <${[...PROVIDERS].join('|')}> [--persona <name>]`
+		`Usage: node scripts/develop/dev-provider.mjs <${[...PROVIDERS].join('|')}> [--persona <name>]\n` +
+			'       [--data local|supabase] [--storage local|supabase] [--tenancy single|multi]'
 	);
+	process.exit(1);
+}
+
+let mix;
+try {
+	mix = parseMix(provider, argv);
+} catch (err) {
+	console.error(err.message);
 	process.exit(1);
 }
 
@@ -206,18 +217,29 @@ Or skip the proxy and send the headers by hand:
 await assertPortFree(APP_PORT, 'app');
 if (provider === 'header') await assertPortFree(PROXY_PORT, 'proxy');
 
-if (provider === 'supabase') startSupabase();
+if (usesSupabase(mix)) startSupabase();
 if (provider === 'header') startCaddy();
 
 const url =
 	provider === 'header' ? `http://localhost:${PROXY_PORT}` : `http://localhost:${APP_PORT}`;
-console.info(`→ Provider "${provider}" — open ${url}\n`);
+const label = mixLabel(mix);
+console.info(
+	`→ auth ${mix.auth}, data ${mix.data}, storage ${mix.storage}, ${mix.tenancy}-tenant — open ${url}\n`
+);
 
 // DATA_PATH is resolved against the CWD of the app process, and `pnpm --filter`
 // runs vite from packages/selva rather than from here. Passing an absolute path
 // through the environment (which outranks the .env file) pins the data
 // directory to the repo root no matter who launched what from where.
-const dataPath = path.join(rootDir, '.selva-data', `dev-${provider}`);
+// One folder per mix: a local data store written by one shape must not be read by another.
+const dataPath = path.join(rootDir, '.selva-data', `dev-${label}`);
+
+// Through the environment, which outranks the mode's .env file: the slots override it, and a
+// non-Supabase mode file has no SUPABASE_* for a Supabase slot to use.
+const mixOverrides = {
+	...(usesSupabase(mix) && provider !== 'supabase' ? supabaseEnv() : {}),
+	...mixEnv(mix)
+};
 
 // --strictPort, not vite's default port-hunting: the Caddyfile hard-codes
 // APP_PORT, so a vite that quietly moves one port up leaves the proxy pointing
@@ -236,7 +258,7 @@ const app = run(
 		String(APP_PORT),
 		'--strictPort'
 	],
-	{ cwd: rootDir, env: { ...process.env, DATA_PATH: dataPath } }
+	{ cwd: rootDir, env: { ...process.env, ...mixOverrides, DATA_PATH: dataPath } }
 );
 
 app.on('exit', (code) => shutdown(code ?? 0));

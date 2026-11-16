@@ -14,6 +14,10 @@ pnpm stage supabase    # the Supabase CLI stack from packages/providers/supabase
 pnpm stage header      # forward-auth, the path Entra reaches
 ```
 
+`--data`, `--storage` and `--tenancy` mix the slots, as for the dev server
+([Mixing providers](./DEV-PROVIDERS.md#mixing-providers)):
+`pnpm stage header --data supabase --tenancy multi`.
+
 Each builds the tree, publishes it, scaffolds and starts it, then prints the
 address (`http://localhost:8180`) and how to claim admin. Starting one replaces
 the last: there is one staged deployment at a time.
@@ -87,4 +91,6 @@ address, not the staged one.
 ## Compute
 
 Add a server at `/admin/compute`. A Rhino.Compute on your machine is
-`http://host.docker.internal:<port>` from inside the container.
+`http://host.docker.internal:<port>` from inside the container; `pnpm compute:local`
+runs the production one on port 6510
+([infra/compute](../../infra/compute/README.md#the-same-server-on-this-machine)).

@@ -4,7 +4,8 @@
 // packages published to a throwaway npm registry, installed with the real CLI
 // into a Linux container, run under pm2 behind Caddy.
 //
-//   node scripts/develop/stage.mjs local|supabase|header [--persona <name>] [--no-build]
+//   node scripts/develop/stage.mjs local|supabase|header [--data <p>] [--storage <p>] [--tenancy <t>]
+//                                  [--persona <name>] [--no-build]
 //   node scripts/develop/stage.mjs publish [--broken] [--no-build]
 //   node scripts/develop/stage.mjs persona <name>
 //   node scripts/develop/stage.mjs logs | sh | down
@@ -19,6 +20,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { renderCaddyfile } from '../../packages/cli/src/caddyfile.js';
 import { readWorkspacePackages } from '../release/publishable-packages.mjs';
+import { mixEnv, mixLabel, parseMix, supabaseEnv, usesSupabase } from './provider-mix.mjs';
+
+export { parseEnv } from './provider-mix.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const stageDir = path.join(rootDir, '.selva-data', 'stage');
@@ -42,6 +46,7 @@ const REGISTRY_URL = `http://localhost:${REGISTRY_PORT}/`;
 const REGISTRY_URL_IN_NETWORK = `http://${REGISTRY}:4873/`;
 
 const MODES = new Set(['local', 'supabase', 'header']);
+const MULTI_ADMIN_EMAIL = 'admin@dev.local';
 const IS_WINDOWS = process.platform === 'win32';
 
 // ============================================================================
@@ -113,14 +118,14 @@ export function packagesToPublish(mode, workspace) {
 	return [...seen.values()];
 }
 
-/** `KEY=value` lines of an env file, quotes stripped. */
-export function parseEnv(text) {
-	const out = {};
-	for (const line of text.split(/\r?\n/)) {
-		const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
-		if (match) out[match[1]] = match[2].replace(/^"(.*)"$/, '$1');
-	}
-	return out;
+/** Which package set `packagesToPublish` needs: the Supabase provider ships when any slot uses it. */
+function packageMode(mix) {
+	return usesSupabase(mix) ? 'supabase' : 'local';
+}
+
+/** A state written before slots could be mixed has only `mode`. */
+function stateMix(state) {
+	return state.mix ?? parseMix(state.mode, []);
 }
 
 // ============================================================================
@@ -400,13 +405,6 @@ function caddy(verb) {
 	return ['bash', '-c', `caddy ${verb} --config /home/node/Caddyfile --adapter caddyfile`];
 }
 
-function supabaseEnv() {
-	const env = parseEnv(
-		fs.readFileSync(path.join(rootDir, 'packages', 'selva', '.env.dev-supabase'), 'utf8')
-	);
-	return Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('SUPABASE_')));
-}
-
 function startSupabase() {
 	console.info('→ Starting the Supabase stack and applying migrations…');
 	for (const args of [
@@ -421,14 +419,17 @@ function startSupabase() {
 /** Scaffolds with the published CLI, exactly as `npx @selvajs/cli <dir>` on a server. */
 function scaffold(state) {
 	const origin = `http://localhost:${PORT}`;
-	const supabase = state.mode === 'supabase' ? supabaseEnv() : {};
+	const mix = stateMix(state);
+	const supabase = usesSupabase(mix) ? supabaseEnv() : {};
 	const env = {
 		CI: '1',
-		SELVA_AUTH_PROVIDER: state.mode,
+		...mixEnv(mix),
 		ORIGIN: origin,
 		...supabase
 	};
+	// The CLI requires it for both: neither has a /setup page to claim admin.
 	if (state.mode === 'header') env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL = readPersona().admin.email;
+	else if (mix.tenancy === 'multi') env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL = MULTI_ADMIN_EMAIL;
 
 	console.info('→ Scaffolding with the published CLI…');
 	inHost(`npm config set registry ${REGISTRY_URL_IN_NETWORK} && npx --yes @selvajs/cli@latest .`, {
@@ -476,6 +477,12 @@ function down({ quiet = false } = {}) {
 }
 
 async function up(mode, argv) {
+	let mix;
+	try {
+		mix = parseMix(mode, argv);
+	} catch (err) {
+		fail(err.message);
+	}
 	if (!dockerOk(['version'])) fail('Docker is not running.');
 	const personaIndex = argv.indexOf('--persona');
 	const persona = readPersona(personaIndex === -1 ? undefined : argv[personaIndex + 1]);
@@ -483,16 +490,16 @@ async function up(mode, argv) {
 	down({ quiet: true });
 	fs.mkdirSync(stageDir, { recursive: true });
 
-	if (!argv.includes('--no-build')) build(mode);
-	if (mode === 'supabase') startSupabase();
+	if (!argv.includes('--no-build')) build(packageMode(mix));
+	if (usesSupabase(mix)) startSupabase();
 
-	const state = { mode, round: 1, persona: persona.name };
-	if (mode === 'supabase') state.supabasePort = Number(new URL(supabaseEnv().SUPABASE_URL).port);
+	const state = { mode, mix, round: 1, persona: persona.name };
+	if (usesSupabase(mix)) state.supabasePort = Number(new URL(supabaseEnv().SUPABASE_URL).port);
 
 	console.info('→ Starting the registry and publishing this tree…');
 	docker(['network', 'create', NETWORK], { quiet: true });
 	await startRegistry();
-	const version = await publishRound(mode, state.round);
+	const version = await publishRound(packageMode(mix), state.round);
 	writeState(state);
 
 	console.info('→ Starting the host…');
@@ -504,10 +511,12 @@ async function up(mode, argv) {
 	await startApp();
 
 	const url = `http://localhost:${PORT}`;
-	console.info(`\nSelva ${version} is running under pm2 behind Caddy.\n`);
+	console.info(`\nSelva ${version} (${mixLabel(mix)}) is running under pm2 behind Caddy.\n`);
 	if (mode === 'header') {
 		console.info(`  Open ${url}: Caddy signs you in as ${persona.displayName} <${persona.email}>.`);
 		console.info('  Switch identity with: pnpm stage persona <name>');
+	} else if (mix.tenancy === 'multi') {
+		console.info(`  Open ${url} and sign up as ${MULTI_ADMIN_EMAIL}: that account becomes admin.`);
 	} else {
 		console.info(inHost('npx selva setup-url', { quiet: true }).trim());
 	}
@@ -521,12 +530,12 @@ async function up(mode, argv) {
 
 async function publish(argv) {
 	const state = requireState();
-	if (!argv.includes('--no-build')) build(state.mode);
+	if (!argv.includes('--no-build')) build(packageMode(stateMix(state)));
 
 	state.round += 1;
 	const broken = argv.includes('--broken');
 	console.info('→ Publishing this tree…');
-	const version = await publishRound(state.mode, state.round, { broken });
+	const version = await publishRound(packageMode(stateMix(state)), state.round, { broken });
 	writeState(state);
 
 	console.info(`\n${version} is in the registry. Update to it:`);
@@ -567,7 +576,8 @@ function shell() {
 }
 
 const USAGE = `Usage:
-  pnpm stage local|supabase|header [--persona <name>] [--no-build]
+  pnpm stage local|supabase|header [--data local|supabase] [--storage local|supabase]
+                                   [--tenancy single|multi] [--persona <name>] [--no-build]
   pnpm stage publish [--broken] [--no-build]
   pnpm stage persona <name>
   pnpm stage logs | sh | down`;
