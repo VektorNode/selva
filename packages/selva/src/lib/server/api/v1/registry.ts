@@ -186,8 +186,22 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		status: 201,
 		multipart: [
 			{ field: 'file', required: true, description: 'The `.gh` or `.ghx` file.' },
-			{ field: 'changeNote', required: false, description: 'Truncated to 1000 characters.' }
+			{
+				field: 'changeNote',
+				required: false,
+				description: 'Markdown, at most 10,000 characters. Longer is refused with 400.'
+			}
 		],
+		errors: [400, 404, 422, 503]
+	},
+	{
+		method: 'POST',
+		path: '/definitions/{guid}/versions/check',
+		scope: 'upload',
+		summary:
+			'Dry run of an upload: validates the file through Compute and diffs it against the version it would follow. Writes nothing.',
+		response: 'object',
+		multipart: [{ field: 'file', required: true, description: 'The `.gh` or `.ghx` file.' }],
 		errors: [400, 404, 422, 503]
 	},
 	{
@@ -211,6 +225,15 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		path: '/definitions/{guid}/versions/{versionId}/schema',
 		scope: 'read',
 		summary: "That version's cached UI schema. No compute round-trip.",
+		response: 'object',
+		errors: [404]
+	},
+	{
+		method: 'GET',
+		path: '/definitions/{guid}/versions/{versionId}/changes',
+		scope: 'read',
+		summary:
+			'What this version changed in inputs, outputs and settings, against `?against=<versionId>` or the version before it.',
 		response: 'object',
 		errors: [404]
 	},

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { DefinitionStatusSchema, GuidSchema } from './schemas.js';
 
+/** A version's Markdown notes. Uploads over it are refused rather than cut mid-sentence. */
+export const MAX_CHANGE_NOTE_LENGTH = 10_000;
+
 /** HTTP-body validator for new-definition input. */
 export const CreateDefinitionInputSchema = z.object({
 	displayName: z.string().trim().min(1, 'Display name is required').max(256),

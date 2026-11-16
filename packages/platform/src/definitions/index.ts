@@ -15,6 +15,7 @@ export { definitionPaths } from './paths.js';
 export { DefinitionChannelSchema, GuidSchema, toSourceDocumentId } from './schemas.js';
 export type { UpdateMetadataInput } from './bodies.js';
 export {
+	MAX_CHANGE_NOTE_LENGTH,
 	PublishVersionInputSchema,
 	CreateDefinitionInputSchema,
 	UpdateMetadataInputSchema

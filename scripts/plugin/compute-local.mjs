@@ -285,7 +285,7 @@ function up() {
 
   Add it at /admin/compute:
     pnpm dev:selva          http://localhost:${PORT}
-    pnpm stage <provider>   http://host.docker.internal:${PORT}
+    pnpm run stage <provider>   http://host.docker.internal:${PORT}
 
   pnpm compute:local status | logs | down
 `);

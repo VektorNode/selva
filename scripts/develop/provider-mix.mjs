@@ -1,4 +1,4 @@
-// The provider per slot for `pnpm dev:<auth>` and `pnpm stage <auth>`:
+// The provider per slot for `pnpm dev:<auth>` and `pnpm run stage <auth>`:
 //
 //   --data local|supabase  --storage local|supabase  --tenancy single|multi
 //

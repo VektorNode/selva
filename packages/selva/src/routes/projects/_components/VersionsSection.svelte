@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { Button, AlertDialog, toast } from '@selvajs/ui';
-	import { Upload, Play, CloudUpload, Trash2 } from '@lucide/svelte';
+	import { Upload, Play, CloudUpload, Trash2, ChevronDown } from '@lucide/svelte';
 	import { refreshAll } from '$app/navigation';
 	import type { DefinitionVersion } from '@selvajs/platform';
+	import { markdownTitle } from '#lib/format/markdown.js';
 	import UploadVersionDialog from './UploadVersionDialog.svelte';
+	import VersionDetails from './VersionDetails.svelte';
 
 	interface Props {
 		definitionGuid: string;
@@ -23,6 +25,7 @@
 	let publishing = $state(false);
 	let confirmingDelete = $state<DefinitionVersion | null>(null);
 	let deletingId = $state<string | null>(null);
+	let expandedId = $state<string | null>(null);
 
 	$effect(() => {
 		void definitionGuid;
@@ -199,16 +202,27 @@
 								{/if}
 							</div>
 							{#if version.changeNote}
-								<p class="mt-1 truncate text-sm">{version.changeNote}</p>
+								<p class="mt-1 truncate text-sm font-medium">{markdownTitle(version.changeNote)}</p>
 							{/if}
-							{#if version.originalFilename}
-								<p class="text-muted-foreground mt-1 truncate font-mono text-xs">
-									{version.originalFilename}
-								</p>
-							{/if}
-							<p class="text-muted-foreground mt-1 text-xs">
+							<p class="text-muted-foreground mt-1 truncate text-xs">
 								Uploaded {formatRelative(version.uploadedAt)}
+								{#if version.originalFilename}
+									· <span class="font-mono">{version.originalFilename}</span>
+								{/if}
 							</p>
+							<button
+								type="button"
+								class="text-muted-foreground hover:text-foreground mt-1.5 flex items-center gap-1 text-xs"
+								aria-expanded={expandedId === version.id}
+								onclick={() => (expandedId = expandedId === version.id ? null : version.id)}
+							>
+								<ChevronDown
+									class="h-3.5 w-3.5 transition-transform {expandedId === version.id
+										? 'rotate-180'
+										: ''}"
+								/>
+								{expandedId === version.id ? 'Hide' : 'Notes and changes'}
+							</button>
 						</div>
 						<div class="flex shrink-0 items-center gap-1">
 							<Button
@@ -251,6 +265,9 @@
 							{/if}
 						</div>
 					</div>
+					{#if expandedId === version.id}
+						<VersionDetails {definitionGuid} {version} {versions} />
+					{/if}
 				</div>
 			{/each}
 		</div>

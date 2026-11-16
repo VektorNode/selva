@@ -392,6 +392,7 @@
 	clearAction: LocalCacheAction
 )}
 	{@const rate = hitRate(c)}
+	{@const full = c.budgetBytes > 0 ? Math.min(100, Math.round((c.bytes / c.budgetBytes) * 100)) : 0}
 	<div class="space-y-2 rounded-lg border p-4">
 		<div class="flex items-baseline justify-between gap-3">
 			<div>
@@ -431,6 +432,34 @@
 				)}
 			</span>
 			<code class="font-mono text-[10px]">{envVar}</code>
+		</div>
+
+		<div class="space-y-1">
+			<div class="text-muted-foreground flex justify-between text-xs">
+				<span>{full}% full</span>
+				{#if full >= 90}
+					<span class="text-destructive"
+						>Nearly full: oldest entries get evicted, raise {envVar}</span
+					>
+				{/if}
+			</div>
+			<div
+				class="bg-muted h-2 overflow-hidden rounded-full"
+				role="progressbar"
+				aria-label="{label} fill"
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-valuenow={full}
+			>
+				<div
+					class="h-full rounded-full {full >= 90
+						? 'bg-destructive'
+						: full >= 70
+							? 'bg-warning'
+							: 'bg-primary'}"
+					style="width: {full}%"
+				></div>
+			</div>
 		</div>
 
 		{#if note}

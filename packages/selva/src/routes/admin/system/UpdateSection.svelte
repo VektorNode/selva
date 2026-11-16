@@ -59,7 +59,12 @@
 	);
 	// No override: the runner refuses the same install before it stops the app.
 	const dataBlocked = $derived(dataCompatibility.compatible === false);
-	const runDisabled = $derived(isRunning || dataBlocked || (nodeBlocked && !overrideSatisfied));
+	// Only when both versions are known: an unreachable registry reports `latest: null` and must
+	// not strand the operator. Read at page load, so a release published since needs a reload.
+	const upToDate = $derived(!updateAvailable && !!currentVersion && !!latestVersion);
+	const runDisabled = $derived(
+		isRunning || upToDate || dataBlocked || (nodeBlocked && !overrideSatisfied)
+	);
 
 	const channelLabel = $derived(channel === 'beta' ? 'beta' : 'stable');
 
@@ -117,6 +122,7 @@
 	function buttonLabel() {
 		if (isRestarting) return 'Restarting & verifying…';
 		if (isRunning) return 'Running…';
+		if (upToDate) return 'Up to date';
 		return 'Run Update';
 	}
 

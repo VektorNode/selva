@@ -37,7 +37,9 @@ export {
 	uploadVersion,
 	getVersion,
 	deleteVersion,
-	getVersionSchema
+	getVersionSchema,
+	checkVersion,
+	getVersionChanges
 } from './definitionVersions.js';
 export {
 	listProjects,

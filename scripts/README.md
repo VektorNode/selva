@@ -6,14 +6,16 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 
 ## `develop/`
 
-| Script                                  | Run                                              | Does                                                                                                                                                       |
-| --------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev-provider.mjs`, `dev-personas.json` | `pnpm dev:local` / `dev:supabase` / `dev:header` | The Selva app pinned to one auth provider on throwaway data ([DEV-PROVIDERS.md](./develop/DEV-PROVIDERS.md))                                               |
-| `stage.mjs`                             | `pnpm stage local` / `supabase` / `header`       | This tree as a real deployment: published, scaffolded by the CLI, under pm2 behind Caddy in Docker, with self-updates ([STAGING.md](./develop/STAGING.md)) |
-| `sync-shared-assets.js`                 | from `plugin-ui` and `ui` builds                 | Copies `assets/shared/` into each package's `static/`                                                                                                      |
-| `check-fixtures.mjs`                    | `pnpm check:fixtures`; CI                        | Fails on an unlisted or misnamed file in `dev/` or `examples/`                                                                                             |
-| `clean.js`                              | `pnpm clean`                                     | Removes `node_modules`, build output and the lockfile                                                                                                      |
-| `solve-bench/`                          | `node scripts/develop/solve-bench/<tool>.mjs`    | Captures and times solves from Grasshopper to the browser's first frame ([README](./develop/solve-bench/README.md))                                        |
+| Script                                  | Run                                                   | Does                                                                                                                |
+| --------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `dev-provider.mjs`, `dev-personas.json` | `pnpm dev:local` / `dev:supabase` / `dev:header`      | The Selva app pinned to a provider mix on throwaway data ([LOCAL.md](./develop/LOCAL.md))                           |
+| `stage.mjs`                             | `pnpm run stage local` / `supabase` / `header`        | This tree as a real deployment in Docker under pm2 and Caddy, with self-updates ([LOCAL.md](./develop/LOCAL.md))    |
+| `provider-mix.mjs`                      | imported by both above                                | Parses `--data`, `--storage`, `--tenancy` into the provider env                                                     |
+| `seed-examples.mjs`                     | `--examples` on both above; `pnpm run stage examples` | Claims or signs in, registers local Compute, uploads `examples/definitions`                                         |
+| `sync-shared-assets.js`                 | from `plugin-ui` and `ui` builds                      | Copies `assets/shared/` into each package's `static/`                                                               |
+| `check-fixtures.mjs`                    | `pnpm check:fixtures`; CI                             | Fails on an unlisted or misnamed file in `dev/` or `examples/`                                                      |
+| `clean.js`                              | `pnpm clean`                                          | Removes `node_modules`, build output and the lockfile                                                               |
+| `solve-bench/`                          | `node scripts/develop/solve-bench/<tool>.mjs`         | Captures and times solves from Grasshopper to the browser's first frame ([README](./develop/solve-bench/README.md)) |
 
 ## `plugin/`
 
@@ -29,6 +31,7 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 | `perf-report.mjs`                | `node scripts/plugin/perf-report.mjs <log>`          | Summarises a `SELVA_PERF_LOG` file                                                                                             |
 | `example-definitions/`           | in Rhino, see its README                             | Builds the showcase and stress-test `.gh` files                                                                                |
 | `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                                                           |
+| `compute-local.mjs`              | `pnpm compute:local`                                 | Runs that server in local Docker ([LOCAL.md](./develop/LOCAL.md#compute))                                                      |
 
 ## `release/`
 

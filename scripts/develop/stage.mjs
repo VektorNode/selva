@@ -11,7 +11,7 @@
 //   node scripts/develop/stage.mjs logs | sh | down
 //
 // `publish` puts the current tree in the registry as the next version, so the
-// admin page offers a real self-update. STAGING.md has the walkthrough.
+// admin page offers a real self-update. scripts/develop/LOCAL.md has the walkthrough.
 
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -199,7 +199,7 @@ function readState() {
 function requireState() {
 	const state = readState();
 	if (!state || !dockerOk(['inspect', HOST])) {
-		fail('No staged deployment. Start one with: pnpm stage local|supabase|header');
+		fail('No staged deployment. Start one with: pnpm run stage local|supabase|header');
 	}
 	return state;
 }
@@ -523,17 +523,17 @@ async function up(mode, argv) {
 	console.info(`\nSelva ${version} (${mixLabel(mix)}) is running under pm2 behind Caddy.\n`);
 	if (mode === 'header') {
 		console.info(`  Open ${url}: Caddy signs you in as ${persona.displayName} <${persona.email}>.`);
-		console.info('  Switch identity with: pnpm stage persona <name>');
+		console.info('  Switch identity with: pnpm run stage persona <name>');
 	} else if (mix.tenancy === 'multi') {
 		console.info(`  Open ${url} and sign up as ${MULTI_ADMIN_EMAIL}: that account becomes admin.`);
 	} else {
 		console.info(inHost('npx selva setup-url', { quiet: true }).trim());
 	}
 	console.info(`
-  pnpm stage publish     publish this tree as the next version, then update at ${url}/admin/system
-  pnpm stage logs        update log, pm2 and app output
-  pnpm stage sh          a shell in the deployment (npx selva update, doctor, pm2 ls)
-  pnpm stage down        remove everything
+  pnpm run stage publish     publish this tree as the next version, then update at ${url}/admin/system
+  pnpm run stage logs        update log, pm2 and app output
+  pnpm run stage sh          a shell in the deployment (npx selva update, doctor, pm2 ls)
+  pnpm run stage down        remove everything
 `);
 }
 
@@ -549,7 +549,7 @@ async function publish(argv) {
 
 	console.info(`\n${version} is in the registry. Update to it:`);
 	console.info(`  in the browser   http://localhost:${PORT}/admin/system`);
-	console.info('  on the server    pnpm stage sh, then: npx selva update');
+	console.info('  on the server    pnpm run stage sh, then: npx selva update');
 	if (broken) console.info('This build exits at boot: the updater should roll back.');
 }
 
@@ -599,13 +599,13 @@ async function examples(state) {
 }
 
 const USAGE = `Usage:
-  pnpm stage local|supabase|header [--data local|supabase] [--storage local|supabase]
+  pnpm run stage local|supabase|header [--data local|supabase] [--storage local|supabase]
                                    [--tenancy single|multi] [--persona <name>] [--no-build]
                                    [--examples]
-  pnpm stage examples        upload examples/definitions to the running deployment
-  pnpm stage publish [--broken] [--no-build]
-  pnpm stage persona <name>
-  pnpm stage logs | sh | down`;
+  pnpm run stage examples        upload examples/definitions to the running deployment
+  pnpm run stage publish [--broken] [--no-build]
+  pnpm run stage persona <name>
+  pnpm run stage logs | sh | down`;
 
 async function main([command, ...argv]) {
 	if (MODES.has(command)) return up(command, argv);

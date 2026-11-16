@@ -180,16 +180,12 @@ pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
 pnpm dev:plugin:mock        # same, against a fake Grasshopper (no Rhino)
 pnpm dev:selva              # Selva app, your own .env and .selva-data
 
-# Same app pinned to one auth provider, each on throwaway data:
-# for testing provider behaviour, not for daily work. scripts/develop/DEV-PROVIDERS.md
-pnpm dev:local              # local provider (filesystem + password)
-pnpm dev:supabase           # Supabase CLI stack (Docker)
-pnpm dev:header             # forward-auth, the path Entra reaches (Caddy)
-
-# The built app as an operator installs it: published to a throwaway registry,
-# scaffolded by the CLI, under pm2 behind Caddy in Docker. `pnpm stage publish`
-# then offers a real self-update. scripts/develop/STAGING.md
-pnpm stage local            # or: supabase, header
+# Throwaway setups for testing, all in scripts/develop/LOCAL.md. <auth> = local|supabase|header;
+# both take --data, --storage, --tenancy, --examples.
+pnpm dev:<auth>             # dev server pinned to a provider (:5273)
+pnpm run stage <auth>       # real install in Docker under pm2 + Caddy, self-updates (:8180).
+                            # `run` is required: pnpm 11 has a built-in `stage`.
+pnpm compute:local          # Rhino.Compute as the GCP server runs it (:6510)
 
 pnpm build                  # every package in dep order, cached
 pnpm build --filter=@selvajs/selva

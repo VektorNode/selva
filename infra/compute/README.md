@@ -39,17 +39,9 @@ Needs Terraform and Google application-default credentials (`gcloud auth applica
 
 ## The same server on this machine
 
-`pnpm compute:local` runs this server in Docker Desktop: the image built from the pushed
-`9.x.selva`, a copy of the fresh Release net10.0 build, `packages.json`, and this `.env`'s
-`SERVER_*` limits (the `.env.example` ones when this machine has no `.env`) except a 60 s idle
-span (`SELVA_COMPUTE_LOCAL_IDLE_SPAN`), pinned to two cores
-(`CPUSET=0-1`) like the VM's 2 vCPUs. It listens on `http://localhost:6510`; from `pnpm stage` it is
-`http://host.docker.internal:6510`. The key is the server's, or one generated into
-`.selva-data/compute-local/`. `RHINO_TOKEN` falls back to `compute.rhino3d/setup/.env`.
-`--local` builds Compute from the `compute.rhino3d` checkout's working tree instead of the
-pushed branch, to test a fork change before pushing it. `--no-build` reuses the last plugin
-build, `--fresh` rebuilds every image layer; `status`,
-`logs` and `down` look after it.
+`pnpm compute:local` runs it in Docker Desktop with this folder's settings: see
+[scripts/develop/LOCAL.md](../../scripts/develop/LOCAL.md#compute). `RHINO_TOKEN` falls back
+to `compute.rhino3d/setup/.env`; `--fresh` rebuilds every image layer.
 
 ## Day to day
 

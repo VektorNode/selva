@@ -291,7 +291,8 @@
 		try {
 			const response = await fetch('/api/admin/system/update', { method: 'POST' });
 			if (!response.ok) {
-				updateLogs = 'Failed to start update process';
+				const body = await response.json().catch(() => null);
+				updateLogs = body?.error ?? body?.message ?? 'Failed to start update process';
 				updateExitCode = response.status;
 				updateRunning = false;
 				return;
