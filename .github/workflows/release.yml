@@ -341,7 +341,7 @@ jobs:
       - name: Release bot token
         id: bot
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true' && env.BOT_APP_ID != ''
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
@@ -391,7 +391,7 @@ jobs:
       - name: Release bot token
         id: bot
         if: env.BOT_APP_ID != ''
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
