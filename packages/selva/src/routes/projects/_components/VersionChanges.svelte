@@ -26,6 +26,10 @@
 
 	const ICON = { added: Plus, removed: Minus, changed: PenLine };
 
+	/** Longer sections show this many until expanded: a rewrite can change dozens of inputs. */
+	const PREVIEW = 6;
+	let expanded = $state<Partial<Record<SchemaChangeImpact, boolean>>>({});
+
 	function subject(c: SchemaChange): string {
 		if (c.kind === 'settings') return c.label;
 		return c.change === 'changed'
@@ -44,14 +48,18 @@
 			{@const items = diff.changes.filter((c) => c.impact === section.impact)}
 			{#if items.length}
 				<section class="space-y-1.5">
-					<div class="flex items-baseline gap-2">
-						<h4 class="text-xs font-semibold tracking-wide uppercase {TONE[section.impact]}">
+					<div class="flex flex-wrap items-baseline gap-x-2">
+						<h4
+							class="text-xs font-semibold tracking-wide whitespace-nowrap uppercase {TONE[
+								section.impact
+							]}"
+						>
 							{section.title} · {items.length}
 						</h4>
-						<p class="text-muted-foreground truncate text-xs">{section.hint}</p>
+						<p class="text-muted-foreground min-w-0 text-xs">{section.hint}</p>
 					</div>
 					<ul class="bg-muted space-y-1 rounded-md p-2">
-						{#each items as change (change.kind + change.id)}
+						{#each expanded[section.impact] ? items : items.slice(0, PREVIEW) as change (change.kind + change.id)}
 							{@const Icon = ICON[change.change]}
 							<li class="flex items-start gap-2 text-sm">
 								<Icon class="mt-0.5 h-3.5 w-3.5 shrink-0 {TONE[change.impact]}" />
@@ -68,6 +76,17 @@
 								</div>
 							</li>
 						{/each}
+						{#if items.length > PREVIEW}
+							<li>
+								<button
+									type="button"
+									class="text-muted-foreground hover:text-foreground text-xs"
+									onclick={() => (expanded[section.impact] = !expanded[section.impact])}
+								>
+									{expanded[section.impact] ? 'Show fewer' : `Show all ${items.length}`}
+								</button>
+							</li>
+						{/if}
 					</ul>
 				</section>
 			{/if}

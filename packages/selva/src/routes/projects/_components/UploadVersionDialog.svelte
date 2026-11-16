@@ -155,7 +155,7 @@
 </script>
 
 <Dialog.Root {open} {onOpenChange}>
-	<Dialog.Content class="max-h-[calc(100dvh-2rem)] max-w-2xl overflow-y-auto">
+	<Dialog.Content class="overflow-x-hidden sm:max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>Upload new version</Dialog.Title>
 			<Dialog.Description>
@@ -164,7 +164,7 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="mt-4 space-y-4">
+		<div class="mt-4 min-w-0 space-y-4">
 			<div class="space-y-1.5">
 				<Label for="upload-file">Grasshopper file</Label>
 				<label

@@ -202,6 +202,8 @@ export async function seedExamples(opts) {
 		form.set('displayName', name);
 		form.set('projectId', projectId);
 		if (described[file]) form.set('description', described[file]);
+		// Test data: an example whose plugin this Compute lacks still gets seeded.
+		form.set('acceptMissingPlugins', 'true');
 
 		const started = Date.now();
 		let res = await api.request('/api/v1/definitions', { method: 'POST', body: form });

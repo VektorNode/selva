@@ -1,15 +1,28 @@
 # Running Selva locally
 
-`<auth>` = `local` | `supabase` | `header`. All on throwaway data in `.selva-data/`;
-`pnpm dev:selva` stays your day-to-day server.
+`<auth>` = `local` | `supabase` | `header`. The `<auth>` commands run on throwaway data in
+`.selva-data/dev-<mix>/` and never touch your own `.env`; they run beside `dev:selva`.
 
-| Command                 | What                                                          | URL              |
-| ----------------------- | ------------------------------------------------------------- | ---------------- |
-| `pnpm dev:<auth>`       | Dev server from source, hot reload                            | `localhost:5273` |
-| `pnpm run stage <auth>` | Real install in Docker: pm2, Caddy, CLI scaffold, self-update | `localhost:8180` |
-| `pnpm compute:local`    | Rhino.Compute as the GCP server runs it                       | `localhost:6510` |
+| Command                 | What                                                              | URL              |
+| ----------------------- | ----------------------------------------------------------------- | ---------------- |
+| `pnpm dev:selva`        | Your day-to-day dev server: `packages/selva/.env`, `.selva-data/` | `localhost:5173` |
+| `pnpm dev:<auth>`       | Dev server pinned to a provider mix, hot reload                   | `localhost:5273` |
+| `pnpm run stage <auth>` | Real install in Docker: pm2, Caddy, CLI scaffold, self-update     | `localhost:8180` |
+| `pnpm compute:local`    | Rhino.Compute as the GCP server runs it                           | `localhost:6510` |
 
-`run` is required: pnpm 11 has a built-in `stage`. Run Update only works on `stage`.
+`run` is required: pnpm 11 has a built-in `stage`. Run Update only works on `stage`. Run these
+from the repo root, or add `-w` (`pnpm -w run stage down`) from inside a package.
+
+## Stop
+
+| Running                         | Stop                                                            |
+| ------------------------------- | --------------------------------------------------------------- |
+| `pnpm dev:<auth>`               | `Ctrl+C` in its terminal                                        |
+| `pnpm run stage <auth>`         | `pnpm run stage down` (container, registry and its data)        |
+| `pnpm compute:local`            | `pnpm compute:local down`                                       |
+| Supabase stack (`supabase` mix) | `npx supabase stop` in `packages/providers/supabase`; data kept |
+
+`pnpm compute:local status` shows whether Compute runs; `docker ps` lists everything left.
 
 ## Flags (`dev` and `stage`)
 
@@ -57,7 +70,8 @@ pnpm run stage down               # remove it all
 
 One deployment at a time. `--no-build` skips the build. Differs from a server: plain HTTP
 (use Chrome/Edge/Firefox), no pm2 boot persistence, update check hits a local registry.
-Compute from the container: `http://host.docker.internal:6510`.
+Compute from the container: `http://host.docker.internal:6510`. Open it as `localhost:8180`, not
+`127.0.0.1`: the app checks the origin, and a login from another one fails as a cross-site POST.
 
 ## Compute
 
