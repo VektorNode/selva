@@ -1,5 +1,16 @@
 # @selvajs/supabase-provider
 
+## 0.21.0-beta.8
+
+### Minor Changes
+
+- 81a6dd2: `IOrgStore.countOrgMembers` and `IProjectStore.countProjectMembers` return live member counts for many ids in one call. Custom store implementations must add both. Member counts on `/team`, `/team/projects`, `/team/reclaim` and `/admin/organizations` no longer stop at the roster page limit, and the admin organizations page no longer lists every org's roster to count it.
+
+### Patch Changes
+
+- Updated dependencies [81a6dd2]
+  - @selvajs/platform@1.1.0-beta.8
+
 ## 0.21.0-beta.7
 
 ### Minor Changes
