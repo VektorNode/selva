@@ -115,9 +115,6 @@ components:
           description: "Machine-readable context. A scope refusal carries `requiredScope`, e.g. `write:org:<id>`."
           additionalProperties:
             type: string
-        requestId:
-          type: string
-          description: "The `x-request-id` of this request. Quote it to an operator: it finds the request in the server logs."
       required:
         - message
         - code
