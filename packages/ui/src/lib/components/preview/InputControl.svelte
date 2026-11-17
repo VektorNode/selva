@@ -24,12 +24,12 @@
 		CheckboxInput,
 		ChecklistInput,
 		ColorInput,
-		CurveInput,
 		DropdownInput,
 		FileInput,
 		GeometryInput,
 		NumberInput,
 		SegmentedInput,
+		SketchInput,
 		TextInput,
 		TileInput
 	} from '#lib/components/preview/inputs/index.js';
@@ -78,7 +78,7 @@
 	const hostActions = getHostContext();
 	const { pickGeometry, clearGeometry, onGeometrySummary } = hostActions;
 	const isGeometry = $derived(isGeometryParamType(paramType));
-	// On Selva a curve is drawn or imported; in Rhino it is picked like any other geometry.
+	// On Selva curves and points are drawn or imported; in Rhino they are picked like any geometry.
 	const sketch = getSketchContext();
 	const drawsCurve = $derived(hostActions.host === 'selva' && isGeometry);
 	const isTrigger = $derived(isTriggerItem(item));
@@ -299,17 +299,11 @@
 		</div>
 	{/if}
 {:else if drawsCurve}
-	<!-- Nothing for an input that takes no curves, or where the host cannot encode one: it solves on the definition's own value. -->
+	<!-- Nothing for an input that takes neither curves nor points, or where the host cannot encode them: it solves on the definition's own value. -->
 	{#if sketch?.supports(item.paramId)}
 		<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
 			{@render fieldHeader(inputId)}
-			<CurveInput
-				{inputId}
-				paramId={item.paramId}
-				{sketch}
-				linesOnly={paramType === 'line'}
-				{disabled}
-			/>
+			<SketchInput {inputId} paramId={item.paramId} {sketch} {disabled} />
 		</div>
 	{/if}
 {:else if isGeometry}

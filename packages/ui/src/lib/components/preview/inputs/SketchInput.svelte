@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { FileUp } from '@lucide/svelte';
-	import { curveLength } from '@selvajs/sketch/model';
+	import { curveLength, isCurve, isPoint } from '@selvajs/sketch/model';
 	import { formatLength, type DrawMode } from '@selvajs/sketch/tool';
 	import { Button } from '#lib/components/primitives/button/index.js';
 	import { Checkbox } from '#lib/components/primitives/checkbox/index.js';
@@ -9,21 +9,20 @@
 	import { Label } from '#lib/components/primitives/label/index.js';
 	import { toast } from '#lib/components/primitives/sonner/index.js';
 	import type { SketchController } from '#lib/contexts/sketchContext.svelte.js';
-	import { CurveImportError, MAX_IMPORTED_CURVES } from '#lib/features/sketch/curve-import.js';
+	import { MAX_IMPORTED_ITEMS, SketchImportError } from '#lib/features/sketch/sketch-import.js';
 	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 	import { formatCount, formatMessage, type ViewerMessages } from '#lib/i18n/messages.js';
+	import type { DrawableKind } from '#lib/schema/host-support.js';
 	import { pickFile } from '#lib/utils/host-files.js';
 
 	interface Props {
 		inputId: string;
 		paramId: string;
 		sketch: SketchController;
-		/** A Get Line input: straight lines only. */
-		linesOnly?: boolean;
 		disabled?: boolean;
 	}
 
-	let { inputId, paramId, sketch, linesOnly = false, disabled = false }: Props = $props();
+	let { inputId, paramId, sketch, disabled = false }: Props = $props();
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -31,28 +30,42 @@
 	const view = $derived(sketch.view(paramId));
 	const mode = $derived(view.state.mode);
 	const unit = $derived(sketch.unitSuffix);
+	const kinds = $derived(sketch.kinds(paramId));
 
+	const MODES: Record<DrawableKind, readonly DrawMode[]> = {
+		line: ['line'],
+		curve: ['line', 'polyline', 'nurbs'],
+		point: ['point']
+	};
 	const DRAW_LABELS: Record<DrawMode, keyof ViewerMessages> = {
+		point: 'curveDrawPoint',
 		line: 'curveDrawLine',
 		polyline: 'curveDrawPolyline',
 		nurbs: 'curveDrawCurve'
 	};
-	const HINTS: Record<DrawMode | 'move', keyof ViewerMessages> = {
+	// A mode the host started through the controller has an id of its own and the general hint.
+	const HINTS: Record<string, keyof ViewerMessages> = {
+		point: 'curveHintPoint',
 		line: 'curveHintLine',
 		polyline: 'curveHintPolyline',
 		nurbs: 'curveHintCurve',
 		move: 'curveHintMove'
 	};
-	const modes = $derived<DrawMode[]>(linesOnly ? ['line'] : ['line', 'polyline', 'nurbs']);
+	const modes = $derived([...new Set(kinds.flatMap((kind) => MODES[kind]))]);
 
 	const summary = $derived.by(() => {
-		const count = view.curves.length;
-		if (count === 0) return '';
-		const length = view.curves.reduce((sum, curve) => sum + curveLength(curve), 0);
-		const counted = linesOnly
-			? formatCount(count, t.curveCountLineOne, t.curveCountLineOther)
-			: formatCount(count, t.curveCountOne, t.curveCountOther);
-		return `${counted} · ${formatLength(length, unit)}`;
+		const curves = view.items.filter(isCurve);
+		const points = view.items.filter(isPoint).length;
+		const parts: string[] = [];
+		if (curves.length > 0) {
+			const length = curves.reduce((sum, curve) => sum + curveLength(curve), 0);
+			const counted = kinds.includes('curve')
+				? formatCount(curves.length, t.curveCountOne, t.curveCountOther)
+				: formatCount(curves.length, t.curveCountLineOne, t.curveCountLineOther);
+			parts.push(`${counted} · ${formatLength(length, unit)}`);
+		}
+		if (points > 0) parts.push(formatCount(points, t.curveCountPointOne, t.curveCountPointOther));
+		return parts.join(', ');
 	});
 
 	// A number field's own state: writing the parsed value straight back would erase "0." while
@@ -69,26 +82,23 @@
 		if (!file) return;
 		importing = true;
 		try {
-			const { curves, skipped, overLimit } = await sketch.importFile(paramId, file);
-			if (curves.length === 0) toast.error(t.curveImportEmpty);
+			const { items, skipped, overLimit } = await sketch.importFile(paramId, file);
+			if (items.length === 0) toast.error(t.curveImportEmpty);
 			else if (overLimit > 0) {
 				toast.warning(
 					formatMessage(
-						curves.length === 1 ? t.curveImportOverLimitOne : t.curveImportOverLimitOther,
-						{
-							max: curves.length,
-							count: curves.length + overLimit
-						}
+						items.length === 1 ? t.curveImportOverLimitOne : t.curveImportOverLimitOther,
+						{ max: items.length, count: items.length + overLimit }
 					)
 				);
 			} else if (skipped > 0) {
 				toast.warning(formatCount(skipped, t.curveImportSkippedOne, t.curveImportSkippedOther));
 			}
 		} catch (error) {
-			const reason = error instanceof CurveImportError ? error.reason : 'unreadable';
+			const reason = error instanceof SketchImportError ? error.reason : 'unreadable';
 			toast.error(
 				reason === 'tooMany'
-					? formatMessage(t.curveImportTooMany, { max: MAX_IMPORTED_CURVES })
+					? formatMessage(t.curveImportTooMany, { max: MAX_IMPORTED_ITEMS })
 					: reason === 'unsupported'
 						? t.curveImportUnsupported
 						: t.curveImportFailed
@@ -107,7 +117,9 @@
 
 <div class="gap-2 min-w-0 flex flex-col">
 	{#if mode}
-		<output id={inputId} class="text-sm min-w-0 text-muted-foreground">{t[HINTS[mode]]}</output>
+		<output id={inputId} class="text-sm min-w-0 text-muted-foreground">
+			{t[HINTS[mode] ?? 'curveHintDraw']}
+		</output>
 		{#if view.state.typed}
 			<span class="text-sm font-mono text-foreground">{view.state.typed} {unit}</span>
 		{/if}
@@ -180,6 +192,11 @@
 				</Button>
 				<Button variant="ghost" size="sm" onclick={() => sketch.reset(paramId)} {disabled}>
 					{t.curveReset}
+				</Button>
+			{/if}
+			{#if view.state.canUndo}
+				<Button variant="ghost" size="sm" onclick={() => sketch.undo(paramId)} {disabled}>
+					{t.curveUndo}
 				</Button>
 			{/if}
 		</div>

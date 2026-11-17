@@ -1,26 +1,50 @@
 // ============================================================================
-// Curves as plain data
+// Curves and points as plain data
 // ============================================================================
 //
 // Coordinates are in the definition's model units and Rhino's axes (Z up), not the viewer's
-// metres. Every curve is immutable: an edit returns a new one.
+// metres. Every item is immutable: an edit returns a new one.
 
 export type Point3 = readonly [x: number, y: number, z: number];
 
-export interface SketchLine {
+/**
+ * What an item carries besides its shape. Every edit keeps all three.
+ */
+export interface ItemTags {
+	/** Stable while the item is edited in the browser. Not sent to Rhino. */
+	id?: string;
+	/**
+	 * The Grasshopper branch the item sits in, as `[0, 1]` for `{0;1}`. Absent is `{0}`. Items
+	 * that share a path arrive as one list, so a path per element groups its items for the
+	 * definition.
+	 */
+	path?: readonly number[];
+	/**
+	 * Text keyed by name, such as a role or a height. Sent to Rhino as the object's user strings,
+	 * which a Get Geometry input carries and a Get Line or Get Point input does not.
+	 */
+	attributes?: Readonly<Record<string, string>>;
+}
+
+export interface SketchPoint extends ItemTags {
+	kind: 'point';
+	at: Point3;
+}
+
+export interface SketchLine extends ItemTags {
 	kind: 'line';
 	from: Point3;
 	to: Point3;
 }
 
-export interface SketchPolyline {
+export interface SketchPolyline extends ItemTags {
 	kind: 'polyline';
 	/** A closed polyline does not repeat its first point. */
 	points: readonly Point3[];
 	closed: boolean;
 }
 
-export interface SketchNurbs {
+export interface SketchNurbs extends ItemTags {
 	kind: 'nurbs';
 	degree: number;
 	points: readonly Point3[];
@@ -34,6 +58,12 @@ export interface SketchNurbs {
 }
 
 export type SketchCurve = SketchLine | SketchPolyline | SketchNurbs;
+
+/** Anything a geometry input can hold that this package draws. */
+export type SketchItem = SketchCurve | SketchPoint;
+
+export const isPoint = (item: SketchItem): item is SketchPoint => item.kind === 'point';
+export const isCurve = (item: SketchItem): item is SketchCurve => item.kind !== 'point';
 
 export const add = (a: Point3, b: Point3): Point3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 export const subtract = (a: Point3, b: Point3): Point3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -77,42 +107,84 @@ export function nurbsFromControlPoints(points: readonly Point3[], degree = 3): S
 	};
 }
 
-/** The points a user can grab: end points, polyline corners, or NURBS control points. */
-export function verticesOf(curve: SketchCurve): readonly Point3[] {
-	return curve.kind === 'line' ? [curve.from, curve.to] : curve.points;
+/** An item's id, path and attributes, to carry over to an item made from it. */
+export function tagsOf(item: ItemTags): ItemTags {
+	const tags: ItemTags = {};
+	if (item.id !== undefined) tags.id = item.id;
+	if (item.path !== undefined) tags.path = item.path;
+	if (item.attributes !== undefined) tags.attributes = item.attributes;
+	return tags;
 }
 
-export function withVertex(curve: SketchCurve, index: number, point: Point3): SketchCurve {
-	if (curve.kind === 'line') {
-		return index === 0 ? { ...curve, from: point } : { ...curve, to: point };
+/** A path as Grasshopper writes it: `[0, 1]` is `{0;1}`, and no path is `{0}`. */
+export function pathKey(path: readonly number[] | undefined): string {
+	return `{${(path ?? [0]).join(';')}}`;
+}
+
+/** Null for text that is not a path such as `{0}` or `{0;1}`. */
+export function parsePath(key: string): number[] | null {
+	const match = /^\{(-?\d+(?:;-?\d+)*)?\}$/.exec(key.trim());
+	if (!match) return null;
+	return match[1] ? match[1].split(';').map(Number) : [];
+}
+
+/** The items by branch, in the order each branch first appears. */
+export function groupByPath<T extends ItemTags>(items: readonly T[]): Map<string, T[]> {
+	const branches = new Map<string, T[]>();
+	for (const item of items) {
+		const key = pathKey(item.path);
+		const branch = branches.get(key);
+		if (branch) branch.push(item);
+		else branches.set(key, [item]);
 	}
-	const points = curve.points.slice();
+	return branches;
+}
+
+/** The points a user can grab: a point, end points, polyline corners, or NURBS control points. */
+export function verticesOf(item: SketchItem): readonly Point3[] {
+	if (item.kind === 'point') return [item.at];
+	return item.kind === 'line' ? [item.from, item.to] : item.points;
+}
+
+export function withVertex(item: SketchItem, index: number, point: Point3): SketchItem {
+	if (item.kind === 'point') return { ...item, at: point };
+	if (item.kind === 'line') {
+		return index === 0 ? { ...item, from: point } : { ...item, to: point };
+	}
+	const points = item.points.slice();
 	points[index] = point;
-	return { ...curve, points };
+	return { ...item, points };
 }
 
 /**
- * The curve without one vertex, or null when what is left is no curve: a line, a polyline down
- * to one point, or a NURBS curve with too few points for its knots.
+ * The item without one vertex, or null when nothing drawable is left: a point, a line, a polyline
+ * down to one point, or a NURBS curve with too few points for its knots.
  */
-export function withoutVertex(curve: SketchCurve, index: number): SketchCurve | null {
-	if (curve.kind === 'line') return null;
+export function withoutVertex(curve: SketchItem, index: number): SketchItem | null {
+	if (curve.kind === 'point' || curve.kind === 'line') return null;
 	const points = curve.points.filter((_, i) => i !== index);
 	if (points.length < 2) return null;
 	if (curve.kind === 'polyline') {
 		return { ...curve, points, closed: curve.closed && points.length > 2 };
 	}
 	// Dropping a control point invalidates the knots, so the curve is rebuilt uniform.
-	return nurbsFromControlPoints(points, curve.degree);
+	return { ...tagsOf(curve), ...nurbsFromControlPoints(points, curve.degree) };
 }
 
-export function mapPoints(curve: SketchCurve, map: (point: Point3) => Point3): SketchCurve {
-	if (curve.kind === 'line') return { ...curve, from: map(curve.from), to: map(curve.to) };
-	return { ...curve, points: curve.points.map(map) };
+export function mapPoints<T extends SketchItem>(item: T, map: (point: Point3) => Point3): T;
+export function mapPoints(item: SketchItem, map: (point: Point3) => Point3): SketchItem {
+	if (item.kind === 'point') return { ...item, at: map(item.at) };
+	if (item.kind === 'line') return { ...item, from: map(item.from), to: map(item.to) };
+	return { ...item, points: item.points.map(map) };
 }
 
-export function scaleCurve(curve: SketchCurve, factor: number): SketchCurve {
-	return factor === 1 ? curve : mapPoints(curve, (point) => scale(point, factor));
+export function scaleItem<T extends SketchItem>(item: T, factor: number): T {
+	return factor === 1 ? item : mapPoints(item, (point) => scale(point, factor));
+}
+
+/** False for an item Rhino would reject: see {@link isValidCurve}; a point needs finite numbers. */
+export function isValidItem(item: SketchItem): boolean {
+	return item.kind === 'point' ? item.at.every(Number.isFinite) : isValidCurve(item);
 }
 
 /** False for a curve Rhino would reject: too few points, zero length, or knots that don't fit. */
@@ -137,19 +209,22 @@ export function isValidCurve(curve: SketchCurve): boolean {
 
 /**
  * Each curve as straight lines, for an input that takes lines only: a polyline becomes its
- * segments, and a NURBS curve is dropped unless it is straight (degree 1).
+ * segments, and a point or a NURBS curve is dropped unless the curve is straight (degree 1).
  */
-export function explodeToLines(curves: readonly SketchCurve[]): SketchLine[] {
+export function explodeToLines(items: readonly SketchItem[]): SketchLine[] {
 	const lines: SketchLine[] = [];
-	const push = (from: Point3, to: Point3) => {
-		if (distance(from, to) > 0) lines.push({ kind: 'line', from, to });
-	};
-	for (const curve of curves) {
+	for (const curve of items) {
+		if (curve.kind === 'point') continue;
 		if (curve.kind === 'line') {
-			push(curve.from, curve.to);
+			if (distance(curve.from, curve.to) > 0) lines.push(curve);
 			continue;
 		}
 		if (curve.kind === 'nurbs' && curve.degree !== 1) continue;
+		// The segments keep the path and attributes, not the id: one id would name several lines.
+		const { id: _, ...tags } = tagsOf(curve);
+		const push = (from: Point3, to: Point3) => {
+			if (distance(from, to) > 0) lines.push({ ...tags, kind: 'line', from, to });
+		};
 		const { points } = curve;
 		for (let i = 1; i < points.length; i++) push(points[i - 1], points[i]);
 		if (curve.kind === 'polyline' && curve.closed) push(points[points.length - 1], points[0]);

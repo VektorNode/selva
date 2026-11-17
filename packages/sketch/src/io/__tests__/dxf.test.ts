@@ -33,12 +33,19 @@ describe('parseDxf', () => {
 	});
 
 	it('reads a line', () => {
-		const { curves } = parseDxf(dxf([0, 'LINE', 8, '0', 10, 1, 20, 2, 30, 3, 11, 4, 21, 5, 31, 6]));
+		const { items: curves } = parseDxf(
+			dxf([0, 'LINE', 8, '0', 10, 1, 20, 2, 30, 3, 11, 4, 21, 5, 31, 6])
+		);
 		expect(curves).toEqual([{ kind: 'line', from: [1, 2, 3], to: [4, 5, 6] }]);
 	});
 
+	it('reads a point', () => {
+		const { items } = parseDxf(dxf([0, 'POINT', 8, '0', 10, 1, 20, 2, 30, 3]));
+		expect(items).toEqual([{ kind: 'point', at: [1, 2, 3] }]);
+	});
+
 	it('reads a closed lightweight polyline at its elevation', () => {
-		const { curves } = parseDxf(
+		const { items: curves } = parseDxf(
 			dxf([0, 'LWPOLYLINE', 90, 3, 70, 1, 38, 5, 10, 0, 20, 0, 10, 10, 20, 0, 10, 10, 20, 10])
 		);
 		expect(curves).toEqual([
@@ -56,7 +63,7 @@ describe('parseDxf', () => {
 
 	it('turns a bulge into an exact arc', () => {
 		// Bulge 1 is a half circle, counter-clockwise from (0,0) to (10,0): it dips to (5,-5).
-		const { curves } = parseDxf(
+		const { items: curves } = parseDxf(
 			dxf([0, 'LWPOLYLINE', 90, 2, 70, 0, 10, 0, 20, 0, 42, 1, 10, 10, 20, 0])
 		);
 		const curve = curves[0] as SketchNurbs;
@@ -70,7 +77,7 @@ describe('parseDxf', () => {
 
 	it('reads a 3D polyline and ends it at SEQEND', () => {
 		const vertex = (x: number, y: number, z: number) => [0, 'VERTEX', 10, x, 20, y, 30, z, 70, 32];
-		const { curves, skipped } = parseDxf(
+		const { items: curves, skipped } = parseDxf(
 			dxf([
 				0,
 				'POLYLINE',
@@ -105,7 +112,7 @@ describe('parseDxf', () => {
 	});
 
 	it('reads a spline with its knots and weights', () => {
-		const { curves } = parseDxf(
+		const { items: curves } = parseDxf(
 			dxf([
 				0,
 				'SPLINE',
@@ -136,7 +143,9 @@ describe('parseDxf', () => {
 	});
 
 	it('reads an arc counter-clockwise across zero degrees', () => {
-		const { curves } = parseDxf(dxf([0, 'ARC', 10, 0, 20, 0, 30, 0, 40, 2, 50, 270, 51, 90]));
+		const { items: curves } = parseDxf(
+			dxf([0, 'ARC', 10, 0, 20, 0, 30, 0, 40, 2, 50, 270, 51, 90])
+		);
 		const curve = curves[0] as SketchNurbs;
 		expect(curveLength(curve)).toBeCloseTo(Math.PI * 2, 2);
 		const [start, end] = nurbsDomain(curve);
@@ -146,7 +155,7 @@ describe('parseDxf', () => {
 
 	it('mirrors an arc whose extrusion points down', () => {
 		// In a plane with normal (0,0,-1) the entity's X axis is world -X.
-		const { curves } = parseDxf(
+		const { items: curves } = parseDxf(
 			dxf([0, 'ARC', 10, 3, 20, 0, 30, 0, 40, 1, 50, 0, 51, 90, 210, 0, 220, 0, 230, -1])
 		);
 		const curve = curves[0] as SketchNurbs;
@@ -160,7 +169,7 @@ describe('parseDxf', () => {
 	});
 
 	it('counts what it does not read', () => {
-		const { curves, skipped } = parseDxf(
+		const { items: curves, skipped } = parseDxf(
 			dxf([
 				0,
 				'INSERT',
@@ -190,7 +199,7 @@ describe('parseDxf', () => {
 		const text = [0, 'SECTION', 2, 'BLOCKS', 0, 'LINE', 10, 0, 11, 5, 0, 'ENDSEC', 0, 'EOF'].join(
 			'\n'
 		);
-		expect(parseDxf(text).curves).toEqual([]);
+		expect(parseDxf(text).items).toEqual([]);
 	});
 
 	it('refuses a binary DXF', () => {

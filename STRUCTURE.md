@@ -27,7 +27,7 @@ selva/
 │   ├── schemas/                    # ui-schema.json, wire-schema.json + TS/C# code generators
 │   ├── compute/                    # @selvajs/compute: Rhino.Compute client + data-tree helpers (no three)
 │   ├── visualization/              # @selvajs/visualization: headless viewer core (scene/render/parse/shared)
-│   ├── sketch/                     # @selvajs/sketch: curves as inputs: model, DXF/3DM/Rhino io, viewer draw tool
+│   ├── sketch/                     # @selvajs/sketch: curves and points as inputs: model, DXF/3DM/Rhino io, viewer draw tool
 │   ├── solve/                      # @selvajs/solve: the solve flow, both sides of the wire (client/server/shared)
 │   ├── platform/                   # Provider interfaces (auth, data, storage, ...)
 │   ├── providers/

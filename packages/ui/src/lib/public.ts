@@ -66,6 +66,13 @@ export {
 // and may commit a value back via ClientSlotArgs.onValueChange.
 export type { ClientSlotArgs, ClientSlot } from './contexts/clientSlotContext.svelte';
 
+// Drawn inputs (Get Line, Get Point, Get Geometry): the handle `ComputeApp`'s `onReady` gives
+// as `getSketch()`, also reachable from a client slot through `getSketchContext`. Curve and point
+// types, draw modes and the codec come from `@selvajs/sketch`.
+export { getSketchContext } from './contexts/sketchContext.svelte';
+export type { SketchController, SketchInputView } from './contexts/sketchContext.svelte';
+export { drawableKinds, type DrawableKind } from './schema/host-support';
+
 // Pre-step producer transit storage (host apps wire producers via these).
 export {
 	writeExternalValue,

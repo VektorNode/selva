@@ -5,7 +5,8 @@ import {
 	scale,
 	subtract,
 	type Point3,
-	type SketchCurve
+	type SketchCurve,
+	type SketchItem
 } from './curve.js';
 import { tessellate } from './nurbs.js';
 
@@ -16,9 +17,9 @@ export interface Segment {
 	length: number;
 }
 
-/** Empty for a NURBS curve: it has no straight segments to dimension. */
-export function segmentsOf(curve: SketchCurve): Segment[] {
-	if (curve.kind === 'nurbs') return [];
+/** Empty for a point or a NURBS curve: neither has straight segments to dimension. */
+export function segmentsOf(curve: SketchItem): Segment[] {
+	if (curve.kind === 'nurbs' || curve.kind === 'point') return [];
 	const points = tessellate(curve);
 	const segments: Segment[] = [];
 	for (let i = 1; i < points.length; i++) {
@@ -43,11 +44,17 @@ export function curveLength(curve: SketchCurve): number {
  * it by the same amount, so the rest of the shape keeps its angles and lengths. On a closed
  * polyline's closing segment the start point moves instead, since its end is the first point.
  *
- * The curve comes back unchanged for a NURBS curve, a zero-length segment (it has no direction)
- * or a length that isn't positive.
+ * The item comes back unchanged for a point, a NURBS curve, a zero-length segment (it has no
+ * direction) or a length that isn't positive.
  */
-export function setSegmentLength(curve: SketchCurve, segment: number, length: number): SketchCurve {
-	if (curve.kind === 'nurbs' || !(length > 0) || !Number.isFinite(length)) return curve;
+export function setSegmentLength<T extends SketchItem>(
+	curve: T,
+	segment: number,
+	length: number
+): T;
+export function setSegmentLength(curve: SketchItem, segment: number, length: number): SketchItem {
+	const fixed = curve.kind === 'nurbs' || curve.kind === 'point';
+	if (fixed || !(length > 0) || !Number.isFinite(length)) return curve;
 
 	if (curve.kind === 'line') {
 		const direction = normalize(subtract(curve.to, curve.from));

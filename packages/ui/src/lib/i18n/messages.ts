@@ -187,7 +187,8 @@ export interface ViewerMessages {
 	geometryPickBlockOne: string;
 	geometryPickBlockOther: string;
 
-	// Curve input (Selva): a Get Geometry or Get Line input, drawn in the viewer or imported
+	// Drawn input (Selva): a Get Line, Get Point or Get Geometry, drawn in the viewer or imported
+	curveDrawPoint: string;
 	curveDrawLine: string;
 	curveDrawPolyline: string;
 	/** A free-form curve pulled toward its control points. */
@@ -197,8 +198,12 @@ export interface ViewerMessages {
 	curveEdit: string;
 	/** Back to the definition's own curves. */
 	curveReset: string;
+	curveUndo: string;
 	curveDone: string;
 	/** Shown while each drawing mode is on. */
+	/** For a drawing mode the host supplies. */
+	curveHintDraw: string;
+	curveHintPoint: string;
 	curveHintLine: string;
 	curveHintPolyline: string;
 	curveHintCurve: string;
@@ -216,6 +221,8 @@ export interface ViewerMessages {
 	curveCountOther: string;
 	curveCountLineOne: string;
 	curveCountLineOther: string;
+	curveCountPointOne: string;
+	curveCountPointOther: string;
 	curveImportEmpty: string;
 	curveImportSkippedOne: string;
 	curveImportSkippedOther: string;
@@ -457,13 +464,17 @@ const en: ViewerMessages = {
 	geometryPickBlockOne: 'Pick a block',
 	geometryPickBlockOther: 'Pick blocks',
 
+	curveDrawPoint: 'Point',
 	curveDrawLine: 'Line',
 	curveDrawPolyline: 'Polyline',
 	curveDrawCurve: 'Curve',
 	curveImport: 'Import',
 	curveEdit: 'Edit points',
 	curveReset: 'Reset',
+	curveUndo: 'Undo',
 	curveDone: 'Done',
+	curveHintDraw: 'Click in the viewer. Enter finishes, Esc steps back.',
+	curveHintPoint: 'Click in the viewer to place points. Done or Esc ends it.',
 	curveHintLine:
 		'Click two points in the viewer. Type a length, or length<angle, and press Enter. Shift locks the angle.',
 	curveHintPolyline:
@@ -480,13 +491,15 @@ const en: ViewerMessages = {
 	curveCountOther: '{count} curves',
 	curveCountLineOne: '{count} line',
 	curveCountLineOther: '{count} lines',
-	curveImportEmpty: 'The file has no curves this input can take.',
-	curveImportSkippedOne: '{count} object was left out: only curves are imported.',
-	curveImportSkippedOther: '{count} objects were left out: only curves are imported.',
-	curveImportOverLimitOne: 'This input takes one curve: the first of {count} was imported.',
+	curveCountPointOne: '{count} point',
+	curveCountPointOther: '{count} points',
+	curveImportEmpty: 'The file has nothing this input can take.',
+	curveImportSkippedOne: '{count} object was left out: this input does not take it.',
+	curveImportSkippedOther: '{count} objects were left out: this input does not take them.',
+	curveImportOverLimitOne: 'This input takes one object: the first of {count} was imported.',
 	curveImportOverLimitOther:
-		'This input takes {max} curves: the first {max} of {count} were imported.',
-	curveImportTooMany: 'The file has more than {max} curves. Import a smaller selection.',
+		'This input takes {max} objects: the first {max} of {count} were imported.',
+	curveImportTooMany: 'The file has more than {max} objects. Import a smaller selection.',
 	curveImportUnsupported: 'Choose a DXF or 3DM file.',
 	curveImportFailed: 'The file could not be read.',
 	curveEncodeFailed: 'The curve could not be sent: the Rhino file library failed to load.',
@@ -707,13 +720,17 @@ const de: ViewerMessages = {
 	geometryPickBlockOne: 'Block wählen',
 	geometryPickBlockOther: 'Blöcke wählen',
 
+	curveDrawPoint: 'Punkt',
 	curveDrawLine: 'Linie',
 	curveDrawPolyline: 'Polylinie',
 	curveDrawCurve: 'Kurve',
 	curveImport: 'Importieren',
 	curveEdit: 'Punkte bearbeiten',
 	curveReset: 'Zurücksetzen',
+	curveUndo: 'Rückgängig',
 	curveDone: 'Fertig',
+	curveHintDraw: 'Im Viewer klicken. Enter beendet, Esc geht einen Schritt zurück.',
+	curveHintPoint: 'Im Viewer klicken, um Punkte zu setzen. Fertig oder Esc beendet.',
 	curveHintLine:
 		'Zwei Punkte im Viewer klicken. Länge oder Länge<Winkel tippen und Enter drücken. Shift rastet den Winkel.',
 	curveHintPolyline:
@@ -730,14 +747,17 @@ const de: ViewerMessages = {
 	curveCountOther: '{count} Kurven',
 	curveCountLineOne: '{count} Linie',
 	curveCountLineOther: '{count} Linien',
-	curveImportEmpty: 'Die Datei enthält keine Kurven, die diese Eingabe annimmt.',
-	curveImportSkippedOne: '{count} Objekt ausgelassen: nur Kurven werden importiert.',
-	curveImportSkippedOther: '{count} Objekte ausgelassen: nur Kurven werden importiert.',
+	curveCountPointOne: '{count} Punkt',
+	curveCountPointOther: '{count} Punkte',
+	curveImportEmpty: 'Die Datei enthält nichts, was diese Eingabe annimmt.',
+	curveImportSkippedOne: '{count} Objekt ausgelassen: Diese Eingabe nimmt es nicht an.',
+	curveImportSkippedOther: '{count} Objekte ausgelassen: Diese Eingabe nimmt sie nicht an.',
 	curveImportOverLimitOne:
-		'Diese Eingabe nimmt eine Kurve an: die erste von {count} wurde importiert.',
+		'Diese Eingabe nimmt ein Objekt an: das erste von {count} wurde importiert.',
 	curveImportOverLimitOther:
-		'Diese Eingabe nimmt {max} Kurven an: die ersten {max} von {count} wurden importiert.',
-	curveImportTooMany: 'Die Datei enthält mehr als {max} Kurven. Eine kleinere Auswahl importieren.',
+		'Diese Eingabe nimmt {max} Objekte an: die ersten {max} von {count} wurden importiert.',
+	curveImportTooMany:
+		'Die Datei enthält mehr als {max} Objekte. Eine kleinere Auswahl importieren.',
 	curveImportUnsupported: 'Eine DXF- oder 3DM-Datei wählen.',
 	curveImportFailed: 'Die Datei konnte nicht gelesen werden.',
 	curveEncodeFailed:

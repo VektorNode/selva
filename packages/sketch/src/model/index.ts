@@ -4,15 +4,31 @@
  * @module model
  */
 
-export type { Point3, SketchCurve, SketchLine, SketchPolyline, SketchNurbs } from './curve.js';
+export type {
+	ItemTags,
+	Point3,
+	SketchCurve,
+	SketchItem,
+	SketchLine,
+	SketchPoint,
+	SketchPolyline,
+	SketchNurbs
+} from './curve.js';
 export {
 	clampedKnots,
 	distance,
 	explodeToLines,
+	groupByPath,
+	isCurve,
+	isPoint,
 	isValidCurve,
+	isValidItem,
 	mapPoints,
 	nurbsFromControlPoints,
-	scaleCurve,
+	parsePath,
+	pathKey,
+	tagsOf,
+	scaleItem,
 	verticesOf,
 	withVertex,
 	withoutVertex

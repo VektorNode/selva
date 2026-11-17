@@ -113,8 +113,8 @@ rewriting them. It also stays clear of the older-plugin hazard above. In the sch
 | Rhino | first | later         |
 | Selva | never | later         |
 
-For Get Line and Get Geometry, Selva has since gained drawing in the viewer and DXF/3DM import,
-with no schema change: see [curve-inputs](./curve-inputs.md).
+For Get Line, Get Point and Get Geometry, Selva has since gained drawing in the viewer and
+DXF/3DM import: see [curve-inputs](./curve-inputs.md).
 
 **Pick in Rhino.**
 

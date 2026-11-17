@@ -1,4 +1,4 @@
-# Curve inputs on Selva: draw, import, solve
+# Drawn inputs on Selva: curves and points, drawn, imported, solved
 
 **Unfiled.** Built, and run in the Selva app against local Rhino.Compute (Rhino 9.1) on
 2026-11-17. Spans a new package (`@selvajs/sketch`), `@selvajs/ui`, one export in
@@ -8,21 +8,23 @@ the Compute fork.
 
 Follows [host-aware-elements](./host-aware-elements.md), which put geometry inputs in the schema
 and gave Rhino a pick. Its plan for Selva was "upload `.3dm`, later". This replaces that row for
-curves: Selva draws them in the viewer and imports DXF and 3DM.
+curves and points: Selva draws them in the viewer and imports DXF and 3DM.
 
 ## What it is
 
-A Get Line or Get Geometry input shows **Line / Polyline / Curve** and **Import** in the Selva form.
-Drawing happens in the viewer, on top of the solved model. What is drawn solves like any other
-input value.
+A Get Line, Get Point or Get Geometry input shows its drawing tools (**Point**, **Line**,
+**Polyline**, **Curve**) and **Import** in the Selva form. Drawing happens in the viewer, on top of
+the solved model. What is drawn solves like any other input value.
 
-## How a curve reaches Grasshopper
+## How an item reaches Grasshopper
 
 Nothing between the form and Rhino changed. `TreeBuilder.fromValues` already passes a list of
-objects through as one JSON string per item, and Rhino.Compute already reads both shapes:
+objects through as one JSON string per item, and a map of branch path to list as a data tree; and
+Rhino.Compute already reads all three shapes:
 
 | Input        | `paramType` | Item on the wire                                               |
 | ------------ | ----------- | -------------------------------------------------------------- |
+| Get Point    | `point`     | `{ "X", "Y", "Z" }`                                            |
 | Get Line     | `line`      | `{ "From": {X,Y,Z}, "To": {X,Y,Z} }`                           |
 | Get Geometry | `geometry`  | Rhino archive JSON: `{ version, archive3dm, opennurbs, data }` |
 
@@ -54,14 +56,15 @@ manual-solve definition has to be solved once on its defaults first.
 A host that parses with `allowScaling: false` has a scene in model units, and a sketch drawn by
 `ComputeApp` would be off by the unit factor. No host in this repo does.
 
-## What a Get Geometry takes
+## What an input takes
 
 Selva has the saved schema and no canvas, so the plugin writes what it needs onto each input
 (schema 2.22.0):
 
 - `geometryTypes`: what the Get Geometry's type filter allows. Selva offers the curve tools when
-  it includes `curve` or is empty (a filter that allows everything). An input filtered to meshes or
-  surfaces stays a Rhino-only element, badge and all.
+  it includes `curve`, the point tool when it includes `point`, and both when it is empty (a
+  filter that allows everything). An input filtered to meshes or surfaces stays a Rhino-only
+  element, badge and all. A Get Line takes lines and a Get Point points, whatever the filter.
 - `atMost`: the most objects the param takes. Drawing one more drops the oldest and the mode ends
   when the count is reached, so an input that takes one curve is redrawn in one go. An import keeps
   the first `atMost`.
@@ -71,10 +74,46 @@ Both are copied from the param every time the plugin validates the schema agains
 and a filter is something authors change. They are still stale between validations, after a
 filter change from the param's own menu and before the next save or canvas change.
 
-A schema saved before 2.22.0 has neither. Selva then offers curves on every `geometry` input and
-takes any number: hiding the input until the file is re-saved would take the feature away from
-every existing definition. The usual rollout order applies: Selva app, then the Compute server's
-plugin, then authors' plugins.
+A schema saved before 2.22.0 has neither. Selva then offers curves and points on every `geometry`
+input and takes any number: hiding the input until the file is re-saved would take the feature
+away from every existing definition. The usual rollout order applies: Selva app, then the Compute
+server's plugin, then authors' plugins.
+
+## Trees and attributes
+
+An item is more than its shape when a host needs it to be:
+
+- **`path`** is its Grasshopper branch. Items all in `{0}` go as a list; any other path turns the
+  value into a branch map, which the solve sends as a data tree. Compute builds the tree and hands
+  it to the param whole, whether or not the param's Tree Access is on. A host groups the curves of
+  one element by giving them one path.
+- **`attributes`** are text by key. An archive carries them as the object's user strings, so they
+  reach a Get Geometry input and not a Get Line or Get Point, whose JSON is a bare struct.
+- **`id`** stays in the browser.
+
+The built-in tools draw into `{0}` and set no attributes. Both are for a host's own draw mode or
+for items it writes through the controller.
+
+## Extension points
+
+What a host can reach without forking, from the narrowest to the widest:
+
+1. **A client slot** (`source: client`, `presentation: slot`) replaces the form control of a drawn
+   input with the host's own, as for any input.
+2. **The controller**: `ComputeApp`'s `onReady` gives `getSketch()`, and a client slot reaches the
+   same object through `getSketchContext()`. It reads and replaces an input's items
+   (`getItems`, `setItems`), starts a mode (`draw`), and has `undo`, `redo` and `reset`.
+3. **A draw mode** (`DrawModeSpec`): how placed points become items. `draw` takes one in place of
+   a built-in name, so a host shape (a rectangle, a wall with its role and branch) uses the
+   built-in snapping, typed lengths, preview and undo.
+4. **The two halves of the tool**, `createCurveLayer` (what is shown) and `createPointPicker`
+   (where a click lands), for a tool with rules of its own. The built-in tool is nothing but these
+   two and a `PointerTool`.
+
+vektor-fab's line apps (`draw-core`, `draw-svelte`) are the case this is shaped for. They keep
+their own envelope on a Text input: a segment is several curves plus heights, which no geometry
+input carries as one value. The next app is meant to be built on 3 or 4 instead, inside Selva's
+viewer; whether `curve-core` is replaced after that is decided by what that app turns out to need.
 
 ## What the live run showed
 
@@ -87,6 +126,23 @@ Geometry filtered to one curve, with lengths printed back as a check.
   same curve the browser evaluates.
 - A DXF and a 3DM, both in metres, landed as 9.000 m and 6.000 m in the millimetre model.
 - The input that takes one curve was redrawn in one go; each new curve replaced the last.
+- Two points clicked into the Get Point input made four shrubs out of two, and Undo made three.
+- The walls sent as a tree, one line in `{0;0}` and two in `{0;1}`, came back from a List Length
+  as 1 and 2 on those two branches, on a Get Line whose Tree Access is off.
+
+A second pass covered what the first left open:
+
+- **Attributes reach Grasshopper.** A host wrote three curves through `setItems`, two branches,
+  two of them with attributes. A C# Script in the definition read each curve's user strings:
+  `role=outer;height=1200` on `{0;0}`, and `role=inner` then none on `{0;1}`.
+- **The host API.** With the Selva page as host: `kinds` and `getItems` read the inputs,
+  `setItems` solved a 3.000 m path, a rectangle `DrawModeSpec` drawn with two clicks added four
+  walls, `undo` took them back, and a line handed to the point input was left out.
+- **Touch.** In the phone layout the sheet with the form and the viewer share the screen; Line,
+  then two taps in the viewer, built a fourth wall. A typed length needs a keyboard.
+- **Rhino.** The plugin's page still picks: as the panel, "Pick a curve" took a preselected curve
+  into the Get Geometry and the solve followed. On Rhino 8.36 the example opens and solves clean,
+  and the schema sync reads the same filter and counts off its params.
 
 It also found three defects, all fixed:
 
@@ -107,16 +163,17 @@ clean on the other.
 
 ## Not built
 
-- **Presets and saved states skip curve inputs.** `isValuelessInput` covers every geometry input on
+- **Presets and saved states skip drawn inputs.** `isValuelessInput` covers every geometry input on
   both hosts, because in Rhino they hold no form value. On Selva they now do. Loading a preset
-  leaves the drawn curves as they are.
-- **Get Point and Get Plane on Selva.** Both are plain JSON on the wire and would reuse the tool's
-  picking.
+  leaves the drawn items as they are.
+- **Get Plane on Selva.** Plain JSON on the wire, and the picker gives the origin; the axes need a
+  control of their own.
 - **Drawing planes other than model XY**, and snapping to edges or midpoints. Snaps are vertices
   only.
+- **Selecting an item.** `nearestCurve` hit-tests one; the built-in tool has no selected state.
 - **Closed periodic NURBS.** A curve closed by clicking its first point has a kink there.
 - **DXF blocks, ellipses and fit-point splines.** Counted as skipped, not expanded.
-- **An import cap of 2000 curves.** Each curve is one request item on every solve.
+- **An import cap of 2000 items.** Each is one request item on every solve.
 
 ## Rejected alternatives
 
@@ -132,5 +189,8 @@ clean on the other.
 - **Drawing inside `@selvajs/visualization`.** The viewer is a renderer with seams for host tools,
   and this is one. It needs only public API, plus `raycastVisible`, now exported so a host tool
   snaps through the same BVH pick as the measure tool.
+- **Building on vektor-fab's `curve-core`.** It would give one curve model across the products.
+  But it needs rhino3dm for every operation, where this model needs it only to encode, and a
+  public package would depend on a product repo's.
 - **One shared sketch that inputs select from.** Each input owning its curves matches Pick in
   Rhino and needs no assignment step.

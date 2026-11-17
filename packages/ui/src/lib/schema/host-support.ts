@@ -19,18 +19,17 @@ export type UIHost = 'rhino' | 'selva';
 
 /**
  * - `value`: an input or output every host renders.
- * - `curve`: a Rhino Get Line, or a Get Geometry that takes curves. Rhino fills it by picking in
- *   the viewport, Selva by drawing in the viewer or importing a file.
- * - `geometry`: any other Rhino Get Geometry, Get Point or Get Plane, filled by picking in the
- *   viewport.
+ * - `sketch`: a Rhino Get Line, a Get Point, or a Get Geometry that takes curves or points.
+ *   Rhino fills it by picking in the viewport, Selva by drawing in the viewer or importing a file.
+ * - `geometry`: any other Rhino Get Geometry, or a Get Plane, filled by picking in the viewport.
  * - `trigger`: a boolean input shown as a button; a press solves once with `true`.
  * - `unknown`: a layout item from a newer schema than this build knows.
  */
-export type ElementKind = 'value' | 'curve' | 'geometry' | 'trigger' | 'unknown';
+export type ElementKind = 'value' | 'sketch' | 'geometry' | 'trigger' | 'unknown';
 
 const SUPPORT: Record<ElementKind, readonly UIHost[]> = {
 	value: ['rhino', 'selva'],
-	curve: ['rhino', 'selva'],
+	sketch: ['rhino', 'selva'],
 	geometry: ['rhino'],
 	trigger: ['rhino'],
 	unknown: []
@@ -72,17 +71,25 @@ export function isGeometryParamType(paramType: string | undefined): boolean {
 	return paramType !== undefined && GEOMETRY_PARAM_TYPES.has(paramType);
 }
 
+/** What can be drawn into an input: `curve` covers lines, polylines and free curves. */
+export type DrawableKind = 'line' | 'curve' | 'point';
+
+const DRAWABLE: Record<string, readonly DrawableKind[]> = { line: ['line'], point: ['point'] };
+const ANY_GEOMETRY: readonly DrawableKind[] = ['curve', 'point'];
+
 /**
- * Whether a curve can fill the input: a Get Line, or a Get Geometry whose type filter lets curves
- * through. An empty `geometryTypes` is a filter that allows everything. An absent one is a schema
- * saved before 2.22.0, where the filter is unknown, and the input is offered rather than hidden.
+ * What a person can draw into the input, empty when nothing: a Get Line takes lines, a Get Point
+ * points, and a Get Geometry what its type filter lets through. An empty `geometryTypes` is a
+ * filter that allows everything. An absent one is a schema saved before 2.22.0, where the filter
+ * is unknown, and the input is offered rather than hidden.
  */
-export function isCurveInput(
+export function drawableKinds(
 	input: Pick<SchemaInput, 'paramType' | 'geometryTypes'> | undefined
-): boolean {
-	if (input?.paramType === 'line') return true;
-	if (input?.paramType !== 'geometry') return false;
-	return !input.geometryTypes?.length || input.geometryTypes.includes('curve');
+): readonly DrawableKind[] {
+	if (input?.paramType !== 'geometry') return DRAWABLE[input?.paramType ?? ''] ?? [];
+	const allowed = input.geometryTypes;
+	if (!allowed?.length) return ANY_GEOMETRY;
+	return ANY_GEOMETRY.filter((kind) => allowed.includes(kind as 'curve' | 'point'));
 }
 
 export function isTriggerItem(item: LayoutItem): boolean {
@@ -98,7 +105,7 @@ export function layoutItemKind(item: LayoutItem, inputs: readonly SchemaInput[])
 	if (item.type !== 'input' && item.type !== 'output') return 'unknown';
 	if (item.type === 'input') {
 		const input = inputs.find((i) => i.id === item.paramId);
-		if (isCurveInput(input)) return 'curve';
+		if (drawableKinds(input).length > 0) return 'sketch';
 		if (isGeometryParamType(input?.paramType)) return 'geometry';
 	}
 	if (!KNOWN_WIDGETS[item.type].has(item.widgetType)) return 'unknown';

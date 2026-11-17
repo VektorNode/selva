@@ -16,7 +16,7 @@ scripts/develop/check-fixtures.mjs` fails on any file below that this list doesn
 | `definitions/point-attractor.gh`           | Not yet described                                                        | by hand                       |
 | `definitions/shelving-unit.gh`             | Dynamic value lists: bay, shelf and door options computed from the size, each pick checked in the same solve | `scripts/plugin/example-definitions` |
 | `definitions/kitchen-run.gh`               | Kitchen configurator on Options Table, Repeat and Set Dynamic Value List: a front and handle per cabinet, colours and worktops that suit each other, picture tiles, a priced order | `scripts/plugin/example-definitions` |
-| `definitions/garden-sketch.gh`             | Inputs drawn in the 3D view: walls from lines (Get Line), a path from one curve (Get Geometry filtered to curves), or both imported from DXF or 3DM | `scripts/plugin/example-definitions` |
+| `definitions/garden-sketch.gh` | Inputs drawn in the 3D view: walls from lines (Get Line), a path from one curve (Get Geometry filtered to curves), shrubs from points (Get Point); all three also imported from DXF or 3DM | `scripts/plugin/example-definitions` |
 | `definitions/dependent-forms-tutorial.gh`  | Tutorial for Set Dynamic Value List, Repeat and Options Table: one small section each, on a pizza order | `scripts/plugin/example-definitions` |
 | `definitions/studio-task-lamp.gh`          | Desk lamp configurator: a dynamic light-source list, Night lighting, checks, charts, price, A3 PDF, CSV and 3DM out | `scripts/plugin/example-definitions` |
 | `definitions/perforated-facade.gh`         | Attractor perforation, metal finishes, a colour picker, DXF and SVG out  | `scripts/plugin/example-definitions` |

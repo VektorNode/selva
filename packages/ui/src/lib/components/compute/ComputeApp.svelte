@@ -24,9 +24,10 @@
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import { setDeferredFilesContext } from '../../contexts/deferredFilesContext.svelte';
-	import { setSketchContext } from '../../contexts/sketchContext.svelte';
+	import { setSketchContext, type SketchController } from '../../contexts/sketchContext.svelte';
+	import type { SketchParamType } from '../../features/sketch/item-values';
 	import { useSketchController } from '../../composables/useSketchController.svelte';
-	import { isCurveInput } from '../../schema/host-support';
+	import { drawableKinds } from '../../schema/host-support';
 	import { toast } from '../primitives/sonner/index.js';
 	import { formatMessage, type Locale, type ViewerMessages } from '../../i18n/messages';
 	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
@@ -87,6 +88,11 @@
 			 * same throttle and memo as the UI's, so it's safe to call at interaction rate.
 			 */
 			getSession: () => SolveSession;
+			/**
+			 * The inputs a person draws (Get Line, Get Point, Get Geometry): read or replace their
+			 * curves and points, start a drawing mode of your own, undo. See `SketchController`.
+			 */
+			getSketch: () => SketchController;
 		}) => void;
 		/**
 		 * Once per settled solve: applied, discarded, blocked, aborted or failed. A result held
@@ -213,26 +219,28 @@
 		cancel: () => session.cancelFiles()
 	});
 
-	// Curve inputs draw into the viewer, which mounts and unmounts under the layout while the
-	// curves have to outlive it.
-	const curveInputs = $derived(
-		(schema?.inputs ?? []).flatMap((input) =>
-			isCurveInput(input)
+	// Drawn inputs live in the viewer, which mounts and unmounts under the layout while their
+	// curves and points have to outlive it.
+	const sketchInputs = $derived(
+		(schema?.inputs ?? []).flatMap((input) => {
+			const kinds = drawableKinds(input);
+			return kinds.length > 0
 				? [
 						{
 							id: input.id,
-							paramType: input.paramType as 'line' | 'geometry',
+							paramType: input.paramType as SketchParamType,
+							kinds,
 							name: input.nickname,
 							atMost: input.atMost
 						}
 					]
-				: []
-		)
+				: [];
+		})
 	);
 	// svelte-ignore state_referenced_locally
 	const sketch = useSketchController({
 		loadRhino,
-		inputs: () => curveInputs,
+		inputs: () => sketchInputs,
 		getValue: (id) => session.values[id],
 		setValue: (id, value) => session.setValue(id, value),
 		getDefault: (id) => schema?.inputs.find((input) => input.id === id)?.default,
@@ -262,7 +270,8 @@
 		onReady?.({
 			loadValues: (incoming) => session.loadValues(incoming),
 			getLastResult: () => session.lastResult,
-			getSession: () => session
+			getSession: () => session,
+			getSketch: () => sketch
 		});
 	});
 

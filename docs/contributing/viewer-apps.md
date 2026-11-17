@@ -135,7 +135,10 @@ Two things this naive version gets wrong that yours shouldn't:
   Lines and points still fall back to their own raycast, so a multi-million-point cloud on every
   `mousemove` needs a spatial index of your own.
 
-`@selvajs/sketch/tool` is a complete tool built on these seams and nothing else.
+`@selvajs/sketch/tool` is a complete tool built on these seams and nothing else. Before writing
+picking or curve rendering of your own, look at its two halves: `createPointPicker` gives a model
+point with snaps, grid, angle lock and typed lengths applied, and `createCurveLayer` draws curves,
+grab points, a preview and editable labels that survive solves.
 
 ## Driving solves
 

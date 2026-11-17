@@ -92,7 +92,7 @@ And it is permanent: `MergeDiscoveredInputs` skips any ID already present in `sc
 
 A geometry input's `geometryTypes` (its Get Geometry type filter) and `atMost` are the exception:
 `SyncGeometryLimits` copies both from the param on every validation, because Selva decides from
-them whether the input takes curves and how many. A hand-written value is overwritten on the next
+them whether the input takes curves or points, and how many. A hand-written value is overwritten on the next
 save.
 
 Validate a payload before grafting it:

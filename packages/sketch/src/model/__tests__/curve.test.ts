@@ -3,10 +3,17 @@ import { describe, expect, it } from 'vitest';
 import {
 	clampedKnots,
 	explodeToLines,
+	groupByPath,
 	isValidCurve,
+	isValidItem,
 	nurbsFromControlPoints,
+	parsePath,
+	pathKey,
+	scaleItem,
+	withVertex,
 	withoutVertex,
 	type Point3,
+	type SketchItem,
 	type SketchPolyline
 } from '../curve.js';
 import { curveLength, segmentsOf, setSegmentLength } from '../measure.js';
@@ -96,6 +103,58 @@ describe('measure', () => {
 	it('leaves the curve alone for a length that is not positive', () => {
 		expect(setSegmentLength(square, 0, 0)).toBe(square);
 		expect(setSegmentLength(square, 0, Number.NaN)).toBe(square);
+	});
+});
+
+describe('tags', () => {
+	const tags = { id: 'a', path: [0, 2], attributes: { role: 'outer' } } as const;
+
+	it('survive every edit', () => {
+		const tagged = { ...square, ...tags };
+		expect(withVertex(tagged, 0, [1, 1, 0])).toMatchObject(tags);
+		expect(setSegmentLength(tagged, 0, 5)).toMatchObject(tags);
+		expect(scaleItem(tagged, 2)).toMatchObject(tags);
+		const curve = { ...nurbsFromControlPoints(square.points), ...tags };
+		expect(withoutVertex(curve, 0)).toMatchObject(tags);
+	});
+
+	it('reach exploded lines without the id', () => {
+		const [line] = explodeToLines([{ ...square, ...tags }]);
+		expect(line).toMatchObject({ path: [0, 2], attributes: { role: 'outer' } });
+		expect(line.id).toBeUndefined();
+	});
+
+	it('group items by Grasshopper path', () => {
+		const a: SketchItem = { kind: 'point', at: [0, 0, 0] };
+		const groups = groupByPath([a, { ...a, path: [0, 1] }, { ...a, path: [0] }]);
+		expect([...groups.keys()]).toEqual(['{0}', '{0;1}']);
+		expect(groups.get('{0}')).toHaveLength(2);
+	});
+
+	it('write and read paths as Grasshopper does', () => {
+		expect(pathKey(undefined)).toBe('{0}');
+		expect(pathKey([0, 3, 1])).toBe('{0;3;1}');
+		expect(parsePath('{0;3;1}')).toEqual([0, 3, 1]);
+		expect(parsePath('{}')).toEqual([]);
+		expect(parsePath('0;1')).toBeNull();
+	});
+});
+
+describe('points', () => {
+	const point = { kind: 'point', at: [1, 2, 3] } as const;
+
+	it('move, scale and never lose their only vertex to an edit', () => {
+		expect(withVertex(point, 0, [4, 5, 6])).toEqual({ kind: 'point', at: [4, 5, 6] });
+		expect(scaleItem(point, 10)).toEqual({ kind: 'point', at: [10, 20, 30] });
+		expect(withoutVertex(point, 0)).toBeNull();
+	});
+
+	it('have no segments, no length to set, and are left out of lines', () => {
+		expect(segmentsOf(point)).toEqual([]);
+		expect(setSegmentLength(point, 0, 5)).toBe(point);
+		expect(explodeToLines([point])).toEqual([]);
+		expect(isValidItem(point)).toBe(true);
+		expect(isValidItem({ kind: 'point', at: [Number.NaN, 0, 0] })).toBe(false);
 	});
 });
 

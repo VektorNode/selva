@@ -1,34 +1,38 @@
 import { untrack } from 'svelte';
 import type { RhinoModule } from 'rhino3dm';
 import type { ThreeViewer } from '@selvajs/visualization/render';
-import { explodeToLines, type SketchCurve } from '@selvajs/sketch/model';
+import { explodeToLines, isCurve, isPoint, type SketchItem } from '@selvajs/sketch/model';
 import { createSketchTool, type SketchState, type SketchTool } from '@selvajs/sketch/tool';
 import type { SketchController } from '#lib/contexts/sketchContext.svelte.js';
+import { importSketchFile } from '#lib/features/sketch/import-file.js';
 import {
-	curvesFromValue,
-	valueFromCurves,
-	valueNeedsRhino
-} from '#lib/features/sketch/curve-values.js';
-import { importCurveFile } from '#lib/features/sketch/import-file.js';
+	itemsFromValue,
+	valueFromItems,
+	valueNeedsRhino,
+	type SketchParamType
+} from '#lib/features/sketch/item-values.js';
 import { modelUnits } from '#lib/features/sketch/units.js';
+import type { DrawableKind } from '#lib/schema/host-support.js';
 
-// Owns the curves of every curve input for as long as the app is mounted, not for as long as an
+// Owns the items of every drawn input for as long as the app is mounted, not for as long as an
 // input's control is: a drawn curve stays in the viewer when its tab or group is closed.
 //
-// The session value is the one copy that solves. Curves are decoded from it when it changes
+// The session value is the one copy that solves. Items are decoded from it when it changes
 // underneath (a default, a loaded state) and encoded back into it after every edit.
 
-export interface CurveInputRef {
+export interface SketchInputRef {
 	id: string;
-	paramType: 'line' | 'geometry';
+	paramType: SketchParamType;
+	/** What the input takes; see `drawableKinds`. */
+	kinds: readonly DrawableKind[];
 	/** The group's name in the scene outliner. */
 	name: string;
-	/** The most curves the param takes; absent when the schema doesn't say. */
+	/** The most items the param takes; absent when the schema doesn't say. */
 	atMost?: number;
 }
 
 export interface SketchControllerDeps {
-	inputs: () => readonly CurveInputRef[];
+	inputs: () => readonly SketchInputRef[];
 	getValue: (paramId: string) => unknown;
 	setValue: (paramId: string, value: unknown) => void;
 	/** The input's value in the definition, restored by `reset`. */
@@ -36,24 +40,40 @@ export interface SketchControllerDeps {
 	/** Rhino's name for the model's unit system, from a solve response; absent before the first. */
 	modelUnits: () => string | null | undefined;
 	/**
-	 * Loads rhino3dm, which writes the format a Get Geometry reads. Without it only Get Line
-	 * inputs work, and only DXF imports. Read once.
+	 * Loads rhino3dm, which writes the format a Get Geometry reads. Without it only Get Line and
+	 * Get Point inputs work, and only DXF imports. Read once.
 	 */
 	loadRhino?: () => Promise<object>;
-	/** rhino3dm could not be loaded, so a curve was not sent. */
+	/** rhino3dm could not be loaded, so the items were not sent. */
 	onEncodeError?: () => void;
 }
 
-const IDLE: SketchState = { mode: null, pendingPoints: 0, typed: '' };
+const IDLE: SketchState = {
+	mode: null,
+	pendingPoints: 0,
+	typed: '',
+	canUndo: false,
+	canRedo: false
+};
 
 class Entry {
-	curves = $state.raw<readonly SketchCurve[]>([]);
+	items = $state.raw<readonly SketchItem[]>([]);
 	state = $state.raw<SketchState>(IDLE);
 	tool: SketchTool | null = null;
-	/** The session value the curves match. Any other value there was put by someone else. */
+	/** The session value the items match. Any other value there was put by someone else. */
 	synced: unknown = undefined;
 	/** Bumped by every load and write, so a slower rhino3dm load cannot overwrite a newer one. */
 	revision = 0;
+}
+
+/** What an input takes out of a list: a file or a host may hold more kinds than it does. */
+function taken(items: readonly SketchItem[], input: SketchInputRef): SketchItem[] {
+	if (input.paramType === 'line') return explodeToLines(items);
+	return items.filter(
+		(item) =>
+			(isPoint(item) && input.kinds.includes('point')) ||
+			(isCurve(item) && input.kinds.includes('curve'))
+	);
 }
 
 /** Call during component initialisation: it registers effects. */
@@ -89,20 +109,20 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 			}
 		: null;
 
-	function write(input: CurveInputRef, target: Entry) {
+	function write(input: SketchInputRef, target: Entry) {
 		const revision = ++target.revision;
 		const commit = (value: unknown) => {
 			if (target.revision !== revision) return;
 			target.synced = value;
 			deps.setValue(input.id, value);
 		};
-		if (input.paramType === 'line' || target.curves.length === 0) {
-			commit(valueFromCurves(target.curves, input.paramType, null));
+		if (input.paramType !== 'geometry' || target.items.length === 0) {
+			commit(valueFromItems(target.items, input.paramType, null));
 			return;
 		}
 		if (!loadRhino) return;
 		loadRhino().then(
-			(rhino) => commit(valueFromCurves(target.curves, input.paramType, rhino)),
+			(module) => commit(valueFromItems(target.items, input.paramType, module)),
 			() => deps.onEncodeError?.()
 		);
 	}
@@ -110,19 +130,27 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 	function load(target: Entry, value: unknown) {
 		target.synced = value;
 		const revision = ++target.revision;
-		const apply = (curves: SketchCurve[]) => {
+		const apply = (items: SketchItem[]) => {
 			if (target.revision !== revision) return;
-			target.curves = curves;
-			target.tool?.setCurves(curves);
+			target.items = items;
+			target.tool?.setItems(items);
 		};
 		if (!loadRhino || !valueNeedsRhino(value)) {
-			apply(curvesFromValue(value, null));
+			apply(itemsFromValue(value, null));
 			return;
 		}
 		loadRhino().then(
-			(rhino) => apply(curvesFromValue(value, rhino)),
+			(module) => apply(itemsFromValue(value, module)),
 			() => apply([])
 		);
+	}
+
+	function replace(input: SketchInputRef, items: readonly SketchItem[]) {
+		const target = entry(input.id);
+		target.tool?.cancel();
+		target.items = items;
+		target.tool?.setItems(items);
+		write(input, target);
 	}
 
 	function disposeTools() {
@@ -144,17 +172,17 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 				metersPerUnit: units.metersPerUnit,
 				unitSuffix: units.suffix,
 				name: input.name,
-				maxCurves: input.atMost,
+				maxItems: input.atMost,
 				settings: { gridStep, showDimensions },
-				onChange: (curves) => {
-					target.curves = curves;
+				onChange: (items) => {
+					target.items = items;
 					write(input, target);
 				},
 				onStateChange: (state) => {
 					target.state = state;
 				}
 			});
-			target.tool.setCurves(target.curves);
+			target.tool.setItems(target.items);
 		}
 	}
 
@@ -181,6 +209,12 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 		}
 	});
 
+	const supports = (paramId: string) => {
+		const input = refOf(paramId);
+		if (!input || input.kinds.length === 0) return false;
+		return input.paramType !== 'geometry' || loadRhino !== null;
+	};
+
 	return {
 		get canDraw() {
 			return viewer !== null && units !== null;
@@ -190,6 +224,9 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 		},
 		get unitSuffix() {
 			return units?.suffix ?? '';
+		},
+		get importAccept() {
+			return loadRhino ? '.dxf,.3dm' : '.dxf';
 		},
 		get gridStep() {
 			return gridStep;
@@ -203,40 +240,41 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 		set showDimensions(value) {
 			showDimensions = value;
 		},
-		get importAccept() {
-			return loadRhino ? '.dxf,.3dm' : '.dxf';
-		},
-		supports: (paramId) => {
-			const paramType = refOf(paramId)?.paramType;
-			return paramType === 'line' || (paramType === 'geometry' && loadRhino !== null);
-		},
+		supports,
+		kinds: (paramId) => refOf(paramId)?.kinds ?? [],
 		view: (paramId) => entry(paramId),
+		getItems: (paramId) => entry(paramId).items,
+		setItems: (paramId, items) => {
+			const input = refOf(paramId);
+			if (input && supports(paramId)) replace(input, taken(items, input).slice(0, input.atMost));
+		},
 		draw: (paramId, mode) => {
-			// Fetched while the user draws, so the first curve doesn't wait for it.
+			// Fetched while the user draws, so the first item doesn't wait for it.
 			if (refOf(paramId)?.paramType === 'geometry') loadRhino?.().catch(() => {});
 			entry(paramId).tool?.draw(mode);
 		},
 		move: (paramId) => entry(paramId).tool?.move(),
 		finish: (paramId) => entry(paramId).tool?.finish(),
+		undo: (paramId) => entry(paramId).tool?.undo(),
+		redo: (paramId) => entry(paramId).tool?.redo(),
 		reset: (paramId) => {
 			entry(paramId).tool?.cancel();
 			deps.setValue(paramId, deps.getDefault(paramId) ?? null);
 		},
 		importFile: async (paramId, file) => {
 			const input = refOf(paramId);
-			if (!input || !units) throw new Error('Curve input is not ready for an import.');
-			const imported = await importCurveFile(file, units.metersPerUnit, loadRhino);
-			const target = entry(paramId);
-			target.tool?.cancel();
-			// A line input can only send straight lines, so that is what it shows.
-			const curves = input.paramType === 'line' ? explodeToLines(imported.curves) : imported.curves;
-			target.curves = curves.slice(0, input.atMost);
-			target.tool?.setCurves(target.curves);
-			write(input, target);
+			if (!input || !units) throw new Error('The input is not ready for an import.');
+			const imported = await importSketchFile(file, units.metersPerUnit, loadRhino);
+			const fitting = taken(imported.items, input);
+			const kept = fitting.slice(0, input.atMost);
+			replace(input, kept);
 			return {
-				curves: [...target.curves],
-				skipped: imported.skipped,
-				overLimit: curves.length - target.curves.length
+				items: [...kept],
+				// A line input turns one polyline into several lines, so only whole objects count.
+				skipped:
+					imported.skipped +
+					(input.paramType === 'line' ? 0 : imported.items.length - fitting.length),
+				overLimit: fitting.length - kept.length
 			};
 		},
 		attachViewer: (next) => {

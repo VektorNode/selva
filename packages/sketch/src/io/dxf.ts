@@ -2,11 +2,12 @@ import {
 	add,
 	clampedKnots,
 	cross,
-	isValidCurve,
+	isValidItem,
 	normalize,
 	scale,
 	type Point3,
 	type SketchCurve,
+	type SketchItem,
 	type SketchNurbs
 } from '../model/curve.js';
 import {
@@ -17,13 +18,13 @@ import {
 } from '../model/nurbs.js';
 
 // ============================================================================
-// DXF curves
+// DXF curves and points
 // ============================================================================
 //
 // An ASCII DXF is a flat list of (group code, value) line pairs. Code 0 starts a section, an
 // entity or a table entry; the codes after it belong to that thing until the next 0.
 //
-// Read: LINE, LWPOLYLINE, POLYLINE (2D and 3D), SPLINE with control points, ARC, CIRCLE.
+// Read: POINT, LINE, LWPOLYLINE, POLYLINE (2D and 3D), SPLINE with control points, ARC, CIRCLE.
 // Skipped and counted in `skipped`: everything else, including INSERT (block references are not
 // expanded), ELLIPSE, and splines that carry fit points only.
 //
@@ -32,8 +33,8 @@ import {
 // drawing has extrusion (0,0,-1), which flips X, so the plane cannot be ignored.
 
 export interface DxfImport {
-	/** In the file's own units. */
-	curves: SketchCurve[];
+	/** Curves and points, in the file's own units. */
+	items: SketchItem[];
 	/** From `$INSUNITS`; null when the file is unitless or doesn't say. */
 	metersPerUnit: number | null;
 	/** Entity type to how many were not read. */
@@ -207,7 +208,7 @@ function arc(entity: Entity, full: boolean): SketchNurbs | null {
 }
 
 /**
- * Reads the curves out of an ASCII DXF's ENTITIES section.
+ * Reads the curves and points out of an ASCII DXF's ENTITIES section.
  *
  * @throws {Error} For a binary DXF, which has no line pairs to read.
  */
@@ -216,12 +217,12 @@ export function parseDxf(text: string): DxfImport {
 		throw new Error('Binary DXF is not supported: save the file as ASCII DXF.');
 	}
 	const pairs = readPairs(text);
-	const result: DxfImport = { curves: [], metersPerUnit: null, skipped: {} };
+	const result: DxfImport = { items: [], metersPerUnit: null, skipped: {} };
 	const skip = (type: string) => {
 		result.skipped[type] = (result.skipped[type] ?? 0) + 1;
 	};
-	const keep = (type: string, curve: SketchCurve | null) => {
-		if (curve && isValidCurve(curve)) result.curves.push(curve);
+	const keep = (type: string, item: SketchItem | null) => {
+		if (item && isValidItem(item)) result.items.push(item);
 		else skip(type);
 	};
 
@@ -263,6 +264,9 @@ export function parseDxf(text: string): DxfImport {
 		const entity = nextEntity();
 		const type = entity[0].value;
 		switch (type) {
+			case 'POINT':
+				keep(type, { kind: 'point', at: point(entity, 10) });
+				break;
 			case 'LINE':
 				keep(type, { kind: 'line', from: point(entity, 10), to: point(entity, 11) });
 				break;
