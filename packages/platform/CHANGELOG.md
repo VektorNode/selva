@@ -1,5 +1,17 @@
 # @selvajs/platform
 
+## 1.1.0-beta.7
+
+### Minor Changes
+
+- 692d4dc: `IEventSink`, `NoopEventSink`, `SupabaseEventSink`, the audit read types and `SupabaseAuditQuery` take an event type parameter `E extends BaseEvent` (`{ type: string; actorId: string; tokenId?: string }`), defaulting to `DomainEvent`. A host writes its own audit events into the same sink and `audit_events` table through an `IEventSink<DomainEvent | HostEvent>`, which still satisfies Selva's `IEventSink`. `BaseEvent` is exported.
+- 692d4dc: `SolveFailureKind` gains `request_too_large`, for a solve whose request body the compute server refused. The Selva app records it instead of dropping the metric.
+- 692d4dc: Retention for audit events and solve metrics. `SELVA_AUDIT_RETENTION_DAYS` and `SELVA_SOLVE_METRICS_RETENTION_DAYS` (default 0: kept forever) set how long rows are kept; a janitor purges older ones at start and then daily. `IDataProvider.purgeExpired` is new and optional (`SupabaseDataProvider` implements it); `startRetentionJanitor` and `resolveRetentionPolicy` are exported from `@selvajs/server/ops`.
+
+### Patch Changes
+
+- 692d4dc: The Supabase provider stores platform-project grants, so `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS` now boots on Supabase. Migration `20261117200000_selva_platform_project_grants` admits `platform` visibility, adds `platform_project_grants` (sessions read under RLS, the service role writes) and opens a platform project under RLS to its grantees only. Deleting a project or org removes its grants, and erasing a user removes grants made to them. Run `npx selva-supabase` and `npx supabase db push` before turning the flag on.
+
 ## 1.1.0-beta.6
 
 ### Minor Changes

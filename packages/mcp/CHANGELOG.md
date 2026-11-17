@@ -1,5 +1,12 @@
 # @selvajs/mcp
 
+## 0.2.0-beta.1
+
+### Minor Changes
+
+- 692d4dc: A tool without `output` no longer sends `structuredContent`. Clients showed that JSON in place of the text and dropped its hints; a tool that wants structured results declares `output`, which lists it as `outputSchema`.
+- 692d4dc: `onToolCall` classifies an `ApiCallError` found through `cause`, so a tool that rewrites the error text with `throw new Error(text, { cause: err })` still reports `timeout` and the call's code. `ToolCallRecord` gains `status`, the failing call's HTTP status.
+
 ## 0.2.0-beta.0
 
 ### Minor Changes
