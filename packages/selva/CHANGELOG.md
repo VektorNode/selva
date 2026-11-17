@@ -1,5 +1,16 @@
 # @selvajs/selva
 
+## 4.21.0-beta.12
+
+### Minor Changes
+
+- 692d4dc: Retention for audit events and solve metrics. `SELVA_AUDIT_RETENTION_DAYS` and `SELVA_SOLVE_METRICS_RETENTION_DAYS` (default 0: kept forever) set how long rows are kept; a janitor purges older ones at start and then daily. `IDataProvider.purgeExpired` is new and optional (`SupabaseDataProvider` implements it); `startRetentionJanitor` and `resolveRetentionPolicy` are exported from `@selvajs/server/ops`.
+
+### Patch Changes
+
+- 692d4dc: `revokeUnredeemedConsentToken` reads the consent key as system. It runs after the code's lifetime, when the consenting session's JWT may have expired, so on Supabase the RLS read failed and the abandoned key stayed live. A failed revoke is now logged instead of swallowed.
+- 692d4dc: `SolveFailureKind` gains `request_too_large`, for a solve whose request body the compute server refused. The Selva app records it instead of dropping the metric.
+
 ## 4.21.0-beta.11
 
 ### Minor Changes

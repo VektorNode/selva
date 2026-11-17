@@ -1,5 +1,17 @@
 # @selvajs/solve
 
+## 2.1.0-beta.7
+
+### Minor Changes
+
+- 692d4dc: `SolveEngine.solve` takes `boundValues`: values for `server`-sourced inputs, by input id, that the host resolved. They fill the input tree in place of the schema default; posted `values` still never reach such an input. `resolveBoundValues(schema, resolver, ctx, scope)` in `@selvajs/server/compute` builds them from an `IBindingResolver` in one batched call. A host no longer needs to clear `serverSourced` to fill these inputs.
+- 692d4dc: `createComputeFetchSolveFn` throws `SolveRequestError` (exported from `@selvajs/solve/client`) when the server refuses a solve, carrying `status`, the parsed `body`, its `code` (or `reason`) and `retryAfterSeconds`. `message` is unchanged.
+- 692d4dc: `createRequestResponseDriver` takes `timeoutMessage(seconds)`, so a host can localise the error a solve past its deadline reports. `ViewerMessages` gains `solveTimedOut` (`{seconds}` placeholder).
+
+### Patch Changes
+
+- 692d4dc: In manual-solve mode, `setValue` with the value the session already holds no longer marks the result stale. `NumberInput` no longer commits a typed value twice.
+
 ## 2.1.0-beta.6
 
 ### Minor Changes

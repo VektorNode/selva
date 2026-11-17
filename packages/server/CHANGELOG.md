@@ -1,5 +1,23 @@
 # @selvajs/server
 
+## 3.0.0-beta.10
+
+### Minor Changes
+
+- e8417c4: `isUsableCachedSchema` accepts a stored schema in an older minor of the current major (`2.19.0` under `2.20.0`) without an extraction time, so a minor `UI_SCHEMA_VERSION` bump no longer sends every definition read back to Compute. An older major still needs an extraction within the recheck window. `isOlderMinorSchemaVersion` is exported from `@selvajs/server/definitions`.
+- 692d4dc: Retention for audit events and solve metrics. `SELVA_AUDIT_RETENTION_DAYS` and `SELVA_SOLVE_METRICS_RETENTION_DAYS` (default 0: kept forever) set how long rows are kept; a janitor purges older ones at start and then daily. `IDataProvider.purgeExpired` is new and optional (`SupabaseDataProvider` implements it); `startRetentionJanitor` and `resolveRetentionPolicy` are exported from `@selvajs/server/ops`.
+- 692d4dc: `SolveEngine.solve` takes `boundValues`: values for `server`-sourced inputs, by input id, that the host resolved. They fill the input tree in place of the schema default; posted `values` still never reach such an input. `resolveBoundValues(schema, resolver, ctx, scope)` in `@selvajs/server/compute` builds them from an `IBindingResolver` in one batched call. A host no longer needs to clear `serverSourced` to fill these inputs.
+
+### Patch Changes
+
+- 692d4dc: `revokeUnredeemedConsentToken` reads the consent key as system. It runs after the code's lifetime, when the consenting session's JWT may have expired, so on Supabase the RLS read failed and the abandoned key stayed live. A failed revoke is now logged instead of swallowed.
+- Updated dependencies [692d4dc]
+- Updated dependencies [692d4dc]
+- Updated dependencies [692d4dc]
+- Updated dependencies [692d4dc]
+  - @selvajs/platform@1.1.0-beta.7
+  - @selvajs/notifications@0.3.1-beta.7
+
 ## 3.0.0-beta.9
 
 ### Minor Changes
