@@ -262,6 +262,19 @@ export class LocalOrgStore implements IOrgStore {
 		return m && isLive(m) ? m : null;
 	}
 
+	async countOrgMembers(
+		_ctx: RequestContext,
+		orgIds: readonly string[]
+	): Promise<Map<string, number>> {
+		const { orgMembers } = await this.loader.get();
+		const counts = new Map<string, number>(orgIds.map((id) => [id, 0]));
+		for (const m of orgMembers) {
+			const n = counts.get(m.orgId);
+			if (n !== undefined && isLive(m)) counts.set(m.orgId, n + 1);
+		}
+		return counts;
+	}
+
 	async getOrgMembersFor(
 		_ctx: RequestContext,
 		orgIds: readonly string[],

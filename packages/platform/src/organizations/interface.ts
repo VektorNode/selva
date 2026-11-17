@@ -29,6 +29,11 @@ export interface IOrgStore {
 	listOrgMembers(ctx: RequestContext, orgId: string, opts?: ListOptions): Promise<Page<OrgMember>>;
 	getOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<OrgMember | null>;
 	/**
+	 * Live member count per org, uncapped by page size. Keys are the requested
+	 * `orgIds`; an org with no members maps to `0`.
+	 */
+	countOrgMembers(ctx: RequestContext, orgIds: readonly string[]): Promise<Map<string, number>>;
+	/**
 	 * Bulk counterpart to `getOrgMember`, for evaluating access rules over a
 	 * list of orgs in one query. Keys are the requested `orgIds`; an org the
 	 * user is not a member of maps to `null` rather than being absent.

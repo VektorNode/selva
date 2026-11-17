@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import type { Project } from '@selvajs/platform';
+import type { Project, ProjectMember } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import { getOrganizationProvider, getProjectProvider } from '#lib/server/providers.server.js';
 
@@ -50,22 +50,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const projects = await projectStore.listProjects(SYSTEM_CONTEXT, ctx.actingOrgId, {
 			limit: 200
 		});
-		rows = await Promise.all(
-			projects.items.map(async (project): Promise<ReclaimRow> => {
-				let memberCount = 0;
-				let alreadyOwner = false;
-				try {
-					const members = await projectStore.listProjectMembers(SYSTEM_CONTEXT, project.id, {
-						limit: 200
-					});
-					memberCount = members.items.length;
-					alreadyOwner = members.items.some((m) => m.userId === ctx.userId && m.role === 'owner');
-				} catch {
-					// non-fatal
-				}
-				return { ...project, memberCount, alreadyOwner };
-			})
-		);
+		const ids = projects.items.map((p) => p.id);
+		const [counts, own] = await Promise.all([
+			projectStore.countProjectMembers(SYSTEM_CONTEXT, ids).catch(() => new Map<string, number>()),
+			projectStore
+				.getProjectMembersFor(SYSTEM_CONTEXT, ids, ctx.userId)
+				.catch(() => new Map<string, ProjectMember | null>())
+		]);
+		rows = projects.items.map((project) => ({
+			...project,
+			memberCount: counts.get(project.id) ?? 0,
+			alreadyOwner: own.get(project.id)?.role === 'owner'
+		}));
 	} catch {
 		// listProjects unavailable — show empty
 	}

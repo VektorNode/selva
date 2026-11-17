@@ -264,6 +264,27 @@ export class SupabaseOrgStore implements IOrgStore {
 		return data ? rowToOrgMember(data) : null;
 	}
 
+	// One head count per org, in parallel: tallying selected rows would be capped by
+	// PostgREST's max-rows, and grouped aggregates are off by default.
+	async countOrgMembers(
+		ctx: RequestContext,
+		orgIds: readonly string[]
+	): Promise<Map<string, number>> {
+		const client = this.clients.forRequest(ctx);
+		const counts = await Promise.all(
+			orgIds.map(async (orgId) => {
+				const { count, error } = await client
+					.from('org_members')
+					.select('user_id', { count: 'exact', head: true })
+					.eq('org_id', orgId)
+					.is('deleted_at', null);
+				if (error) throw mapPostgrestError(error);
+				return [orgId, count ?? 0] as const;
+			})
+		);
+		return new Map(counts);
+	}
+
 	async getOrgMembersFor(
 		ctx: RequestContext,
 		orgIds: readonly string[],

@@ -10,6 +10,8 @@ declare global {
 			fields?: Record<string, string>;
 			/** Machine-readable context, e.g. `requiredScope` on an API-token scope refusal. */
 			details?: Record<string, string>;
+			/** The request's `x-request-id`, added to `/api/*` error bodies by `hooks.server.ts`. */
+			requestId?: string;
 		}
 		interface Locals {
 			/** Set by hooks.server.ts for protected routes. */

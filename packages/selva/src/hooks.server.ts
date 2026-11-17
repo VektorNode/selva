@@ -296,7 +296,10 @@ function withoutShareToken(url: URL): string {
 // inside its timing store; static assets skip the timing.
 export const handle: import('@sveltejs/kit/hooks').Handle = (input) => {
 	const { event } = input;
-	const run = () => requestMemo.run(event.request.method, () => gate(input));
+	const run = () =>
+		requestMemo.run(event.request.method, async () =>
+			withRequestIdInErrorBody(await gate(input), event.url.pathname)
+		);
 	if (isStaticAsset(event.url.pathname)) return run();
 	return requestTiming.timeRequest(
 		{
@@ -582,6 +585,9 @@ function applyResponseHeaders(response: Response, pathname: string, requestId: s
 	// get a short TTL.
 	if (pathname.startsWith('/_app/')) {
 		response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+	} else if (pathname.startsWith('/api/v1/') && !response.headers.has('Cache-Control')) {
+		// Authenticated JSON: no intermediary may keep a copy.
+		response.headers.set('Cache-Control', 'private, no-store');
 	} else if (
 		pathname.startsWith('/favicon/') ||
 		pathname === '/favicon.svg' ||
@@ -591,6 +597,33 @@ function applyResponseHeaders(response: Response, pathname: string, requestId: s
 	}
 
 	return response;
+}
+
+/**
+ * Copies the request id into an API error's JSON body, so a client that logs only the body still
+ * has the id an operator greps for. The header alone is lost by most HTTP client error paths.
+ */
+async function withRequestIdInErrorBody(response: Response, pathname: string): Promise<Response> {
+	if (response.status < 400 || !pathname.startsWith('/api/')) return response;
+	if (!response.headers.get('Content-Type')?.includes('application/json')) return response;
+	const requestId = response.headers.get(REQUEST_ID_HEADER);
+	if (!requestId) return response;
+	let body: unknown;
+	try {
+		body = await response.clone().json();
+	} catch {
+		return response;
+	}
+	if (!body || typeof body !== 'object' || Array.isArray(body) || 'requestId' in body) {
+		return response;
+	}
+	const headers = new Headers(response.headers);
+	headers.delete('Content-Length');
+	return new Response(JSON.stringify({ ...body, requestId }), {
+		status: response.status,
+		statusText: response.statusText,
+		headers
+	});
 }
 
 export const handleError: import('@sveltejs/kit/hooks').HandleServerError = ({

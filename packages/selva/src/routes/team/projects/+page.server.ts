@@ -41,23 +41,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		);
 		const inOrg = visible.filter((p) => p.orgId === orgId);
 		const store = getProjectProvider();
-		rows = await Promise.all(
-			inOrg.map(async (project): Promise<ProjectRow> => {
-				let memberCount = 0;
-				try {
-					// Counting members of a project the caller can already view is a
-					// leadership read, not a second visibility decision — the filter
-					// above is what made this project nameable at all.
-					const members = await store.listProjectMembers(SYSTEM_CONTEXT, project.id, {
-						limit: 200
-					});
-					memberCount = members.items.length;
-				} catch {
-					// non-fatal
-				}
-				return { ...project, memberCount };
-			})
-		);
+		// Counting members of a project the caller can already view is a
+		// leadership read, not a second visibility decision — the filter
+		// above is what made this project nameable at all.
+		const counts = await store
+			.countProjectMembers(
+				SYSTEM_CONTEXT,
+				inOrg.map((p) => p.id)
+			)
+			.catch(() => new Map<string, number>());
+		rows = inOrg.map((project) => ({ ...project, memberCount: counts.get(project.id) ?? 0 }));
 	} catch {
 		// non-fatal — show empty
 	}

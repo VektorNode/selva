@@ -19,18 +19,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 	let rows: OrgRow[] = [];
 	try {
 		const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: 200 });
-		rows = await Promise.all(
-			page.items.map(async (org): Promise<OrgRow> => {
-				let memberCount = 0;
-				try {
-					const members = await orgs.listOrgMembers(SYSTEM_CONTEXT, org.id, { limit: 1000 });
-					memberCount = members.items.length;
-				} catch {
-					// non-fatal
-				}
-				return { ...org, memberCount };
-			})
-		);
+		const counts = await orgs
+			.countOrgMembers(
+				SYSTEM_CONTEXT,
+				page.items.map((org) => org.id)
+			)
+			.catch(() => new Map<string, number>());
+		rows = page.items.map((org) => ({ ...org, memberCount: counts.get(org.id) ?? 0 }));
 	} catch {
 		// listOrgs unavailable — show empty
 	}

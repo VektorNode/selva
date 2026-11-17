@@ -35,7 +35,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			orgId: null,
 			mailConfigured: getNotificationProvider().isConfigured(),
 			actorRole: null as OrgRole | null,
-			actorUserId: ctx.userId
+			actorUserId: ctx.userId,
+			inviteeSetsCredentials: !!getAuthProvider().passwordAuth
 		};
 	}
 
@@ -92,6 +93,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		orgId,
 		actorRole,
 		actorUserId: ctx.userId,
-		mailConfigured: getNotificationProvider().isConfigured()
+		mailConfigured: getNotificationProvider().isConfigured(),
+		// Under header-auth the proxy proves who opens the link; there is nothing to set.
+		inviteeSetsCredentials: !!auth.passwordAuth
 	};
 };

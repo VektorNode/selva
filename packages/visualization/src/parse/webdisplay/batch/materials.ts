@@ -93,7 +93,8 @@ export function createMaterial(
 		polygonOffset: true,
 		polygonOffsetFactor: SURFACE_OFFSET_FACTOR,
 		polygonOffsetUnits: 0,
-		depthWrite: true,
+		// A see-through surface that wrote depth would hide whatever sits inside or behind it.
+		depthWrite: !(matData.transparent || matData.opacity < 1),
 		depthTest: true
 	});
 

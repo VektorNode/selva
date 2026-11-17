@@ -15,8 +15,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const [memberCount, projectCount] = await Promise.all([
 		getOrganizationProvider()
-			.listOrgMembers(ctx, orgId, { limit: 1000 })
-			.then((page) => page.items.length)
+			.countOrgMembers(ctx, [orgId])
+			.then((counts) => counts.get(orgId) ?? 0)
 			.catch(() => 0),
 		getProjectProvider()
 			.listProjects(ctx, orgId, { limit: 200 })

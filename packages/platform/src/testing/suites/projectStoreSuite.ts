@@ -320,6 +320,32 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			expect(page.items.length).toBe(2);
 		});
 
+		it('countProjectMembers counts live members per project', async () => {
+			const { store, orgId, ownerId } = await createStore();
+			const p1 = project(orgId, ownerId, { name: 'Count Members A' });
+			const p2 = project(orgId, ownerId, { name: 'Count Members B' });
+			await store.createProject(ctx(ownerId), p1);
+			await store.createProject(ctx(ownerId), p2);
+			// Relative: createProject may add the owner as a member.
+			const before = await store.countProjectMembers(ctx(ownerId), [p1.id, p2.id]);
+			const added: string[] = [];
+			for (let i = 0; i < 3; i++) {
+				const u = await seed();
+				await store.addProjectMember(ctx(ownerId), member(p1.id, u, 'viewer'));
+				added.push(u);
+			}
+			await store.removeProjectMember(ctx(ownerId), p1.id, added[0]);
+
+			const counts = await store.countProjectMembers(ctx(ownerId), [p1.id, p2.id]);
+			expect(counts.get(p1.id)).toBe((before.get(p1.id) ?? 0) + 2);
+			expect(counts.get(p2.id)).toBe(before.get(p2.id));
+		});
+
+		it('countProjectMembers returns an empty map for no ids', async () => {
+			const { store, ownerId } = await createStore();
+			expect((await store.countProjectMembers(ctx(ownerId), [])).size).toBe(0);
+		});
+
 		// ============================================================================
 		// Audit fields + soft delete
 		// ============================================================================

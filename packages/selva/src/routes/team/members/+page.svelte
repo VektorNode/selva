@@ -31,6 +31,8 @@
 		actorUserId: string;
 		/** SMTP is set up, so minting an invite also mails the link. */
 		mailConfigured: boolean;
+		/** False under header-auth: the proxy signs the invitee in, so there is no password to set. */
+		inviteeSetsCredentials: boolean;
 	}
 	let { data }: { data: PageData } = $props();
 
@@ -121,6 +123,11 @@
 	const invitableRoles = $derived(isOwner ? ORG_ROLES : ORG_ROLES.filter((r) => r !== 'owner'));
 
 	// Invite form
+	const inviteeSetup = $derived(
+		data.inviteeSetsCredentials
+			? 'The invitee sets their own credentials when they open it.'
+			: 'The invitee opens it while signed in through your identity provider.'
+	);
 	let showInviteForm = $state(false);
 	let inviteEmail = $state('');
 	let inviteRole = $state<OrgRole>('member');
@@ -309,12 +316,11 @@
 						<p class="text-sm font-medium">Invite member</p>
 						<p class="text-muted-foreground text-xs">
 							{#if data.mailConfigured}
-								Selva emails the invite link to this address. The invitee sets their own credentials
-								when they open it.
+								Selva emails the invite link to this address.
+								{inviteeSetup}
 							{:else}
-								You'll get a link to send yourself — set <span class="font-mono">SMTP_HOST</span> to have
-								Selva email invites directly. The invitee sets their own credentials when they open the
-								link.
+								You'll get a link to send yourself — set <span class="font-mono">SMTP_HOST</span> to
+								have Selva email invites directly. {inviteeSetup}
 							{/if}
 						</p>
 					</div>

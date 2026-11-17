@@ -56,6 +56,14 @@ export interface IProjectStore {
 		projectIds: readonly string[],
 		userId: string
 	): Promise<Map<string, ProjectMember | null>>;
+	/**
+	 * Live member count per project, uncapped by page size. Keys are the
+	 * requested `projectIds`; a project with no members maps to `0`.
+	 */
+	countProjectMembers(
+		ctx: RequestContext,
+		projectIds: readonly string[]
+	): Promise<Map<string, number>>;
 	addProjectMember(ctx: RequestContext, member: ProjectMember): Promise<void>;
 	updateProjectMemberRole(
 		ctx: RequestContext,

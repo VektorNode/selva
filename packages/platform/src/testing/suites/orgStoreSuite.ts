@@ -329,6 +329,31 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			expect(page.items.length).toBe(2);
 		});
 
+		it('countOrgMembers counts live members past the page size', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			// Relative: single-org mode may start with members already seeded.
+			const before = (await store.countOrgMembers(ctx(u1), [orgId])).get(orgId) ?? 0;
+			const added: string[] = [];
+			for (let i = 0; i < 3; i++) {
+				const u = await seed();
+				await store.addOrgMember(ctx(u1), member(orgId, u));
+				added.push(u);
+			}
+			await store.removeOrgMember(ctx(u1), orgId, added[0]);
+
+			const missing = makeUuid();
+			const counts = await store.countOrgMembers(ctx(u1), [orgId, missing]);
+			expect(counts.get(orgId)).toBe(before + 2);
+			expect(counts.get(missing)).toBe(0);
+		});
+
+		it('countOrgMembers returns an empty map for no ids', async () => {
+			const store = await createStore();
+			const { u1 } = await setupOrg(store);
+			expect((await store.countOrgMembers(ctx(u1), [])).size).toBe(0);
+		});
+
 		// ============================================================================
 		// Audit fields + soft delete
 		// ============================================================================
