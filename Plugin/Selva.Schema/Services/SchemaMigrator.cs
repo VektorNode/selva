@@ -441,6 +441,16 @@ public static class SchemaMigrator
 
         EnsurePluginVersionSupported(schema.MinPluginVersion, currentPluginVersion);
 
+        // A newer minor: deserializing already dropped the fields this plugin doesn't know, so stamp
+        // it as ours, or a Selva server at our format rejects it. A newer major keeps its stamp.
+        if (schemaVersion > SchemaVersion.CURRENT && schemaVersion.Major == SchemaVersion.CURRENT.Major)
+        {
+            changes.Add($"Restamped from {schema.SchemaVersion} to {SchemaVersion.CURRENT_STRING}; " +
+                        "settings newer than this plugin were dropped");
+            schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+            return (schema, changes);
+        }
+
         if (schemaVersion >= SchemaVersion.CURRENT)
         {
             return (schema, changes);
