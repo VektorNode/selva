@@ -570,6 +570,20 @@
 							{#if isNumberInput}
 								{@const config = item.config as NumberWidgetConfig}
 								{@render toggleRow('Slider', config.renderAsSlider ?? true, toggleSliderMode)}
+								<div class="flex flex-col gap-1 pb-2">
+									<span class="text-muted-foreground text-[10px] font-medium">Unit</span>
+									<input
+										type="text"
+										maxlength="16"
+										value={config.unit ?? ''}
+										oninput={(e) => {
+											config.unit = e.currentTarget.value.trim() || undefined;
+										}}
+										placeholder="e.g., mm"
+										aria-label="Unit"
+										class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
+									/>
+								</div>
 							{/if}
 
 							{#if isCheckboxInput}

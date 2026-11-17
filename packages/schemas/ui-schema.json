@@ -135,6 +135,11 @@
 				"stepSize": { "type": "number" },
 				"placeholder": { "type": "string" },
 				"renderAsSlider": { "type": "boolean" },
+				"unit": {
+					"type": "string",
+					"maxLength": 16,
+					"description": "Unit shown after the value, e.g. \"mm\". Display only: the solve gets the bare number."
+				},
 				"hideRange": {
 					"type": "boolean",
 					"description": "Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it."
@@ -848,7 +853,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.20.0",
+					"default": "2.21.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

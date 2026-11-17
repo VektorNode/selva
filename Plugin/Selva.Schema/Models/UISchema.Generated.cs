@@ -172,6 +172,12 @@ namespace Selva.Schema.Models
         public bool? RenderAsSlider { get; set; }
 
 /// <summary>
+/// Unit shown after the value, e.g. "mm". Display only: the solve gets the bare number.
+/// </summary>
+        [JsonProperty("unit")]
+        public string Unit { get; set; }
+
+/// <summary>
 /// Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it.
 /// </summary>
         [JsonProperty("hideRange")]

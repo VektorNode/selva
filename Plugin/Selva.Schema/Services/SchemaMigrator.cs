@@ -37,7 +37,8 @@ public static class SchemaMigrator
             { new Version(2, 17, 0), MigrateTo_2_17_0 },
             { new Version(2, 18, 0), MigrateTo_2_18_0 },
             { new Version(2, 19, 0), MigrateTo_2_19_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_20_0 }
+            { new Version(2, 20, 0), MigrateTo_2_20_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_21_0 }
         };
 
     /// <summary>
@@ -420,10 +421,19 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_20_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.20.0";
 
         // The schema gains an optional 'previewSolves'. Absent means every solve makes every file,
         // as before, so nothing is rewritten.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_21_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // A number input's config gains an optional 'unit'. Absent shows no unit, as before.
 
         return schema;
     }

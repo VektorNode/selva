@@ -38,6 +38,9 @@
 	const step = $derived(config?.stepSize ?? 1);
 	const numValue = $derived(typeof value === 'number' ? value : min);
 
+	const unit = $derived(config?.unit?.trim() || undefined);
+	const unitId = $derived(`${inputId}-unit`);
+
 	const commitDebounced = debounce((newValue: SupportedTypes) => onChange(newValue), 400);
 	const commitSliderDebounced = debounce((newValue: SupportedTypes) => onChange(newValue), 150);
 
@@ -161,7 +164,11 @@
 			onkeydown={(e) => {
 				if (e.key === 'Enter') e.currentTarget.blur();
 			}}
+			aria-describedby={unit ? unitId : undefined}
 		/>
+		{#if unit}
+			<span id={unitId} class="pr-2.5 text-sm shrink-0 text-muted-foreground">{unit}</span>
+		{/if}
 		<Separator orientation="vertical" />
 		<div class="px-3.5 min-w-0 flex flex-1 items-center" onpointerdowncapture={startDrag}>
 			<!-- A function binding, not value + onValueChange: when a fine drag leaves the value
@@ -178,10 +185,25 @@
 			/>
 		</div>
 	</InputGroup.Root>
+{:else if unit}
+	<div class="relative" style:--unit-len={unit.length}>
+		{@render numberBox('pr-[calc(var(--unit-len)*1ch+1.5rem)]')}
+		<span
+			id={unitId}
+			class="right-3 text-sm inset-y-0 pointer-events-none absolute flex items-center text-muted-foreground"
+			>{unit}</span
+		>
+	</div>
 {:else}
+	{@render numberBox()}
+{/if}
+
+{#snippet numberBox(className?: string)}
 	<Input
 		id={inputId}
 		type="number"
+		class={className}
+		aria-describedby={unit ? unitId : undefined}
 		value={numValue}
 		min={config?.minimum}
 		max={config?.maximum}
@@ -210,7 +232,7 @@
 			}
 		}}
 	/>
-{/if}
+{/snippet}
 
 {#if validationError}
 	<Field.Error>{validationError}</Field.Error>

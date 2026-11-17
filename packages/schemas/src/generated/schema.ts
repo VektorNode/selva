@@ -198,6 +198,10 @@ export interface NumberWidgetConfig {
 	placeholder?: string;
 	renderAsSlider?: boolean;
 	/**
+	 * Unit shown after the value, e.g. "mm". Display only: the solve gets the bare number.
+	 */
+	unit?: string;
+	/**
 	 * Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it.
 	 */
 	hideRange?: boolean;
@@ -585,7 +589,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.20.0';
+export const UI_SCHEMA_VERSION = '2.21.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)
