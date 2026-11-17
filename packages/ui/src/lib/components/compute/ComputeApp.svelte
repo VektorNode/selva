@@ -24,6 +24,10 @@
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import { setDeferredFilesContext } from '../../contexts/deferredFilesContext.svelte';
+	import { setSketchContext } from '../../contexts/sketchContext.svelte';
+	import { useSketchController } from '../../composables/useSketchController.svelte';
+	import { isCurveInput } from '../../schema/host-support';
+	import { toast } from '../primitives/sonner/index.js';
 	import { formatMessage, type Locale, type ViewerMessages } from '../../i18n/messages';
 	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
 
@@ -92,6 +96,14 @@
 		onSolved?: (settlement: SolveSettlement) => void;
 		/** Hands the live three.js viewer to the host once it mounts. See `Viewer.svelte` for the contract. */
 		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
+		/**
+		 * Loads rhino3dm: `() => import('rhino3dm').then((m) => m.default())`, plus whatever the
+		 * bundler needs to find its wasm. With it, Get Geometry inputs take curves drawn in the
+		 * viewer or imported from DXF and 3DM. Without it only Get Line inputs do: the format a
+		 * Get Geometry reads is written by rhino3dm, and bundling that here would put 2.7 MB of
+		 * wasm into every host's build. Read once at mount.
+		 */
+		loadRhino?: () => Promise<object>;
 		/** Viewer chrome and defaults. `backgroundColor` and `showSceneManager` are set by the layout. */
 		viewerConfig?: ViewerConfig;
 		headerRight?: Snippet;
@@ -150,6 +162,7 @@
 		onReady,
 		onSolved,
 		onViewerReady,
+		loadRhino,
 		viewerConfig = {},
 		externalScopeKey,
 		clientSlot,
@@ -199,6 +212,44 @@
 		make: () => session.makeFiles(),
 		cancel: () => session.cancelFiles()
 	});
+
+	// Curve inputs draw into the viewer, which mounts and unmounts under the layout while the
+	// curves have to outlive it.
+	const curveInputs = $derived(
+		(schema?.inputs ?? []).flatMap((input) =>
+			isCurveInput(input)
+				? [
+						{
+							id: input.id,
+							paramType: input.paramType as 'line' | 'geometry',
+							name: input.nickname,
+							atMost: input.atMost
+						}
+					]
+				: []
+		)
+	);
+	// svelte-ignore state_referenced_locally
+	const sketch = useSketchController({
+		loadRhino,
+		inputs: () => curveInputs,
+		getValue: (id) => session.values[id],
+		setValue: (id, value) => session.setValue(id, value),
+		getDefault: (id) => schema?.inputs.find((input) => input.id === id)?.default,
+		modelUnits: () =>
+			(session.lastResult?.source as { modelunits?: string } | undefined)?.modelunits,
+		onEncodeError: () => toast.error(t.curveEncodeFailed)
+	});
+	setSketchContext(sketch);
+
+	function handleViewerReady(viewer: ThreeViewer) {
+		const detachSketch = sketch.attachViewer(viewer);
+		const hostCleanup = onViewerReady?.(viewer);
+		return () => {
+			hostCleanup?.();
+			detachSketch();
+		};
+	}
 
 	let isViewerFullscreen = $state(false);
 
@@ -313,7 +364,7 @@
 					bind:isViewerFullscreen
 					values={session.values}
 					logoUrl={logo}
-					{onViewerReady}
+					onViewerReady={handleViewerReady}
 					{viewerConfig}
 					{panelActions}
 					{primaryAction}

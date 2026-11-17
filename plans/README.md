@@ -43,6 +43,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [live-solve-channel](./features/live-solve-channel.md)                       | **unfiled** — design only; builds on solve-diagnostics                          |
 | [solve-events-structure](./features/solve-events-structure.md)               | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
 | [viewer-hotspots](./features/viewer-hotspots.md)                             | **unfiled** — design only; wire-walk verified live in Rhino                     |
+| [curve-inputs](./features/curve-inputs.md)                                   | **unfiled** — built; run live against local Rhino.Compute 9.1                   |
 | [definition-inventory](./features/definition-inventory.md)                   | **unfiled** — components, plugins, obsolete warnings per version                |
 | [publish-from-plugin](./features/publish-from-plugin.md)                     | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
 | [host-aware-elements](./features/host-aware-elements.md)                     | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |

@@ -26,6 +26,7 @@ export {
 	type ElementKind,
 	HOST_LABELS,
 	isGeometryParamType,
+	isCurveInput,
 	layoutItemKind,
 	hostsFor,
 	isSupportedOn,

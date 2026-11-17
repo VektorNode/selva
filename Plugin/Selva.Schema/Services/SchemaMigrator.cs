@@ -38,7 +38,8 @@ public static class SchemaMigrator
             { new Version(2, 18, 0), MigrateTo_2_18_0 },
             { new Version(2, 19, 0), MigrateTo_2_19_0 },
             { new Version(2, 20, 0), MigrateTo_2_20_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_21_0 }
+            { new Version(2, 21, 0), MigrateTo_2_21_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_22_0 }
         };
 
     /// <summary>
@@ -431,9 +432,20 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_21_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.21.0";
 
         // A number input's config gains an optional 'unit'. Absent shows no unit, as before.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_22_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // A geometry input gains 'geometryTypes' and 'atMost', read from its param. This migrator
+        // has no document to read them from: they stay absent until the plugin next validates the
+        // schema against the canvas, and a host treats absent as "takes anything, any number".
 
         return schema;
     }

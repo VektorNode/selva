@@ -266,6 +266,37 @@ describe('type-specific fields reach the typed param', () => {
 		expect(input.default).toBe('A');
 	});
 
+	it('keeps every line of a Get Line default that takes several', () => {
+		const line = (x: number) => ({ From: { X: 0, Y: 0, Z: 0 }, To: { X: x, Y: 0, Z: 0 } });
+		const { input, errors } = processInputWithError(
+			createInputSchema({
+				paramType: 'Line',
+				atMost: 2147483647,
+				default: {
+					innerTree: {
+						'{0}': [
+							{ type: 'Rhino.Geometry.Line', data: JSON.stringify(line(1)) },
+							{ type: 'Rhino.Geometry.Line', data: JSON.stringify(line(2)) }
+						]
+					}
+				}
+			})
+		);
+		expect(errors).toEqual([]);
+		expect(input.paramType).toBe('Line');
+		expect(input.default).toEqual({ '{0}': [line(1), line(2)] });
+	});
+
+	it('parses Point and Plane inputs instead of reporting them as unknown', () => {
+		for (const paramType of ['Point', 'Plane']) {
+			const { input, errors } = processInputWithError(
+				createInputSchema({ paramType, default: '{"X":1,"Y":2,"Z":3}' })
+			);
+			expect(errors).toEqual([]);
+			expect(input.paramType).toBe(paramType);
+		}
+	});
+
 	it('parses a JSON-string Geometry default into an object', () => {
 		const { input } = processInputWithError(
 			createInputSchema({ paramType: 'Geometry', default: '{"x":1}' })

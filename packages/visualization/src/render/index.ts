@@ -34,6 +34,7 @@ export type { PointerTool, ToolRegistry, ToolRegistration } from './tool-registr
 
 // Picking primitives, so a host tool's grab band matches the built-in ones.
 export { pickThreshold, snapToVertex } from './measure.js';
+export { raycastVisible } from './scene-pick.js';
 
 export {
 	SOURCE_COMPUTE,

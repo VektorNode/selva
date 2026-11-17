@@ -17,7 +17,6 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // GeometryKind valid values: "point", "pointCloud", "curve", "surface", "polysurface", "extrusion", "mesh", "subd", "block"
     // SolveEndedKind valid values: "ok", "blocked", "aborted", "error"
     // InventoryValueKind valid values: "slider", "panel", "toggle", "valueList", "persistent"
 

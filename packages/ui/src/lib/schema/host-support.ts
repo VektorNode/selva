@@ -19,14 +19,18 @@ export type UIHost = 'rhino' | 'selva';
 
 /**
  * - `value`: an input or output every host renders.
- * - `geometry`: a Rhino Get Geometry/Point/Line/Plane input, filled by picking in the viewport.
+ * - `curve`: a Rhino Get Line, or a Get Geometry that takes curves. Rhino fills it by picking in
+ *   the viewport, Selva by drawing in the viewer or importing a file.
+ * - `geometry`: any other Rhino Get Geometry, Get Point or Get Plane, filled by picking in the
+ *   viewport.
  * - `trigger`: a boolean input shown as a button; a press solves once with `true`.
  * - `unknown`: a layout item from a newer schema than this build knows.
  */
-export type ElementKind = 'value' | 'geometry' | 'trigger' | 'unknown';
+export type ElementKind = 'value' | 'curve' | 'geometry' | 'trigger' | 'unknown';
 
 const SUPPORT: Record<ElementKind, readonly UIHost[]> = {
 	value: ['rhino', 'selva'],
+	curve: ['rhino', 'selva'],
 	geometry: ['rhino'],
 	trigger: ['rhino'],
 	unknown: []
@@ -68,6 +72,19 @@ export function isGeometryParamType(paramType: string | undefined): boolean {
 	return paramType !== undefined && GEOMETRY_PARAM_TYPES.has(paramType);
 }
 
+/**
+ * Whether a curve can fill the input: a Get Line, or a Get Geometry whose type filter lets curves
+ * through. An empty `geometryTypes` is a filter that allows everything. An absent one is a schema
+ * saved before 2.22.0, where the filter is unknown, and the input is offered rather than hidden.
+ */
+export function isCurveInput(
+	input: Pick<SchemaInput, 'paramType' | 'geometryTypes'> | undefined
+): boolean {
+	if (input?.paramType === 'line') return true;
+	if (input?.paramType !== 'geometry') return false;
+	return !input.geometryTypes?.length || input.geometryTypes.includes('curve');
+}
+
 export function isTriggerItem(item: LayoutItem): boolean {
 	return (
 		item.type === 'input' &&
@@ -80,8 +97,9 @@ export function layoutItemKind(item: LayoutItem, inputs: readonly SchemaInput[])
 	if (item.type === 'linebreak') return 'value';
 	if (item.type !== 'input' && item.type !== 'output') return 'unknown';
 	if (item.type === 'input') {
-		const paramType = inputs.find((i) => i.id === item.paramId)?.paramType;
-		if (isGeometryParamType(paramType)) return 'geometry';
+		const input = inputs.find((i) => i.id === item.paramId);
+		if (isCurveInput(input)) return 'curve';
+		if (isGeometryParamType(input?.paramType)) return 'geometry';
 	}
 	if (!KNOWN_WIDGETS[item.type].has(item.widgetType)) return 'unknown';
 	return isTriggerItem(item) ? 'trigger' : 'value';

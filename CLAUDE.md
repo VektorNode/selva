@@ -128,6 +128,18 @@ The Svelte shells stay in `@selvajs/ui`: `Viewer.svelte`, `SceneManager.svelte`,
 
 The solve session is not a layer here: it lives in `@selvajs/solve/client`.
 
+### `@selvajs/sketch`
+
+`packages/sketch`. Lines, polylines and NURBS curves as Get Line / Get Geometry inputs. Three
+entrypoints that depend downward only: `/model` (plain data and math, no deps), `/io` (DXF reader;
+Rhino archive codec and 3DM reader that take a loaded rhino3dm module), `/tool` (the viewer draw
+tool, on `ThreeViewer`'s public seams). Curves are in model units and Rhino's axes; the scene is
+in metres.
+
+`@selvajs/ui` never imports rhino3dm: the host passes `loadRhino` to `ComputeApp`, or the wasm
+lands in every host's bundle, the plugin's `.gha` included. Design:
+[curve-inputs](./plans/features/curve-inputs.md).
+
 ### `@selvajs/platform`
 
 Pluggable provider interfaces (auth, data stores, storage, permissions, access rules) with Zod schemas. Granular exports for tree-shaking: see [packages/platform/src/](packages/platform/src/). `@selvajs/local-provider` is the filesystem-backed implementation (HMAC sessions, atomic-write JSON, WebP image transcoding).

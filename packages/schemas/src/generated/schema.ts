@@ -19,6 +19,16 @@ export type ParamType =
 	| 'point'
 	| 'line'
 	| 'plane';
+export type GeometryKind =
+	| 'point'
+	| 'pointCloud'
+	| 'curve'
+	| 'surface'
+	| 'polysurface'
+	| 'extrusion'
+	| 'mesh'
+	| 'subd'
+	| 'block';
 export type InputNumberLayoutItem = LayoutItemBase & {
 	type: 'input';
 	widgetType: 'number';
@@ -439,6 +449,14 @@ export interface SchemaInput {
 	 * Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'.
 	 */
 	inputStructure?: 'item' | 'list' | 'tree';
+	/**
+	 * For a 'geometry' input: what the Get Geometry's type filter allows, re-read from the param whenever the plugin validates the schema against the document. Empty or absent means the filter allows everything, or is unknown: a schema saved before 2.22.0 never has it, and other inputs carry none. A host without the document (Selva) reads it to decide whether the input takes curves.
+	 */
+	geometryTypes?: GeometryKind[];
+	/**
+	 * For a geometry, point, line or plane input: the most objects the param takes, re-read from it like geometryTypes; 2147483647 is no limit. Absent on other inputs and on a schema saved before 2.22.0.
+	 */
+	atMost?: number;
 }
 export interface SchemaOutput {
 	/**
@@ -589,7 +607,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.21.0';
+export const UI_SCHEMA_VERSION = '2.22.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

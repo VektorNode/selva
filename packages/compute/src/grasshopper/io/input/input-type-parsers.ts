@@ -262,16 +262,18 @@ function geometryFallback(schema: InputParamSchema, base: BaseInputType): Geomet
 	};
 }
 
-const geometryParser: InputTypeParser<GeometryInputType> = {
+const geometryParser = (
+	paramType: GeometryInputType['paramType']
+): InputTypeParser<GeometryInputType> => ({
 	parse(schema, base) {
 		return {
 			...base,
-			paramType: 'Geometry',
+			paramType,
 			default: objectDefault(schema) as GeometryInputType['default']
 		};
 	},
-	fallback: geometryFallback
-};
+	fallback: (schema, base) => ({ ...geometryFallback(schema, base), paramType })
+});
 
 const fileParser: InputTypeParser<FileInputType> = {
 	parse(schema, base) {
@@ -301,7 +303,10 @@ export const INPUT_TYPE_PARSERS: ReadonlyMap<string, InputTypeParser> = new Map<
 	['Boolean', booleanParser],
 	['Text', textParser],
 	['ValueList', valueListParser],
-	['Geometry', geometryParser],
+	['Geometry', geometryParser('Geometry')],
+	['Line', geometryParser('Line')],
+	['Point', geometryParser('Point')],
+	['Plane', geometryParser('Plane')],
 	['File', fileParser],
 	['Color', colorParser]
 ]);

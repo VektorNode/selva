@@ -30,6 +30,22 @@
 			"description": "Contextual parameter data types. 'geometry', 'point', 'line' and 'plane' come from Rhino's Get Geometry, Get Point, Get Line and Get Plane: the host picks their control from this type, whatever the layout item's widgetType says, and they carry no value from the form."
 		},
 
+		"GeometryKind": {
+			"type": "string",
+			"enum": [
+				"point",
+				"pointCloud",
+				"curve",
+				"surface",
+				"polysurface",
+				"extrusion",
+				"mesh",
+				"subd",
+				"block"
+			],
+			"description": "A kind of Rhino object a geometry input can take, in Rhino's own terms: a surface has one face, a polysurface several."
+		},
+
 		"//_VISIBILITY_RULES": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
 		"VisibilityRule": {
 			"type": "object",
@@ -735,6 +751,16 @@
 					"$ref": "#/definitions/InputStructure",
 					"default": "item",
 					"description": "Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'."
+				},
+				"geometryTypes": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GeometryKind" },
+					"description": "For a 'geometry' input: what the Get Geometry's type filter allows, re-read from the param whenever the plugin validates the schema against the document. Empty or absent means the filter allows everything, or is unknown: a schema saved before 2.22.0 never has it, and other inputs carry none. A host without the document (Selva) reads it to decide whether the input takes curves."
+				},
+				"atMost": {
+					"type": "integer",
+					"minimum": 1,
+					"description": "For a geometry, point, line or plane input: the most objects the param takes, re-read from it like geometryTypes; 2147483647 is no limit. Absent on other inputs and on a schema saved before 2.22.0."
 				}
 			},
 			"required": ["id", "nickname", "paramType"],
@@ -853,7 +879,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.21.0",
+					"default": "2.22.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

@@ -103,10 +103,12 @@ export interface BooleanInputType extends BaseInputType {
 }
 
 /**
- * Geometry input type (generic geometry)
+ * A Rhino geometry input: Get Geometry, Get Line, Get Point or Get Plane. The default is what
+ * Rhino.Compute reports, parsed from JSON: Rhino's archive object for `Geometry`,
+ * `{ From, To }` for `Line`, `{ X, Y, Z }` for `Point`.
  */
 export interface GeometryInputType extends BaseInputType {
-	paramType: 'Geometry';
+	paramType: 'Geometry' | 'Line' | 'Point' | 'Plane';
 	default: DefaultValue<object | string>;
 }
 

@@ -5,18 +5,8 @@
  * and run `pnpm generate` at the repo root to regenerate it.
  */
 
-import type { ParamType } from './schema.js';
+import type { GeometryKind, ParamType } from './schema.js';
 
-export type GeometryKind =
-	| 'point'
-	| 'pointCloud'
-	| 'curve'
-	| 'surface'
-	| 'polysurface'
-	| 'extrusion'
-	| 'mesh'
-	| 'subd'
-	| 'block';
 export type SolveEndedKind = 'ok' | 'blocked' | 'aborted' | 'error';
 export type InventoryValueKind = 'slider' | 'panel' | 'toggle' | 'valueList' | 'persistent';
 

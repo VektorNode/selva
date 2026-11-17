@@ -187,6 +187,48 @@ export interface ViewerMessages {
 	geometryPickBlockOne: string;
 	geometryPickBlockOther: string;
 
+	// Curve input (Selva): a Get Geometry or Get Line input, drawn in the viewer or imported
+	curveDrawLine: string;
+	curveDrawPolyline: string;
+	/** A free-form curve pulled toward its control points. */
+	curveDrawCurve: string;
+	curveImport: string;
+	/** Starts moving the points of what is drawn. */
+	curveEdit: string;
+	/** Back to the definition's own curves. */
+	curveReset: string;
+	curveDone: string;
+	/** Shown while each drawing mode is on. */
+	curveHintLine: string;
+	curveHintPolyline: string;
+	curveHintCurve: string;
+	curveHintMove: string;
+	/** Label of the grid-snap spacing field, and its placeholder when the grid is off. */
+	curveGrid: string;
+	curveGridOff: string;
+	/** Label of the checkbox that shows segment lengths in the viewer. */
+	curveDimensions: string;
+	/** Before the first solve the model's units are unknown, so nothing can be drawn to scale. */
+	curveNeedsSolve: string;
+	/** In place of the count, while the input holds no curve. */
+	curveEmpty: string;
+	curveCountOne: string;
+	curveCountOther: string;
+	curveCountLineOne: string;
+	curveCountLineOther: string;
+	curveImportEmpty: string;
+	curveImportSkippedOne: string;
+	curveImportSkippedOther: string;
+	/** The input takes `{max}` curves and the file had `{count}`. */
+	curveImportOverLimitOne: string;
+	curveImportOverLimitOther: string;
+	/** `{max}` is the most curves any import may hold. */
+	curveImportTooMany: string;
+	curveImportUnsupported: string;
+	curveImportFailed: string;
+	/** rhino3dm, which writes curves in Rhino's format, could not be downloaded. */
+	curveEncodeFailed: string;
+
 	// File input
 	fileModeUpload: string;
 	fileModeUrl: string;
@@ -415,6 +457,40 @@ const en: ViewerMessages = {
 	geometryPickBlockOne: 'Pick a block',
 	geometryPickBlockOther: 'Pick blocks',
 
+	curveDrawLine: 'Line',
+	curveDrawPolyline: 'Polyline',
+	curveDrawCurve: 'Curve',
+	curveImport: 'Import',
+	curveEdit: 'Edit points',
+	curveReset: 'Reset',
+	curveDone: 'Done',
+	curveHintLine:
+		'Click two points in the viewer. Type a length, or length<angle, and press Enter. Shift locks the angle.',
+	curveHintPolyline:
+		'Click points in the viewer. Click the first point to close, the last one again or Enter to finish. Type a length for an exact segment.',
+	curveHintCurve:
+		'Click control points in the viewer. Click the last one again or press Enter to finish.',
+	curveHintMove: 'Click a point, then where it goes. Delete removes it, Esc puts it back.',
+	curveGrid: 'Grid',
+	curveGridOff: 'Off',
+	curveDimensions: 'Dimensions',
+	curveNeedsSolve: 'Available after the first solve.',
+	curveEmpty: 'Nothing drawn yet',
+	curveCountOne: '{count} curve',
+	curveCountOther: '{count} curves',
+	curveCountLineOne: '{count} line',
+	curveCountLineOther: '{count} lines',
+	curveImportEmpty: 'The file has no curves this input can take.',
+	curveImportSkippedOne: '{count} object was left out: only curves are imported.',
+	curveImportSkippedOther: '{count} objects were left out: only curves are imported.',
+	curveImportOverLimitOne: 'This input takes one curve: the first of {count} was imported.',
+	curveImportOverLimitOther:
+		'This input takes {max} curves: the first {max} of {count} were imported.',
+	curveImportTooMany: 'The file has more than {max} curves. Import a smaller selection.',
+	curveImportUnsupported: 'Choose a DXF or 3DM file.',
+	curveImportFailed: 'The file could not be read.',
+	curveEncodeFailed: 'The curve could not be sent: the Rhino file library failed to load.',
+
 	fileModeUpload: 'Upload',
 	fileModeUrl: 'URL',
 	fileUrlLabel: 'File URL',
@@ -630,6 +706,42 @@ const de: ViewerMessages = {
 	geometryPickSubdOther: 'SubDs wählen',
 	geometryPickBlockOne: 'Block wählen',
 	geometryPickBlockOther: 'Blöcke wählen',
+
+	curveDrawLine: 'Linie',
+	curveDrawPolyline: 'Polylinie',
+	curveDrawCurve: 'Kurve',
+	curveImport: 'Importieren',
+	curveEdit: 'Punkte bearbeiten',
+	curveReset: 'Zurücksetzen',
+	curveDone: 'Fertig',
+	curveHintLine:
+		'Zwei Punkte im Viewer klicken. Länge oder Länge<Winkel tippen und Enter drücken. Shift rastet den Winkel.',
+	curveHintPolyline:
+		'Punkte im Viewer klicken. Ersten Punkt klicken zum Schliessen, letzten erneut oder Enter zum Beenden. Länge tippen für ein exaktes Segment.',
+	curveHintCurve:
+		'Kontrollpunkte im Viewer klicken. Letzten erneut klicken oder Enter zum Beenden.',
+	curveHintMove: 'Punkt klicken, dann das Ziel. Entf löscht ihn, Esc setzt ihn zurück.',
+	curveGrid: 'Raster',
+	curveGridOff: 'Aus',
+	curveDimensions: 'Bemassung',
+	curveNeedsSolve: 'Nach der ersten Berechnung verfügbar.',
+	curveEmpty: 'Noch nichts gezeichnet',
+	curveCountOne: '{count} Kurve',
+	curveCountOther: '{count} Kurven',
+	curveCountLineOne: '{count} Linie',
+	curveCountLineOther: '{count} Linien',
+	curveImportEmpty: 'Die Datei enthält keine Kurven, die diese Eingabe annimmt.',
+	curveImportSkippedOne: '{count} Objekt ausgelassen: nur Kurven werden importiert.',
+	curveImportSkippedOther: '{count} Objekte ausgelassen: nur Kurven werden importiert.',
+	curveImportOverLimitOne:
+		'Diese Eingabe nimmt eine Kurve an: die erste von {count} wurde importiert.',
+	curveImportOverLimitOther:
+		'Diese Eingabe nimmt {max} Kurven an: die ersten {max} von {count} wurden importiert.',
+	curveImportTooMany: 'Die Datei enthält mehr als {max} Kurven. Eine kleinere Auswahl importieren.',
+	curveImportUnsupported: 'Eine DXF- oder 3DM-Datei wählen.',
+	curveImportFailed: 'Die Datei konnte nicht gelesen werden.',
+	curveEncodeFailed:
+		'Die Kurve konnte nicht gesendet werden: Die Rhino-Dateibibliothek liess sich nicht laden.',
 
 	fileModeUpload: 'Hochladen',
 	fileModeUrl: 'URL',

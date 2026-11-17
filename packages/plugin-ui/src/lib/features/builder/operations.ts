@@ -236,13 +236,18 @@ export function handleItemDrop({
 	if (itemType === 'input') {
 		const inputExists = schema.inputs.some((i) => i.id === paramId);
 		if (!inputExists) {
+			// The plugin re-reads both from the param on save; until then discovery's copy keeps the
+			// "Not on Selva yet" badge right for a Get Geometry that takes no curves.
+			const discovered = availableInputs.find((i) => i.id === paramId);
+			const isGeometry = discovered?.geometryTypes !== undefined && paramType === 'geometry';
 			schema.inputs = [
 				...schema.inputs,
 				{
 					id: paramId,
 					nickname: displayName,
 					paramType: (paramType as any) || 'generic',
-					description: ''
+					description: '',
+					...(isGeometry ? { geometryTypes: discovered.geometryTypes } : {})
 				} as SchemaInput
 			];
 		}

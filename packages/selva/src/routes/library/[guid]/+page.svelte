@@ -7,6 +7,7 @@
 	import UserChip from '#lib/components/UserChip.svelte';
 	import MainNav from '#lib/components/MainNav.svelte';
 	import SettingsMenu from '#lib/components/SettingsMenu.svelte';
+	import { loadRhino } from '#lib/load-rhino.js';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
@@ -68,6 +69,7 @@
 	homeUrl="/"
 	solveDeadlineMs={data.solveDeadlineMs}
 	events={liveEvents ?? undefined}
+	{loadRhino}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >

@@ -27,6 +27,7 @@ namespace Selva.Schema.Models
 
     // String-enum types are represented as 'string' in C# for compatibility
     // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic", "geometry", "point", "line", "plane"
+    // GeometryKind valid values: "point", "pointCloud", "curve", "surface", "polysurface", "extrusion", "mesh", "subd", "block"
     // InputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
@@ -595,6 +596,18 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("inputStructure", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string InputStructure { get; set; } = "item";
+
+/// <summary>
+/// For a 'geometry' input: what the Get Geometry's type filter allows, re-read from the param whenever the plugin validates the schema against the document. Empty or absent means the filter allows everything, or is unknown: a schema saved before 2.22.0 never has it, and other inputs carry none. A host without the document (Selva) reads it to decide whether the input takes curves.
+/// </summary>
+        [JsonProperty("geometryTypes")]
+        public List<string> GeometryTypes { get; set; } = new List<string>();
+
+/// <summary>
+/// For a geometry, point, line or plane input: the most objects the param takes, re-read from it like geometryTypes; 2147483647 is no limit. Absent on other inputs and on a schema saved before 2.22.0.
+/// </summary>
+        [JsonProperty("atMost")]
+        public int? AtMost { get; set; }
     }
 
     public class SchemaOutput

@@ -129,8 +129,13 @@ Two things this naive version gets wrong that yours shouldn't:
 - **Filter out your own preview geometry**, or clicks near your rubber band snap to the band
   instead of the model under it. Walk `object.parent` checking for your own `userData.source`:
   hits report leaf objects, not the group you added.
-- **`intersectObjects` is O(n) per event.** Fine against solve meshes; far too slow against a
-  multi-million-point cloud on every `mousemove`. Bring a spatial index for that case.
+- **`intersectObjects` is O(n) per event.** For hover-rate picking use
+  `raycastVisible(viewer.scene, raycaster)` from the same entrypoint instead: it goes through the
+  viewer's BVH and skips hidden objects, viewer aids and edge overlays, as the measure tool does.
+  Lines and points still fall back to their own raycast, so a multi-million-point cloud on every
+  `mousemove` needs a spatial index of your own.
+
+`@selvajs/sketch/tool` is a complete tool built on these seams and nothing else.
 
 ## Driving solves
 

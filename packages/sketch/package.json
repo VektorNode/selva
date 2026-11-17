@@ -1,0 +1,102 @@
+{
+	"name": "@selvajs/sketch",
+	"version": "0.0.0",
+	"description": "Draw, import and encode lines, polylines and NURBS curves as Grasshopper inputs",
+	"author": "VektorNode",
+	"license": "MIT",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/sketch"
+	},
+	"type": "module",
+	"keywords": [
+		"grasshopper",
+		"rhino",
+		"curve",
+		"nurbs",
+		"polyline",
+		"dxf",
+		"sketch",
+		"three"
+	],
+	"exports": {
+		"./model": {
+			"selva-source": {
+				"types": "./dist/model.d.ts",
+				"default": "./src/model/index.ts"
+			},
+			"types": "./dist/model.d.ts",
+			"default": "./dist/model.js"
+		},
+		"./io": {
+			"selva-source": {
+				"types": "./dist/io.d.ts",
+				"default": "./src/io/index.ts"
+			},
+			"types": "./dist/io.d.ts",
+			"default": "./dist/io.js"
+		},
+		"./tool": {
+			"selva-source": {
+				"types": "./dist/tool.d.ts",
+				"default": "./src/tool/index.ts"
+			},
+			"types": "./dist/tool.d.ts",
+			"default": "./dist/tool.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"sideEffects": false,
+	"scripts": {
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest watch",
+		"type-check": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@selvajs/visualization": "workspace:^",
+		"rhino3dm": ">=8.4.0",
+		"three": ">=0.179.0"
+	},
+	"peerDependenciesMeta": {
+		"@selvajs/visualization": {
+			"optional": true
+		},
+		"rhino3dm": {
+			"optional": true
+		},
+		"three": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@selvajs/visualization": "workspace:*",
+		"@types/node": "catalog:",
+		"@types/three": "catalog:",
+		"eslint": "catalog:",
+		"prettier": "catalog:",
+		"rhino3dm": "catalog:",
+		"three": "catalog:",
+		"tsdown": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}

@@ -25,6 +25,7 @@ public static partial class Definitions
         yield return ("examples/definitions/shelving-unit", Shelving);
         yield return ("examples/definitions/kitchen-run", Kitchen);
         yield return ("examples/definitions/dependent-forms-tutorial", Tutorial);
+        yield return ("examples/definitions/garden-sketch", Garden);
         yield return ("dev/grasshopper/stress-display-throughput", StressDisplay);
         yield return ("dev/grasshopper/stress-every-input-and-output", KitchenSink);
         yield return ("dev/grasshopper/bench-solve-transport", SolveBench);

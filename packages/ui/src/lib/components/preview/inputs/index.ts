@@ -1,6 +1,7 @@
 export { default as CheckboxInput } from './CheckboxInput.svelte';
 export { default as ChecklistInput } from './ChecklistInput.svelte';
 export { default as ColorInput } from './ColorInput.svelte';
+export { default as CurveInput } from './CurveInput.svelte';
 export { default as DropdownInput } from './DropdownInput.svelte';
 export { default as FileInput } from './FileInput.svelte';
 export { default as GeometryInput } from './GeometryInput.svelte';

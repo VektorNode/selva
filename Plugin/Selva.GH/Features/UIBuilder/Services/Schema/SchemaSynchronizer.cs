@@ -760,6 +760,7 @@ public class SchemaSynchronizer
         var existingIds = ResolveExistingIds(referencedIds, document);
         removedIds = PurgeStaleReferences(schema, existingIds);
         MergeDiscoveredInputs(schema, document);
+        SyncGeometryLimits(schema, document);
         MergeDiscoveredPrintOutputs(schema, document);
         RestoreTombstonedLayout(schema);
 
@@ -879,6 +880,36 @@ public class SchemaSynchronizer
             });
 
             existingIds.Add(docObj.InstanceGuid);
+        }
+    }
+
+    /// <summary>
+    ///     Copies each geometry input's type filter and AtMost from its param into the schema, on
+    ///     every validation and not only at discovery: Selva has the schema but not the canvas, and
+    ///     reads them to decide whether an input takes curves, and how many. They go stale between
+    ///     validations when the author changes the filter from the param's menu; the next save or
+    ///     canvas change brings them back in line.
+    /// </summary>
+    private static void SyncGeometryLimits(UISchema schema, GH_Document document)
+    {
+        if (document == null)
+        {
+            return;
+        }
+
+        foreach (var input in schema.Inputs)
+        {
+            if (!GeometryParamTypes.Contains(input.ParamType) ||
+                document.FindObject(input.Id, false) is not IGH_ContextualParameter param)
+            {
+                // Null drops the key from the saved schema; the generated default is an empty list.
+                input.GeometryTypes = null;
+                input.AtMost = null;
+                continue;
+            }
+
+            input.AtMost = Math.Max(param.AtMost, 1);
+            input.GeometryTypes = input.ParamType == "geometry" ? GeometryFilter.KindsOf(param) : null;
         }
     }
 
