@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A definition saved with a newer plugin (for example a beta) no longer fails on a Selva server as "authored with a newer Selva plugin": the plugin restamps a newer minor schema format to its own.
+
 ## [0.25.1] - 2026-11-06
 
 ### Added
