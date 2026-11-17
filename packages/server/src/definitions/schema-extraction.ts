@@ -103,6 +103,14 @@ export function compareSchemaVersion(version: string | undefined): -1 | 0 | 1 | 
 	return 0;
 }
 
+/** An older minor or patch of the app's own major: a minor bump only adds optional constructs. */
+export function isOlderMinorSchemaVersion(version: string | undefined): boolean {
+	const extracted = version ? parseSemver(version) : null;
+	const supported = parseSemver(UI_SCHEMA_VERSION);
+	if (!extracted || !supported || extracted[0] !== supported[0]) return false;
+	return compareSchemaVersion(version) === -1;
+}
+
 /**
  * Rejects a schema from a NEWER plugin than this app was built against — its
  * shape may contain constructs the renderer doesn't know. Older (or missing)

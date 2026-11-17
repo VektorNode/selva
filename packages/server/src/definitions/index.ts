@@ -7,6 +7,7 @@ export {
 	extractSchemaForUpload,
 	postSchemaFormData,
 	assertSupportedSchemaVersion,
+	isOlderMinorSchemaVersion,
 	assertCamelCaseSchema,
 	readSchemaResults,
 	SchemaExtractionError

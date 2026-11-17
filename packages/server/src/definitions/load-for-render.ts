@@ -25,7 +25,11 @@ import type {
 	RequestContext
 } from '@selvajs/platform';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
-import { compareSchemaVersion, fetchSchemaFromCompute } from './schema-extraction.js';
+import {
+	compareSchemaVersion,
+	fetchSchemaFromCompute,
+	isOlderMinorSchemaVersion
+} from './schema-extraction.js';
 import { applySavedValues, savedValuesFrom, type SavedValues } from './saved-values.js';
 import { withTimeout } from './with-timeout.js';
 
@@ -429,9 +433,10 @@ function setBounded<V>(map: Map<string, V>, key: string, value: V) {
 
 /**
  * A cached schema is usable when it is structurally sound and either the current format version,
- * or an older one (missing counts, see `compareSchemaVersion`) extracted within
- * `OLDER_SCHEMA_RECHECK_MS` of `now`, either side: a future stamp from a skewed clock still
- * expires. Without `extractedAt` only the current version passes. The `inputs` check is the
+ * an older minor of the current major (`isOlderMinorSchemaVersion`), or an older major (missing
+ * counts, see `compareSchemaVersion`) extracted within `OLDER_SCHEMA_RECHECK_MS` of `now`,
+ * either side: a future stamp from a skewed clock still expires. Without `extractedAt` an older
+ * major never passes. The `inputs` check is the
  * PascalCase guard: a compute server that serialized with the wrong Newtonsoft emits `Inputs`, and
  * such a row must never be served. See `assertCamelCaseSchema`.
  */
@@ -442,7 +447,7 @@ export function isUsableCachedSchema(
 ): boolean {
 	if (!Array.isArray(schema.inputs)) return false;
 	const order = compareSchemaVersion(schema.schemaVersion);
-	if (order === 0) return true;
+	if (order === 0 || isOlderMinorSchemaVersion(schema.schemaVersion)) return true;
 	if (order !== -1 || !extractedAt) return false;
 	const at = Date.parse(extractedAt);
 	return Number.isFinite(at) && Math.abs(now - at) < OLDER_SCHEMA_RECHECK_MS;
