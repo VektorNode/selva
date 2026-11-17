@@ -105,6 +105,8 @@ pnpm release:plugin 0.14.0         # 0.14.0-beta.N → 0.14.0 (promote to stable
 
 `AssemblyVersion` / `FileVersion` stay numeric (`x.y.z.0`), since .NET rejects a suffix there, while `<Version>` / `<InformationalVersion>` (what yak and users see) carry the full `-beta.N`.
 
+A beta must target a version above the latest stable tag: after `0.25.2`, the next beta line is `pnpm release:plugin minor --beta` → `0.26.0-beta.1`. The script refuses anything lower, such as `--beta` on a leftover `0.25.1-beta.N`, because Rhino shows `0.25.1-beta.1` and `0.25.1` both as `0.25.1.0`. The bump counts from the latest stable tag, so a beta branch that never got the stable csproj bump still lands on the right line.
+
 **Never push to Yak locally for a release**: watch the Actions tab instead.
 
 ### Local dry-run

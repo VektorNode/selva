@@ -158,27 +158,59 @@ function bump(current, kind) {
 	return next;
 }
 
+function compareCore(a, b) {
+	const x = parseVersion(a);
+	const y = parseVersion(b);
+	return x.major - y.major || x.minor - y.minor || x.patch - y.patch;
+}
+
+// Highest stable plugin-vX.Y.Z tag, or null.
+function latestStable() {
+	const tags = execFileSync('git', ['tag', '--list', 'plugin-v*'], {
+		cwd: projectRoot,
+		encoding: 'utf8'
+	})
+		.split('\n')
+		.map((t) => t.trim().replace(/^plugin-v/, ''))
+		.filter((v) => /^\d+\.\d+\.\d+$/.test(v));
+	return tags.sort(compareCore).at(-1) ?? null;
+}
+
 // Pre-release bump (--beta):
-//   - with a bump arg → next core at -beta.1 (e.g. minor on 0.13.0 → 0.14.0-beta.1)
+//   - with a bump arg → next core at -beta.1, counted from the newer of the current version and
+//     the latest stable tag (minor on 0.25.1-beta.1 with 0.25.2 released → 0.26.0-beta.1)
 //   - explicit x.y.z   → that core at -beta.1
 //   - no bump arg, current is already -beta.N → same core, -beta.(N+1)
 //   - no bump arg, current is stable → can't infer a target; caller must pass one
+// A beta whose core is not above the latest stable is refused: Yak sorts x.y.z-beta.N below
+// x.y.z, and Rhino shows both as x.y.z.0, so it could not be told apart from the stable build.
 function bumpBeta(current, kind) {
 	const cur = parseVersion(current);
+	const stable = latestStable();
+	let target;
 	if (kind) {
+		const base = stable && compareCore(stable, current) > 0 ? stable : current;
 		const core =
 			kind === 'major' || kind === 'minor' || kind === 'patch'
-				? bumpCore(current, kind)
+				? bumpCore(base, kind)
 				: coreVersion(kind);
-		return `${core}-beta.1`;
+		target = `${core}-beta.1`;
+	} else {
+		if (cur.beta == null) {
+			die(
+				'--beta with no bump arg needs a current -beta version to increment. ' +
+					'Pass a bump (e.g. `--beta minor`) or an explicit x.y.z to start a new beta line.'
+			);
+		}
+		target = `${cur.major}.${cur.minor}.${cur.patch}-beta.${cur.beta + 1}`;
 	}
-	if (cur.beta == null) {
+	if (stable && compareCore(target, stable) <= 0) {
 		die(
-			'--beta with no bump arg needs a current -beta version to increment. ' +
-				'Pass a bump (e.g. `--beta minor`) or an explicit x.y.z to start a new beta line.'
+			`${target} is not above the latest stable ${stable}. ` +
+				'Start a new beta line with `--beta minor` (or `--beta patch`).'
 		);
 	}
-	return `${cur.major}.${cur.minor}.${cur.patch}-beta.${cur.beta + 1}`;
+	return target;
 }
 
 // ============================================================================
