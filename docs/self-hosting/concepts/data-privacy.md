@@ -54,6 +54,7 @@ handler captures the email before `deleteUser` and passes it through.
 - deletes `invites` addressed to their email
 - redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`)
 - sets `solve_metrics.actor_id` to `'deleted'`, so capacity aggregates survive without the person
+- deletes platform-project grants made to them, and nulls `created_by` on grants they made
 
 **Local** (`LocalDataProvider`, `packages/providers/local/src/data/LocalDataProvider.ts`) has no FK
 cascade, so it removes the rows itself:
@@ -71,8 +72,13 @@ Erasure removes the person, not what they made. Orgs, projects, definitions and 
 stores read as `'deleted'`). The delete route refuses the only owner of an org: make someone else an
 owner, or delete the org, first.
 
-**Open gap:** on Supabase, `audit_events` and `solve_metrics` have no time-based retention. Rows live
-until a subject is erased.
+## Retention
+
+On Supabase, `SELVA_AUDIT_RETENTION_DAYS` and `SELVA_SOLVE_METRICS_RETENTION_DAYS` set how long
+`audit_events` and `solve_metrics` rows are kept. A purge runs at start and then daily, deleting
+older rows (`purgeExpired` on the data provider). Both default to 0, which keeps rows until a subject
+is erased: the controller picks the periods, and an upgrade deletes nothing on its own. See
+[packages/selva/.env.example](../../../packages/selva/.env.example).
 
 ## What compute servers receive
 

@@ -244,7 +244,7 @@
 			{disabled}
 		/>
 	{:else}
-		<DropdownInput value={single} {config} {assets} onChange={commit} {disabled} />
+		<DropdownInput {inputId} value={single} {config} {assets} onChange={commit} {disabled} />
 	{/if}
 {/snippet}
 
@@ -263,7 +263,7 @@
 
 {#snippet helpButton()}
 	{#if item.description}
-		<HelpButton {label} description={item.description} />
+		<HelpButton {label} description={item.description} nameTemplate={locale.messages.helpFor} />
 	{/if}
 {/snippet}
 

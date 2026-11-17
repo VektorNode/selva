@@ -11,9 +11,11 @@
 		assets?: UISchema['assets'];
 		onChange: (value: SupportedTypes) => void;
 		disabled?: boolean;
+		/** The trigger's id, which the field's `<label for>` names it by. */
+		inputId?: string;
 	}
 
-	let { value, config, assets, onChange, disabled = false }: Props = $props();
+	let { value, config, assets, onChange, disabled = false, inputId }: Props = $props();
 
 	const locale = getLocaleContext();
 
@@ -37,7 +39,7 @@
 	}}
 	{disabled}
 >
-	<Select.Trigger class="w-full" {disabled}>
+	<Select.Trigger id={inputId} class="w-full" {disabled}>
 		<span class="gap-2 min-w-0 flex items-center">
 			{#if currentGlyph}<OptionGlyph glyph={currentGlyph} />{/if}
 			<span class="truncate">{currentLabel || locale.messages.selectOption}</span>

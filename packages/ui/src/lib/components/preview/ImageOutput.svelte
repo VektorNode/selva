@@ -35,9 +35,12 @@
 
 	const extOf = (f: FileData) => (f.fileType ?? '').toLowerCase();
 
+	// A failed solve still names its files, with no data in them: that is no result, not a file
+	// the browser couldn't decode.
+	const hasData = (f: FileData) => typeof f.data === 'string' && f.data.trim() !== '';
 	const files = $derived.by<FileData[]>(() => {
-		if (Array.isArray(value)) return value.filter(isFileData);
-		return isFileData(value) ? [value] : [];
+		const all = Array.isArray(value) ? value.filter(isFileData) : isFileData(value) ? [value] : [];
+		return all.filter(hasData);
 	});
 	const images = $derived(files.filter((f) => SUPPORTED_EXTS.has(extOf(f))));
 	const unsupported = $derived(images.length === 0 ? files[0] : undefined);
@@ -73,7 +76,9 @@
 	let isFullscreen = $state(false);
 	let downloading = $state(false);
 	let error = $state<string | null>(null);
-	let decodeFailed = $state(false);
+	// Keyed by URL: the next solve's image must get its own chance to decode.
+	let failedUrl = $state<string | null>(null);
+	const decodeFailed = $derived(failedUrl !== null && failedUrl === dataUrl);
 
 	// View state. `scale` is screen px per image px; (x, y) is the image's top-left in stage px.
 	// The image is sized with width/height rather than a CSS transform so the browser re-rasters
@@ -133,7 +138,6 @@
 
 	function onImageLoad(e: Event) {
 		const img = e.currentTarget as HTMLImageElement;
-		decodeFailed = false;
 		// A viewBox-only SVG can report 0×0; fall back to the browser's default replaced-element size.
 		const w = img.naturalWidth || 300;
 		const h = img.naturalHeight || 150;
@@ -300,7 +304,6 @@
 		'flex h-7 min-w-7 items-center justify-center rounded-sm px-1.5 text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
 </script>
 
-<!-- The layout hides this output until a solve returns a file, so there is no empty state here. -->
 {#if error || unsupported || current}
 	<div
 		bind:this={wrapperEl}
@@ -359,7 +362,7 @@
 						alt=""
 						draggable="false"
 						onload={onImageLoad}
-						onerror={() => (decodeFailed = true)}
+						onerror={() => (failedUrl = dataUrl)}
 						class="absolute top-(--img-y) left-(--img-x) h-(--img-h) w-(--img-w) max-w-none
 						{pixelated ? 'pixelated' : ''}
 						{ready ? '' : 'invisible'}"
@@ -493,6 +496,11 @@
 				</div>
 			</div>
 		{/if}
+	</div>
+{:else}
+	<!-- No file, or only empty ones: no solve has produced this output yet, or the last one failed. -->
+	<div class="px-3 py-3 text-sm rounded-md border border-border-strong text-muted-foreground">
+		{t.waitingForData}
 	</div>
 {/if}
 

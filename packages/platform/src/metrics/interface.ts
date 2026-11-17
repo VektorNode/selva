@@ -18,6 +18,8 @@ export type SolveFailureKind =
 	| 'share_cap'
 	/** Result exceeded the response size limit (HTTP 413). */
 	| 'too_large'
+	/** The compute server refused the request body as too large, before solving (HTTP 413). */
+	| 'request_too_large'
 	/**
 	 * Rejected by scheduler backpressure — the per-server queue was full, or the
 	 * solve sat queued past its wait deadline, so it never executed

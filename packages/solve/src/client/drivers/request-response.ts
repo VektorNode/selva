@@ -12,7 +12,12 @@ export interface RequestResponseDriverOptions<TMesh> {
 	meshPolicy?: MeshPolicy<TMesh>;
 	/** Live events for the solves this driver runs; without it the session never sees any. */
 	events?: SolveEventSource;
+	/** The error reported when a solve passes `solveDeadlineMs`, for a host that localises it. */
+	timeoutMessage?: (seconds: number) => string;
 }
+
+const defaultTimeoutMessage = (seconds: number) =>
+	`The solve took longer than ${seconds} s and was stopped.`;
 
 /**
  * `getReporter` is lazy (`() => session`) because the session and driver reference each
@@ -24,6 +29,7 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	options: RequestResponseDriverOptions<TMesh>
 ): SolveDriver {
 	const { meshPolicy, solveDeadlineMs, onChange, events } = options;
+	const timeoutMessage = options.timeoutMessage ?? defaultTimeoutMessage;
 
 	// Checked inside the throttled run, not before triggering it, so a hit only serves
 	// after the throttle's latest-wins ordering has picked these values to run.
@@ -44,9 +50,7 @@ export function createRequestResponseDriver<TMesh = unknown>(
 		console.debug('[Solve/driver] solve stopped (cancelled or timed out)');
 		const reason = signal.reason as { name?: string } | undefined;
 		if (reason?.name === 'TimeoutError') {
-			getReporter().reportError(
-				`The solve took longer than ${Math.round(solveDeadlineMs / 1000)} s and was stopped.`
-			);
+			getReporter().reportError(timeoutMessage(Math.round(solveDeadlineMs / 1000)));
 		} else {
 			getReporter().reportAborted();
 		}

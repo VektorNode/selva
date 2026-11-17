@@ -126,6 +126,18 @@ describe('applyValueChange', () => {
 		expect(s.hasPendingChanges).toBe(true);
 	});
 
+	it('in manual mode, an unchanged value leaves a solved result current', () => {
+		const s = state({ values: { a: 5, b: [1, { x: 2 }] } });
+		expect(applyValueChange(s, 'a', 5, false)).toBe(false);
+		expect(applyValueChange(s, 'b', [1, { x: 2 }], false)).toBe(false);
+		expect(s.hasPendingChanges).toBe(false);
+	});
+
+	it('in auto mode, an unchanged value still dispatches, so a failed solve can retry', () => {
+		const s = state({ values: { a: 5 } });
+		expect(applyValueChange(s, 'a', 5, true)).toBe(true);
+	});
+
 	it('force overrides manual mode, and the solve covers every pending edit', () => {
 		const s = state({ values: { a: 1 }, hasPendingChanges: true });
 		expect(applyValueChange(s, 'a', 2, false, true)).toBe(true);

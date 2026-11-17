@@ -55,7 +55,8 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
 - **The key is redacted** from every tool output.
 - **`onToolCall` sees every tool call** once it settles: outcome, the `/api/v1` calls with their
   status and duration, and argument names with their sizes, never values. `onCall` sees each
-  API call alone.
+  API call alone. A tool that rewrites an `ApiCallError`'s text throws
+  `new Error(text, { cause: err })` so the outcome keeps its code (a timeout stays `timeout`).
 - **`listen` checks the live spec** at `/api/v1/openapi.json`: every declared call must exist
   with the same scope, or the server refuses to start.
 - **A browser `Origin` must be the host's own** or listed in `allowedOrigins`; anything else gets 403. Native clients send none.
@@ -70,7 +71,9 @@ through the SDK's stateless fallback.
 ## Output
 
 A tool returns a string, or `{ text, structured?, images? }`. A tool with `output` (Zod or JSON
-Schema) lists it as `outputSchema`, and clients may reject a `structured` that doesn't match it. `images` (`{ data, mimeType }`,
+Schema) lists it as `outputSchema`, and clients may reject a `structured` that doesn't match it.
+A tool without `output` sends no `structuredContent`: clients would show it in place of the
+text. `images` (`{ data, mimeType }`,
 base64) follow the text as MCP image content, for a model that can see. Clients render PNG, JPEG,
 GIF and WebP, not SVG.
 

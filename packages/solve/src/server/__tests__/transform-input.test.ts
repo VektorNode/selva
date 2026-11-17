@@ -103,7 +103,7 @@ describe('solveInputsFromSchema', () => {
 	});
 });
 
-// No resolver fills a `server` input, and an author marks one to keep it out of the caller's
+// Only the host fills a `server` input, and an author marks one to keep it out of the caller's
 // hands: a posted value must neither reach the tree nor pass unremarked.
 describe('a server-sourced input', () => {
 	const sourced = solveInputsFromSchema({
@@ -125,6 +125,16 @@ describe('a server-sourced input', () => {
 	it('solves with its schema default whatever the caller posts', () => {
 		const [tree] = buildSolveInputTree(sourced, { srv: 'forged' });
 		expect(tree.InnerTree['{0}'].map((item) => item.data)).toEqual(['from-schema']);
+	});
+
+	it('takes the bound value over the default, and never the posted one', () => {
+		const [tree] = buildSolveInputTree(sourced, { srv: 'forged' }, { srv: 'resolved' });
+		expect(tree.InnerTree['{0}'].map((item) => item.data)).toEqual(['resolved']);
+	});
+
+	it('ignores a bound value for an input that is not server-sourced', () => {
+		const [, free] = buildSolveInputTree(sourced, { free: 'typed' }, { free: 'bound' });
+		expect(free.InnerTree['{0}'].map((item) => item.data)).toEqual(['typed']);
 	});
 
 	it('is named when posted, so the host can refuse the request', () => {

@@ -62,3 +62,5 @@ export {
 	mergeApiKeys,
 	type IncomingServerBase
 } from './server-config-write.js';
+
+export { resolveBoundValues } from './bound-values.js';

@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createComputeFetchSolveFn } from '../compute-fetch-solve-fn.js';
+import { createComputeFetchSolveFn, SolveRequestError } from '../compute-fetch-solve-fn.js';
 
 function jsonResponse(body: unknown, init?: ResponseInit & { url?: string; redirected?: boolean }) {
 	const res = new Response(JSON.stringify(body), {
@@ -317,6 +317,37 @@ describe('createComputeFetchSolveFn — malformed responses', () => {
 		await expect(solveOnce()).rejects.toThrow('solver died');
 		fetchMock.mockResolvedValueOnce(new Response('', { status: 500 }));
 		await expect(solveOnce()).rejects.toThrow('Compute error (HTTP 500)');
+	});
+
+	it('a refusal throws SolveRequestError carrying status, body and code', async () => {
+		const body = { message: 'Compute is down', code: 'compute_unavailable' };
+		fetchMock.mockResolvedValue(jsonResponse(body, { status: 503 }));
+		const err = await solveOnce().catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(SolveRequestError);
+		expect(err).toMatchObject({
+			message: 'Compute is down',
+			status: 503,
+			body,
+			code: 'compute_unavailable'
+		});
+	});
+
+	it("reads a body's reason as its code when it has none", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ reason: 'quota' }, { status: 403 }));
+		await expect(solveOnce()).rejects.toMatchObject({
+			status: 403,
+			code: 'quota',
+			message: 'Compute error (HTTP 403)'
+		});
+	});
+
+	it('a 429 is a SolveRequestError with its wait', async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ retryAfter: 7 }, { status: 429 }));
+		await expect(solveOnce()).rejects.toMatchObject({
+			name: 'SolveRequestError',
+			status: 429,
+			retryAfterSeconds: 7
+		});
 	});
 
 	it.each(['null', '[]', '{"message":{}}', '{"message":7}'])(

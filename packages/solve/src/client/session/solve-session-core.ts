@@ -10,6 +10,7 @@ import type { UISchema } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/schemas';
 import { getExternalInputs, type ExternalValueRef } from '../external-storage.js';
 import { serverSourcedInputIds } from '../../shared/server-sourced.js';
+import { stableInputKey } from '../solve-memo.js';
 import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
 
 /**
@@ -128,10 +129,20 @@ export function applyValueChange(
 	instanceSolve: boolean | undefined,
 	force = false
 ): boolean {
+	// Auto mode keeps an unchanged value: it retries after a failure, and `isRepeatOfLastSolve`
+	// already drops a true repeat. Manual mode must not call a result stale for a no-op commit.
+	if (instanceSolve === false && !force && sameValue(state.values[id], value)) return false;
 	state.values[id] = value;
 	if (instanceSolve !== false) return true;
 	state.hasPendingChanges = !force;
 	return force;
+}
+
+// By the key the memo uses: a widget may hand back an equal array or object, never the same one.
+function sameValue(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true;
+	if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+	return stableInputKey(a) === stableInputKey(b);
 }
 
 /** Same rule as `applyValueChange`, for a whole set. Whether it should dispatch. */

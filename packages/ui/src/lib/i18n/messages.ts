@@ -83,6 +83,10 @@ export interface ViewerMessages {
 	solveDone: string;
 	/** A visible solve was aborted; the previous result stays. */
 	solveStopped: string;
+	/** A solve passed its deadline. `{seconds}` is replaced with the deadline. */
+	solveTimedOut: string;
+	/** A field's help button. `{label}` is the field's label. */
+	helpFor: string;
 	parametersTab: string;
 	moreTab: string;
 	scrollTabsBack: string;
@@ -330,6 +334,8 @@ const en: ViewerMessages = {
 	solveSolving: 'Solving…',
 	solveDone: 'Done',
 	solveStopped: 'Stopped',
+	solveTimedOut: 'The solve took longer than {seconds} s and was stopped.',
+	helpFor: 'Help for {label}',
 	parametersTab: 'Parameters',
 	moreTab: 'More',
 	scrollTabsBack: 'Previous tabs',
@@ -544,6 +550,8 @@ const de: ViewerMessages = {
 	solveSolving: 'Berechnung läuft…',
 	solveDone: 'Fertig',
 	solveStopped: 'Abgebrochen',
+	solveTimedOut: 'Die Berechnung dauerte länger als {seconds} s und wurde abgebrochen.',
+	helpFor: 'Hilfe zu {label}',
 	parametersTab: 'Parameter',
 	moreTab: 'Mehr',
 	scrollTabsBack: 'Vorherige Tabs',

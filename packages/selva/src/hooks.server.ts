@@ -15,6 +15,7 @@ import {
 	resolveApiToken
 } from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
+import { resolveRetentionPolicy, startRetentionJanitor } from '@selvajs/server/ops';
 import {
 	providers,
 	flag,
@@ -329,6 +330,11 @@ const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) =>
 	if (!bootHealthKicked) {
 		bootHealthKicked = true;
 		void getBootHealth();
+		startRetentionJanitor({
+			data: providers.data,
+			policy: resolveRetentionPolicy(env),
+			logger: getLogger()
+		});
 		// Reconciles a self-update that was in flight when this process came up
 		// into the audit log. No-op when no pending-update state file exists —
 		// see selfUpdate.server.ts for the full lifecycle.

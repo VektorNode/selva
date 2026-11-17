@@ -191,7 +191,7 @@
 			>
 		</Label>
 		{#if item.description}
-			<HelpButton {label} description={item.description} />
+			<HelpButton {label} description={item.description} nameTemplate={locale.messages.helpFor} />
 		{/if}
 	</div>
 {/snippet}

@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import type { ActionButton } from '../../types/actionButton';
-	import type { SolveFn } from '@selvajs/solve/shared';
+	import type { SolveDiagnostic, SolveFn } from '@selvajs/solve/shared';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createComputeDriver } from '../../compute/computeDriver';
@@ -24,7 +24,7 @@
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import { setDeferredFilesContext } from '../../contexts/deferredFilesContext.svelte';
-	import type { Locale, ViewerMessages } from '../../i18n/messages';
+	import { formatMessage, type Locale, type ViewerMessages } from '../../i18n/messages';
 	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
 
 	import type { Snippet } from 'svelte';
@@ -41,6 +41,8 @@
 		showModeToggle?: boolean;
 		/** Host actions, listed in the panel footer's ⋯ menu after saving and loading inputs. */
 		panelActions?: ActionButton[];
+		/** The host's main commit action, a visible button beside Calculate instead of a menu entry. */
+		primaryAction?: ActionButton;
 		/** Lists "Save inputs…" in the footer menu. */
 		showSaveButton?: boolean;
 		/** Lists "Load inputs…" in the footer menu. */
@@ -126,6 +128,7 @@
 		primaryColor,
 		showModeToggle = false,
 		panelActions = [],
+		primaryAction,
 		showSaveButton = true,
 		showLoadButton = true,
 		onSaveState,
@@ -176,7 +179,8 @@
 		// `isSolving` lives on the driver, which the session can't observe — republish so the
 		// spinner and disabled states track it.
 		onChange: () => session.notify(),
-		events
+		events,
+		timeoutMessage: (seconds) => formatMessage(t.solveTimedOut, { seconds })
 	});
 	// svelte-ignore state_referenced_locally
 	const session = useSolveSession({
@@ -257,6 +261,14 @@
 	);
 
 	let pageTitle = $derived(title ?? (schema?.description || schema.name));
+
+	// A failed solve lists beside the definition's own messages rather than replacing the layout,
+	// so the inputs stay editable and the user can change them and solve again.
+	const footerDiagnostics = $derived<SolveDiagnostic[]>(
+		session.error
+			? [{ level: 'error', message: session.error }, ...session.diagnostics]
+			: session.diagnostics
+	);
 </script>
 
 <div class="contents" style:--primary={primaryOverride}>
@@ -275,9 +287,9 @@
 		rightContent={headerRight}
 		errors={session.computeErrors}
 		warnings={session.computeWarnings}
-		diagnostics={session.diagnostics}
+		diagnostics={footerDiagnostics}
 	>
-		{#if session.error}
+		{#if session.error && !schema}
 			<div class="min-h-100 p-8 flex items-center justify-center">
 				<StateDisplay type="error" size="medium" message={session.error} />
 			</div>
@@ -304,6 +316,7 @@
 					{onViewerReady}
 					{viewerConfig}
 					{panelActions}
+					{primaryAction}
 					{showSaveButton}
 					{showLoadButton}
 					{onSaveState}

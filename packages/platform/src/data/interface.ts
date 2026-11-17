@@ -124,4 +124,23 @@ export interface IDataProvider {
 	 * MUST tolerate a missing user and missing rows (idempotent — caller may retry).
 	 */
 	onUserDeleted(ctx: RequestContext, userId: string, opts?: UserErasureOptions): Promise<void>;
+
+	/**
+	 * Deletes audit events and solve metrics recorded before the given cutoffs.
+	 * Absent on a provider that keeps neither. MUST be idempotent: a janitor
+	 * calls it on a timer and retries after a failure.
+	 */
+	purgeExpired?(ctx: RequestContext, cutoffs: RetentionCutoffs): Promise<PurgeResult>;
+}
+
+/** An omitted cutoff keeps that table whole. */
+export interface RetentionCutoffs {
+	auditEventsBefore?: Date;
+	solveMetricsBefore?: Date;
+}
+
+/** Rows deleted per table. */
+export interface PurgeResult {
+	auditEvents: number;
+	solveMetrics: number;
 }

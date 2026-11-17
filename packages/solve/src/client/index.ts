@@ -23,7 +23,7 @@ export type { LiveSolveState } from './events/live-solve.js';
 export type { SolvePhase, RetainedSolveResult } from './session/solve-session-core.js';
 export type { DeferredFiles } from './session/deferred-files.js';
 
-export { createComputeFetchSolveFn } from './compute-fetch-solve-fn.js';
+export { createComputeFetchSolveFn, SolveRequestError } from './compute-fetch-solve-fn.js';
 export type { ComputeFetchSolveFnOptions } from './compute-fetch-solve-fn.js';
 
 export { stableInputKey } from './solve-memo.js';

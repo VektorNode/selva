@@ -10,6 +10,7 @@ import type {
 } from '@selvajs/platform';
 import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { SupabasePlatformProjectGrantStore } from './SupabasePlatformProjectGrantStore.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 import { stampSoftDelete, stampUpdate } from './rowStamp.js';
@@ -30,11 +31,15 @@ const PROJECT_MEMBER_COLUMNS =
 export class SupabaseProjectStore implements IProjectStore {
 	private readonly events: IEventSink;
 
+	/** Grants have no soft-delete: deleting a project removes its grants, as in the local provider. */
+	private readonly grants: SupabasePlatformProjectGrantStore;
+
 	constructor(
 		private readonly clients: ClientBundle,
 		events: IEventSink = new NoopEventSink()
 	) {
 		this.events = events;
+		this.grants = new SupabasePlatformProjectGrantStore(clients);
 	}
 
 	async listProjects(
@@ -177,6 +182,8 @@ export class SupabaseProjectStore implements IProjectStore {
 				...actorOf(ctx)
 			});
 		}
+
+		await this.grants.deleteByProject(ctx, id);
 
 		await this.events.emit({ type: 'project.deleted', projectId: id, ...actorOf(ctx) });
 	}

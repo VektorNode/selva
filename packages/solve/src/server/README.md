@@ -58,6 +58,10 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
+Inputs the schema marks `source.kind: 'server'` never take `values`. Pass what the host resolved
+for them as `boundValues`, by input id; `resolveBoundValues` in `@selvajs/server/compute` builds it
+from an `IBindingResolver`. Refuse a request that posts one (`postedServerSourcedIds`).
+
 `toWebResponse` throws a `compute_error`'s error, so the route's own handler decides what a failed
 Compute means to its caller.
 

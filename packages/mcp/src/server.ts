@@ -94,8 +94,13 @@ export interface ToolCallRecord {
 	durationMs: number;
 	/** `invalid_arguments`: refused before any call; `timeout`: a call got no answer in time. */
 	outcome: 'ok' | 'error' | 'timeout' | 'invalid_arguments';
-	/** The failing call's code, or the thrown error's name. */
+	/**
+	 * The failing call's code, or the thrown error's name. A tool that rewrites an
+	 * `ApiCallError`'s message keeps this by throwing `new Error(text, { cause: err })`.
+	 */
 	code?: string;
+	/** The failing call's HTTP status; `0` when no response arrived. */
+	status?: number;
 	/** The host API calls it made, in the order they settled. */
 	calls: ApiCallRecord[];
 	/** Each argument's JSON length, by name. */
@@ -161,7 +166,9 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 			return value;
 		};
 
-		function toResult(out: ToolOutput): CallToolResult {
+		// Without an `outputSchema`, clients show `structuredContent` in place of the text and
+		// drop its hints, so a tool without `output` sends the text alone.
+		function toResult(out: ToolOutput, hasOutputSchema: boolean): CallToolResult {
 			return {
 				content: [
 					{ type: 'text', text: redact(out.text) },
@@ -171,12 +178,13 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 						mimeType
 					}))
 				],
-				...(out.structured && {
-					structuredContent: JSON.parse(redact(JSON.stringify(out.structured))) as Record<
-						string,
-						unknown
-					>
-				}),
+				...(hasOutputSchema &&
+					out.structured && {
+						structuredContent: JSON.parse(redact(JSON.stringify(out.structured))) as Record<
+							string,
+							unknown
+						>
+					}),
 				...(out.meta && {
 					_meta: redactValue(out.meta) as Record<string, unknown>
 				})
@@ -243,7 +251,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 						}, HEARTBEAT_MS);
 
 			const calls: ApiCallRecord[] = [];
-			let ended: Pick<ToolCallRecord, 'outcome' | 'code'> = { outcome: 'ok' };
+			let ended: Pick<ToolCallRecord, 'outcome' | 'code' | 'status'> = { outcome: 'ok' };
 			let result: CallToolResult | undefined;
 			try {
 				const api = createApiClient(
@@ -259,7 +267,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 				);
 				const args: unknown = resolved.input.parse(req.params.arguments ?? {});
 				const out = await resolved.def.run(api, args, { signal: ctx.mcpReq.signal, spec });
-				result = toResult(typeof out === 'string' ? { text: out } : out);
+				result = toResult(typeof out === 'string' ? { text: out } : out, !!resolved.output);
 				return result;
 			} catch (err) {
 				ended = outcomeOf(err);
@@ -604,12 +612,25 @@ function checkCalls(owner: string, calls: string[], spec: OperationIndex): void 
 	}
 }
 
-function outcomeOf(err: unknown): Pick<ToolCallRecord, 'outcome' | 'code'> {
-	if (err instanceof ApiCallError) {
-		return { outcome: err.code === 'TIMEOUT' ? 'timeout' : 'error', code: err.code };
+function outcomeOf(err: unknown): Pick<ToolCallRecord, 'outcome' | 'code' | 'status'> {
+	const api = apiCallErrorIn(err);
+	if (api) {
+		return {
+			outcome: api.code === 'TIMEOUT' ? 'timeout' : 'error',
+			code: api.code,
+			status: api.status
+		};
 	}
 	if (err instanceof z.ZodError) return { outcome: 'invalid_arguments' };
 	return { outcome: 'error', code: err instanceof Error ? err.name : 'Error' };
+}
+
+/** The `ApiCallError` behind a failure, directly or through `cause`. */
+function apiCallErrorIn(err: unknown): ApiCallError | undefined {
+	for (let e = err, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
+		if (e instanceof ApiCallError) return e;
+	}
+	return undefined;
 }
 
 function jsonLength(value: unknown): number {

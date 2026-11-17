@@ -202,6 +202,9 @@
 				validationError = error;
 				if (!error) {
 					value = newValue;
+					// `onchange` fired first and queued the same value; a second commit 400 ms later
+					// lands after a solve the blur may have started.
+					commitDebounced.cancel();
 					onChange(newValue);
 				}
 			}

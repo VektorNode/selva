@@ -64,6 +64,8 @@
 		onValueChange: (id: string, val: SupportedTypes, forceSolve?: boolean) => void | Promise<void>;
 		onLoadValues?: (values: Record<string, unknown>) => void | Promise<void>;
 		panelActions?: ActionButton[];
+		/** A visible button beside Calculate, for the host's one main commit action. */
+		primaryAction?: ActionButton;
 		showSaveButton?: boolean;
 		showLoadButton?: boolean;
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
@@ -94,6 +96,7 @@
 		onValueChange,
 		onLoadValues,
 		panelActions = [],
+		primaryAction,
 		showSaveButton = true,
 		showLoadButton = true,
 		onSaveState,
@@ -106,6 +109,7 @@
 
 	const presetText = $derived({ ...DEFAULT_PRESET_LABELS, ...presetLabels });
 	let presets = $state<ParameterPresetManager | null>(null);
+	let primaryActionRunning = $state(false);
 	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
 	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
 
@@ -188,6 +192,11 @@
 
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(false);
+	// Paneforge writes the handles' aria-value* only once its layout settles; until then axe sees a
+	// focusable separator with no value. Each handle reports the size of the pane before it, as
+	// paneforge does.
+	let leftSize = $state<number | null>(null);
+	let rightSize = $state<number | null>(null);
 	let leftPaneRef = $state<{ expand: () => void } | null>(null);
 	let rightPaneRef = $state<{ expand: () => void } | null>(null);
 	let requestedLeftTabId = $state<string | null>(null);
@@ -199,6 +208,12 @@
 	// side panes' 22–30: the viewer rendered a sliver, then jumped to its share (CLS ~0.4).
 	const viewerDefaultSize = $derived(
 		100 - (hasLeftPanel ? leftDefaultSize : 0) - (hasRightPanel ? rightDefaultSize : 0)
+	);
+	const leftHandleValue = $derived(Math.round(leftSize ?? leftDefaultSize));
+	const rightHandleValue = $derived(
+		Math.round(
+			100 - (hasLeftPanel ? (leftSize ?? leftDefaultSize) : 0) - (rightSize ?? rightDefaultSize)
+		)
 	);
 
 	const layoutKey = $derived(
@@ -305,8 +320,49 @@
 	</DropdownMenu.Root>
 {/snippet}
 
-<!-- One primary action and one menu. A definition that solves on every change has no Calculate,
-     so the menu sits alone at the end of the row. -->
+<!-- Takes the filled style only while Calculate doesn't: two filled buttons leave no primary. -->
+{#snippet primaryActionButton(action: ActionButton)}
+	{@const hint =
+		action.hint ?? (action.solvesFirst && resultIsStale ? t.calculatesFirst : undefined)}
+	<Button
+		variant={action.variant === 'destructive'
+			? 'destructive'
+			: resultIsStale && schema.instanceSolve === false
+				? 'outline'
+				: 'default'}
+		size="lg"
+		class="min-w-0 shrink"
+		disabled={action.disabled || primaryActionRunning}
+		aria-busy={primaryActionRunning}
+		title={hint}
+		onclick={async () => {
+			primaryActionRunning = true;
+			try {
+				await runPanelAction(action, ensureSolved);
+			} finally {
+				primaryActionRunning = false;
+			}
+		}}
+	>
+		{#if action.icon}
+			{@const IconComponent = action.icon}
+			<IconComponent />
+		{/if}
+		<span class="truncate">{action.label}</span>
+	</Button>
+{/snippet}
+
+{#snippet footerActions()}
+	{#if primaryAction}
+		{@render primaryActionButton(primaryAction)}
+	{/if}
+	{#if hasMenu}
+		{@render actionsMenu()}
+	{/if}
+{/snippet}
+
+<!-- Calculate, the host's primary action if it has one, and one menu. A definition that solves
+     on every change has no Calculate, so the rest sit at the end of the row. -->
 {#snippet footer()}
 	<!-- No wrapper: it would always render (the messages' live region is never empty) and pick up
 	     the drawer footer's row padding, leaving a gap above Calculate with nothing in it. -->
@@ -317,7 +373,7 @@
 			{hasNeverSolved}
 			{isSolving}
 			{oncalculate}
-			trailing={hasMenu ? actionsMenu : undefined}
+			trailing={hasMenu || primaryAction ? footerActions : undefined}
 		/>
 	{:else}
 		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
@@ -329,9 +385,7 @@
 				{onabort}
 				{freezesDuringSolve}
 			/>
-			{#if hasMenu}
-				{@render actionsMenu()}
-			{/if}
+			{@render footerActions()}
 		</div>
 	{/if}
 {/snippet}
@@ -518,6 +572,7 @@
 						collapsedSize={0}
 						onCollapse={() => (leftCollapsed = true)}
 						onExpand={() => (leftCollapsed = false)}
+						onResize={(size) => (leftSize = size)}
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
@@ -532,6 +587,9 @@
 						line={false}
 						class="translate-x-1.5 z-20"
 						data-collapsed={leftCollapsed}
+						aria-valuenow={leftHandleValue}
+						aria-valuemin={0}
+						aria-valuemax={100}
 						onclick={() => {
 							if (leftCollapsed) leftPaneRef?.expand();
 						}}
@@ -567,6 +625,9 @@
 							line={false}
 							class="-translate-x-1.5 z-20"
 							data-collapsed={rightCollapsed}
+							aria-valuenow={rightHandleValue}
+							aria-valuemin={0}
+							aria-valuemax={100}
 							onclick={() => {
 								if (rightCollapsed) rightPaneRef?.expand();
 							}}
@@ -582,6 +643,7 @@
 						collapsedSize={0}
 						onCollapse={() => (rightCollapsed = true)}
 						onExpand={() => (rightCollapsed = false)}
+						onResize={(size) => (rightSize = size)}
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed

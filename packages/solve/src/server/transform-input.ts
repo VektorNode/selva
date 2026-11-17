@@ -40,26 +40,28 @@ export function postedServerSourcedIds(
 
 /**
  * The input tree a solve sends: each input's value, or its schema default when it has none. A
- * server-sourced input always takes its default.
+ * server-sourced input takes its value from `boundValues` (what the host resolved), never from
+ * `values`.
  */
 export function buildSolveInputTree(
 	inputs: SolveInput[],
-	values: Record<string, unknown>
+	values: Record<string, unknown>,
+	boundValues: Record<string, unknown> = {}
 ): DataTree[] {
 	return TreeBuilder.fromValues(
 		inputs
 			// Stored schemas are validated at upload only, so an older one can lack `paramType`.
 			.filter((input) => input.paramType)
-			.map((input) => ({
-				paramName: input.nickname,
-				paramType: input.paramType,
-				// `hasOwn`: an input id of `constructor` would read the inherited function.
-				value:
-					(!input.serverSourced && Object.hasOwn(values, input.id)
-						? values[input.id]
-						: undefined) ?? input.default,
-				minimum: input.minimum,
-				maximum: input.maximum
-			}))
+			.map((input) => {
+				const from = input.serverSourced ? boundValues : values;
+				return {
+					paramName: input.nickname,
+					paramType: input.paramType,
+					// `hasOwn`: an input id of `constructor` would read the inherited function.
+					value: (Object.hasOwn(from, input.id) ? from[input.id] : undefined) ?? input.default,
+					minimum: input.minimum,
+					maximum: input.maximum
+				};
+			})
 	);
 }

@@ -6,6 +6,7 @@
 
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { hmacKeys } from '#lib/server/keys.server.js';
+import { getLogger } from '#lib/server/providers.server.js';
 import {
 	assertSafeRemoteDefinitionUrl,
 	createComputeRateLimiter,
@@ -33,7 +34,12 @@ const unredeemed = new Map<string, ReturnType<typeof setTimeout>>();
 export function expectRedemption(tokenId: string, revoke: () => Promise<void>): void {
 	const timer = setTimeout(() => {
 		unredeemed.delete(tokenId);
-		revoke().catch(() => {});
+		revoke().catch((err) =>
+			getLogger().warn('OAuth: revoking an unredeemed consent key failed', {
+				tokenId,
+				message: err instanceof Error ? err.message : String(err)
+			})
+		);
 	}, ABANDON_AFTER_MS);
 	timer.unref?.();
 	unredeemed.set(tokenId, timer);

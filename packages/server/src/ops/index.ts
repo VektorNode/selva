@@ -18,3 +18,11 @@ export {
 	type ConfigVerdict,
 	type DeploymentEnv
 } from './deploymentConfig.js';
+
+export {
+	resolveRetentionPolicy,
+	retentionCutoffs,
+	startRetentionJanitor,
+	type RetentionJanitor,
+	type RetentionPolicy
+} from './retention.js';

@@ -7,7 +7,7 @@
  * minted elsewhere would be live with no way to see or revoke it.
  */
 
-import type { OrgMember, RequestContext } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, type OrgMember, type RequestContext } from '@selvajs/platform';
 import { apiError, ApiErrorCode, requireCaller, type ApiRequest } from '../api/index.js';
 import { buildRequestContext } from '../http/request-context.js';
 import { listUserMemberships } from '../organizations/user-memberships.js';
@@ -141,7 +141,9 @@ export async function revokeUnredeemedConsentToken(
 	const store = req.deps.data.apiTokens;
 	if (!store) return;
 	const { ctx } = requireCaller(req);
-	const token = await store.get(ctx, tokenId);
+	// Read as system: this runs after the code's lifetime, when the consenting
+	// session's JWT may have expired and an RLS read would fail. We minted the id.
+	const token = await store.get(SYSTEM_CONTEXT, tokenId);
 	if (!token || token.revokedAt || token.lastUsedAt) return;
 	await store.revoke(ctx, tokenId, 'owner');
 	req.deps.tokens.resolutionCache?.forget(tokenId);

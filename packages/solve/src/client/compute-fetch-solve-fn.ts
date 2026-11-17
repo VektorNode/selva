@@ -72,13 +72,49 @@ function parseServerTiming(header: string | null): Record<string, number> {
 	return out;
 }
 
-function rateLimitedError(retryAfterSeconds: number): Error {
-	return new Error(`Rate limit reached. Try again in ${Math.ceil(retryAfterSeconds)}s.`);
+/**
+ * The server refused the solve. `message` is the text to show; branch on `status` and `code`
+ * instead of matching it. A solve refused locally during a 429 cooldown has `status` 429 and no
+ * `body`; a redirect to the sign-in page has `status` 401.
+ */
+export class SolveRequestError extends Error {
+	override readonly name = 'SolveRequestError';
+	readonly status: number;
+	/** The response body parsed as JSON, or undefined when it was empty or not JSON. */
+	readonly body: unknown;
+	/** The body's `code`, or its `reason` when it has no `code`. */
+	readonly code: string | undefined;
+	readonly retryAfterSeconds: number | undefined;
+
+	constructor(
+		message: string,
+		init: { status: number; body?: unknown; retryAfterSeconds?: number | null }
+	) {
+		super(message);
+		this.status = init.status;
+		this.body = init.body;
+		this.code = readCode(init.body);
+		this.retryAfterSeconds = init.retryAfterSeconds ?? undefined;
+	}
 }
 
-function sessionExpiredError(): Error {
-	return new Error(
-		'Your session has expired. Sign in again in a new tab, then re-run — your inputs are preserved.'
+function readCode(body: unknown): string | undefined {
+	if (!isPlainObject(body)) return undefined;
+	if (typeof body.code === 'string') return body.code;
+	return typeof body.reason === 'string' ? body.reason : undefined;
+}
+
+function rateLimitedError(retryAfterSeconds: number, body?: unknown): SolveRequestError {
+	return new SolveRequestError(
+		`Rate limit reached. Try again in ${Math.ceil(retryAfterSeconds)}s.`,
+		{ status: 429, body, retryAfterSeconds }
+	);
+}
+
+function sessionExpiredError(body: unknown): SolveRequestError {
+	return new SolveRequestError(
+		'Your session has expired. Sign in again in a new tab, then re-run — your inputs are preserved.',
+		{ status: 401, body }
 	);
 }
 
@@ -102,17 +138,19 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseErrorBody(text: string): { message?: string; retryAfter?: unknown } {
+function parseErrorBody(text: string): { body?: unknown; message?: string; retryAfter?: unknown } {
+	let body: unknown;
 	try {
-		const body: unknown = JSON.parse(text);
-		if (!isPlainObject(body)) return {};
-		return {
-			...(typeof body.message === 'string' ? { message: body.message } : {}),
-			retryAfter: body.retryAfter
-		};
+		body = JSON.parse(text);
 	} catch {
 		return {};
 	}
+	if (!isPlainObject(body)) return { body };
+	return {
+		body,
+		...(typeof body.message === 'string' ? { message: body.message } : {}),
+		retryAfter: body.retryAfter
+	};
 }
 
 export function createComputeFetchSolveFn<TMesh = unknown>(
@@ -125,9 +163,9 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 
 	let cooldownUntil = 0;
 
-	function rateLimited(retryAfterSeconds: number): Error {
+	function rateLimited(retryAfterSeconds: number, body?: unknown): SolveRequestError {
 		opts.onRateLimited?.(retryAfterSeconds);
-		return rateLimitedError(retryAfterSeconds);
+		return rateLimitedError(retryAfterSeconds, body);
 	}
 
 	return async (
@@ -200,12 +238,15 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 		if (res.status === 401 || redirectedToLogin) {
 			opts.onSessionExpired?.();
-			throw sessionExpiredError();
+			const body = redirectedToLogin
+				? undefined
+				: parseErrorBody(await res.text().catch(() => '')).body;
+			throw sessionExpiredError(body);
 		}
 
 		if (!res.ok) {
 			const errorBody = await res.text().catch(() => '');
-			const { message, retryAfter: bodyHint } = parseErrorBody(errorBody);
+			const { body, message, retryAfter: bodyHint } = parseErrorBody(errorBody);
 			if (errorBody && message === undefined) {
 				log(`[Compute] unreadable error body (HTTP ${res.status}, ${errorBody.length} chars)`);
 			}
@@ -216,16 +257,21 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			if (res.status === 503 || res.status === 504) {
 				// The server names the failure class (unreachable, bad API key,
 				// rate-limited, timed out) — show it rather than a blanket "offline".
-				throw new Error(
-					message || 'Compute server is offline or unreachable. Please try again later.'
+				throw new SolveRequestError(
+					message || 'Compute server is offline or unreachable. Please try again later.',
+					{ status: res.status, body, retryAfterSeconds: retryAfter }
 				);
 			}
 			if (res.status === 429) {
 				const seconds = retryAfter ?? DEFAULT_RETRY_AFTER_S;
 				cooldownUntil = Date.now() + seconds * 1000;
-				throw rateLimited(seconds);
+				throw rateLimited(seconds, body);
 			}
-			throw new Error(message || `Compute error (HTTP ${res.status})`);
+			throw new SolveRequestError(message || `Compute error (HTTP ${res.status})`, {
+				status: res.status,
+				body,
+				retryAfterSeconds: retryAfter
+			});
 		}
 
 		const ttfbMs = performance.now() - solveStart;

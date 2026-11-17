@@ -709,6 +709,27 @@ describe('createRequestResponseDriver — ending a solve', () => {
 		}
 	});
 
+	it("reports the deadline in the host's own words", async () => {
+		vi.useFakeTimers();
+		try {
+			const { log, reporter } = collectingReporter();
+			const onSolve = (_v: Record<string, unknown>, signal: AbortSignal) =>
+				new Promise<SolveResult>((_, reject) =>
+					signal.addEventListener('abort', () => reject(signal.reason))
+				);
+			const driver = createRequestResponseDriver(onSolve, () => reporter, {
+				solveDeadlineMs: 2_000,
+				timeoutMessage: (seconds) => `Nach ${seconds} s abgebrochen.`
+			});
+			vi.spyOn(console, 'warn').mockImplementation(() => {});
+			driver.solve({ a: 1 });
+			await vi.advanceTimersByTimeAsync(2_001);
+			expect(log).toEqual(['error: Nach 2 s abgebrochen.']);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it('says a newer solve is queued while the current one reports', async () => {
 		let release!: () => void;
 		const seen: boolean[] = [];

@@ -1,5 +1,5 @@
 import type { RequestContext } from '../context.js';
-import type { DomainEvent, DomainEventType } from './interface.js';
+import type { BaseEvent, DomainEvent } from './interface.js';
 
 /**
  * Read-side counterpart to `IEventSink`, kept as its own interface: a
@@ -13,13 +13,14 @@ import type { DomainEvent, DomainEventType } from './interface.js';
  * gated on `instance_admin`.
  */
 
-export interface AuditEventRow {
+/** `E` widens rows to a host event union written through the same sink. */
+export interface AuditEventRow<E extends BaseEvent = DomainEvent> {
 	id: string;
 	/** ISO 8601. When the row was persisted, not when the mutation occurred. */
 	occurredAt: string;
-	type: DomainEventType;
+	type: E['type'];
 	actorId: string;
-	data: DomainEvent;
+	data: E;
 }
 
 /**
@@ -31,9 +32,9 @@ export interface AuditCursor {
 	id: string;
 }
 
-export interface AuditQueryFilters {
+export interface AuditQueryFilters<E extends BaseEvent = DomainEvent> {
 	/** Empty/undefined = all types. */
-	types?: readonly DomainEventType[];
+	types?: readonly E['type'][];
 	actorId?: string;
 	/** Inclusive bounds, ISO 8601. */
 	sinceIso?: string;
@@ -43,12 +44,12 @@ export interface AuditQueryFilters {
 	cursor?: AuditCursor;
 }
 
-export interface AuditQueryResult {
-	rows: AuditEventRow[];
+export interface AuditQueryResult<E extends BaseEvent = DomainEvent> {
+	rows: AuditEventRow<E>[];
 	/** Null past the last page. */
 	nextCursor: AuditCursor | null;
 }
 
-export interface IAuditQuery {
-	list(ctx: RequestContext, filters: AuditQueryFilters): Promise<AuditQueryResult>;
+export interface IAuditQuery<E extends BaseEvent = DomainEvent> {
+	list(ctx: RequestContext, filters: AuditQueryFilters<E>): Promise<AuditQueryResult<E>>;
 }

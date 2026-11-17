@@ -61,6 +61,7 @@ const FAILURE_KINDS = Object.keys({
 	rate_limited: true,
 	share_cap: true,
 	too_large: true,
+	request_too_large: true,
 	shed: true,
 	compute_error: true
 } satisfies Record<SolveFailureKind, true>) as SolveFailureKind[];

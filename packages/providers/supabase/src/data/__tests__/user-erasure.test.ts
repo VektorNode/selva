@@ -26,8 +26,13 @@ interface Op {
 function recordingBundle(errorOn?: string): { bundle: ClientBundle; ops: Op[] } {
 	const ops: Op[] = [];
 
+	// Chainable: a second `.eq` narrows the same op, recorded by its first filter.
 	function result(marker: string) {
-		return { error: errorOn === marker ? { message: `boom:${marker}` } : null };
+		const res = {
+			error: errorOn === marker ? { message: `boom:${marker}` } : null,
+			eq: () => res
+		};
+		return res;
 	}
 
 	const serviceClient = {

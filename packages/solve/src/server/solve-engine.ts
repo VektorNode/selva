@@ -113,6 +113,12 @@ export interface SolveEngineSolveArgs {
 	 */
 	inputs: SolveInput[];
 	values: Record<string, unknown>;
+	/**
+	 * Values for server-sourced inputs, by input id, that the host resolved itself (e.g. with
+	 * `resolveBoundValues` from `@selvajs/server/compute`). Never fill it from the request. An
+	 * input missing here solves on its schema default. Ignored for every other input.
+	 */
+	boundValues?: Record<string, unknown>;
 	signal: AbortSignal;
 	acceptEncoding?: string;
 	/** Sent as `X-Selva-Definition`, a key a router can keep one definition's solves together on. */
@@ -239,7 +245,7 @@ export class SolveEngine {
 		const treeBuildStart = performance.now();
 		let inputTree;
 		try {
-			inputTree = buildSolveInputTree(args.inputs, args.values);
+			inputTree = buildSolveInputTree(args.inputs, args.values, args.boundValues);
 		} catch (error) {
 			return { kind: 'compute_error', durationMs: elapsed(), error };
 		}

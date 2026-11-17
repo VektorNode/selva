@@ -17,6 +17,7 @@ import { resolveComputeLimits } from '@selvajs/server/compute';
 import { resolveApiRateLimitConfig } from '@selvajs/server/api';
 import { resolveSignInMaxAgeMs } from '@selvajs/server/http';
 import { readSmtpConfig } from '@selvajs/server/notifications';
+import { resolveRetentionPolicy } from '@selvajs/server/ops';
 import { ALL_SETTINGS, EXTERNAL_KEYS } from '../settings.js';
 
 // The manifest is only worth trusting if it lists every key the code reads.
@@ -52,7 +53,8 @@ const readers: Record<string, (env: Record<string, string | undefined>) => unkno
 	'compute limits': (e) => resolveComputeLimits(e),
 	'API token rate limit': (e) => resolveApiRateLimitConfig(e),
 	'sign-in max age': (e) => resolveSignInMaxAgeMs(e),
-	smtp: (e) => readSmtpConfig(e)
+	smtp: (e) => readSmtpConfig(e),
+	retention: (e) => resolveRetentionPolicy(e)
 };
 
 describe('every env key a reader touches is declared', () => {

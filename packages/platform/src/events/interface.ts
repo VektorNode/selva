@@ -136,6 +136,17 @@ export type DomainEvent = DomainEventBody & { tokenId?: string };
 export type DomainEventType = DomainEvent['type'];
 
 /**
+ * What every event a sink accepts carries. A host writes its own events beside Selva's
+ * through an `IEventSink<DomainEvent | HostEvent>`, which still satisfies Selva's
+ * `IEventSink`. Prefix host `type`s so they can't collide with a later Selva event.
+ */
+export interface BaseEvent {
+	type: string;
+	actorId: string;
+	tokenId?: string;
+}
+
+/**
  * A durable sink (e.g. Supabase `audit_events.event_version`) stamps every row
  * with this so a reader dispatches on an explicit version instead of
  * inferring the shape. Bump when the union's persisted form changes in a
@@ -143,7 +154,7 @@ export type DomainEventType = DomainEvent['type'];
  */
 export const AUDIT_EVENT_VERSION = 1;
 
-export interface IEventSink {
+export interface IEventSink<E extends BaseEvent = DomainEvent> {
 	/**
 	 * Stores call this AFTER a successful mutation; a failed write does not
 	 * emit.
@@ -158,7 +169,7 @@ export interface IEventSink {
 	 * asynchronously are fine as long as they preserve event ordering per
 	 * `actorId`.
 	 */
-	emit(event: DomainEvent): Promise<void>;
+	emit(event: E): Promise<void>;
 }
 
 /**
@@ -185,6 +196,6 @@ export function actorOf(ctx: {
 }
 
 /** Discards every event. Used when `SelvaConfig.events` is omitted. */
-export class NoopEventSink implements IEventSink {
-	async emit(_event: DomainEvent): Promise<void> {}
+export class NoopEventSink<E extends BaseEvent = DomainEvent> implements IEventSink<E> {
+	async emit(_event: E): Promise<void> {}
 }

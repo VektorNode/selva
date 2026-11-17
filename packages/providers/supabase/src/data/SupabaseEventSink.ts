@@ -1,6 +1,7 @@
 import {
 	AUDIT_EVENT_VERSION,
 	NoopLogger,
+	type BaseEvent,
 	type DomainEvent,
 	type IEventSink,
 	type ILogger
@@ -16,7 +17,7 @@ import type { ClientBundle } from './client.js';
  * mutation has already succeeded by the time we're here; a failed audit
  * write is logged and swallowed so the response still completes.
  */
-export class SupabaseEventSink implements IEventSink {
+export class SupabaseEventSink<E extends BaseEvent = DomainEvent> implements IEventSink<E> {
 	private readonly logger: ILogger;
 
 	constructor(
@@ -26,7 +27,7 @@ export class SupabaseEventSink implements IEventSink {
 		this.logger = opts.logger ?? new NoopLogger();
 	}
 
-	async emit(event: DomainEvent): Promise<void> {
+	async emit(event: E): Promise<void> {
 		try {
 			const { error } = await this.clients.serviceClient.from('audit_events').insert({
 				type: event.type,

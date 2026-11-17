@@ -132,6 +132,9 @@ const solve = createComputeFetchSolveFn({
 });
 ```
 
+A refused solve throws `SolveRequestError` with the HTTP `status`, the parsed `body` and its
+`code`. Branch on those, not on `message`.
+
 ### Headless tool
 
 Use the shared result type when you just need to pass solve results through your own code.

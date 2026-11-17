@@ -8,12 +8,9 @@ import type { PlatformProjectGrant } from './types.js';
  *
  * All deletes are hard-deletes — grants have no downstream references and
  * revocation is immediate.
- *
- * The Supabase adapter does not implement grants: its store is a stub that throws 501 and sets
- * `unsupported`, and `createSelvaProviders` then refuses `ENABLE_PLATFORM_PROJECTS`.
  */
 export interface IPlatformProjectGrantStore {
-	/** Set by a stub that cannot store grants, so a host can refuse the feature instead of 501ing. */
+	/** Set by a stub that cannot store grants: `createSelvaProviders` then refuses `ENABLE_PLATFORM_PROJECTS`. */
 	readonly unsupported?: true;
 	listByProject(ctx: RequestContext, projectId: string): Promise<PlatformProjectGrant[]>;
 	/** Keys are the requested `projectIds`; a project with no grants maps to an empty array. */

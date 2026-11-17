@@ -17,6 +17,7 @@ import {
 	NoopEventSink
 } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
+import { SupabasePlatformProjectGrantStore } from './SupabasePlatformProjectGrantStore.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
 import { stampSoftDelete, stampUpdate } from './rowStamp.js';
@@ -36,11 +37,15 @@ const ORG_MEMBER_COLUMNS =
 export class SupabaseOrgStore implements IOrgStore {
 	private readonly events: IEventSink;
 
+	/** Grants have no soft-delete: deleting an org removes the grants it holds and those on its projects. */
+	private readonly grants: SupabasePlatformProjectGrantStore;
+
 	constructor(
 		private readonly clients: ClientBundle,
 		events: IEventSink = new NoopEventSink()
 	) {
 		this.events = events;
+		this.grants = new SupabasePlatformProjectGrantStore(clients);
 	}
 
 	async listOrgs(ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
@@ -194,6 +199,9 @@ export class SupabaseOrgStore implements IOrgStore {
 		// is operational state with no audit need.
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
 		if (invErr) throw mapPostgrestError(invErr);
+
+		await this.grants.deleteByGranteeOrg(ctx, id);
+		for (const projectId of projectIds) await this.grants.deleteByProject(ctx, projectId);
 
 		const { error: tokErr } = await client.from('api_tokens').delete().eq('org_id', id);
 		if (tokErr) throw mapPostgrestError(tokErr);

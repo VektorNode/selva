@@ -597,6 +597,34 @@ var COMPUTE_LIMIT_SETTINGS = composeManifest([
 		description: 'Ask Rhino.Compute to cache solve results server-side.'
 	})
 ]);
+var retentionDays = (key, label, what, impact) =>
+	defineSetting({
+		key,
+		label,
+		type: 'int',
+		min: 0,
+		default: 0,
+		onInvalid: 'fail',
+		class: 'setting',
+		zero: 'Forever',
+		unit: 'days',
+		description: `Days ${what} are kept before the daily purge deletes them. 0 keeps them forever.`,
+		impact
+	});
+var RETENTION_SETTINGS = composeManifest([
+	retentionDays(
+		'SELVA_AUDIT_RETENTION_DAYS',
+		'Keep audit log for',
+		'audit events',
+		'Older events are gone for good, including who granted instance admin.'
+	),
+	retentionDays(
+		'SELVA_SOLVE_METRICS_RETENTION_DAYS',
+		'Keep solve metrics for',
+		'solve metrics',
+		'Compute usage charts cannot reach back further than this.'
+	)
+]);
 var API_TOKEN_RATE_LIMIT_SETTING = tunableInt(
 	'API_TOKEN_RATE_LIMIT_MAX',
 	600,
@@ -841,7 +869,8 @@ var ENGINE_SETTINGS = composeManifest([
 		legacy: { bool: 'exact-true' }
 	}),
 	COMPUTE_LIMIT_SETTINGS,
-	API_TOKEN_RATE_LIMIT_SETTING
+	API_TOKEN_RATE_LIMIT_SETTING,
+	RETENTION_SETTINGS
 ]);
 // ../providers/header-auth/src/config.ts
 var header = (key, fallback, slot) =>

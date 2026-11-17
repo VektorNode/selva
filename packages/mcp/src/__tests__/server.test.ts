@@ -303,8 +303,30 @@ describe('createMcpServer', () => {
 			name: 'get_order',
 			arguments: { id: '1', detail: 'full' }
 		});
-		expect(full.structuredContent).toEqual({ name: 'A', id: '1' });
+		expect(full.content[0].text).toContain('"id": "1"');
 		expect(calls[0].url).toBe('https://host/api/v1/orders/1');
+	});
+
+	it('sends structuredContent only for a tool with an outputSchema', async () => {
+		const typed = fromOperation('getOrdersById', {
+			name: 'get_order_typed',
+			description: 'One order.',
+			output: z.object({ name: z.string(), id: z.string() })
+		});
+		const { server } = serve(
+			[json({ name: 'A', id: '1' }), json({ name: 'A', id: '1' })],
+			[getOrder, typed]
+		);
+		const untyped = await rpc(server, 'tools/call', {
+			name: 'get_order',
+			arguments: { id: '1', detail: 'full' }
+		});
+		expect(untyped.structuredContent).toBeUndefined();
+		const withSchema = await rpc(server, 'tools/call', {
+			name: 'get_order_typed',
+			arguments: { id: '1' }
+		});
+		expect(withSchema.structuredContent).toEqual({ name: 'A', id: '1' });
 	});
 
 	it('pages list operations with a small default', async () => {
@@ -559,5 +581,32 @@ describe('onToolCall', () => {
 		});
 		await rpc(server, 'tools/call', { name: 'release_job', arguments: {} });
 		expect(seen[0]).toMatchObject({ outcome: 'invalid_arguments', calls: [] });
+	});
+
+	it('classifies an ApiCallError a tool rethrew as its cause', async () => {
+		const seen: ToolCallRecord[] = [];
+		const rewrapping = tool({
+			name: 'slow',
+			description: 'Times out.',
+			input: z.object({}),
+			calls: ['getOrders'],
+			run: async () => {
+				const err = new ApiCallError('getOrders', 0, 'TIMEOUT', 'No response within 30s');
+				throw new Error('slow: the host did not answer', { cause: err });
+			}
+		});
+		const server = createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: fakeFetch([]).fetch,
+			openapi: SPEC,
+			tools: [rewrapping],
+			onToolCall: (c) => seen.push(c)
+		});
+		const result = await rpc(server, 'tools/call', { name: 'slow', arguments: {} });
+		expect(result.content[0].text).toBe('slow: the host did not answer');
+		expect(seen[0]).toMatchObject({ outcome: 'timeout', code: 'TIMEOUT', status: 0 });
 	});
 });

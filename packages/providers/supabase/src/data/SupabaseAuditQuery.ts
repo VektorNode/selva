@@ -2,6 +2,7 @@ import type {
 	AuditEventRow,
 	AuditQueryFilters,
 	AuditQueryResult,
+	BaseEvent,
 	DomainEvent,
 	IAuditQuery,
 	RequestContext
@@ -20,10 +21,10 @@ const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0
  * Pagination is keyset on `(occurred_at desc, id desc)`; the `id` tie-breaker
  * prevents skipped rows when multiple events land in the same millisecond.
  */
-export class SupabaseAuditQuery implements IAuditQuery {
+export class SupabaseAuditQuery<E extends BaseEvent = DomainEvent> implements IAuditQuery<E> {
 	constructor(private readonly clients: ClientBundle) {}
 
-	async list(_ctx: RequestContext, filters: AuditQueryFilters): Promise<AuditQueryResult> {
+	async list(_ctx: RequestContext, filters: AuditQueryFilters<E>): Promise<AuditQueryResult<E>> {
 		const limit = clampPageLimit(filters.limit);
 
 		let q = this.clients.serviceClient
@@ -68,7 +69,7 @@ export class SupabaseAuditQuery implements IAuditQuery {
 			type: string;
 			actor_id: string;
 			occurred_at: string;
-			data: DomainEvent;
+			data: E;
 		}>;
 
 		const hasMore = fetched.length > limit;
@@ -78,11 +79,11 @@ export class SupabaseAuditQuery implements IAuditQuery {
 		return {
 			rows: page.map((r) => ({
 				id: r.id,
-				type: r.type as DomainEvent['type'],
+				type: r.type as E['type'],
 				actorId: r.actor_id,
 				occurredAt: r.occurred_at,
 				data: r.data
-			})) satisfies AuditEventRow[],
+			})) satisfies AuditEventRow<E>[],
 			nextCursor: hasMore && last ? { occurredAt: last.occurred_at, id: last.id } : null
 		};
 	}

@@ -1,8 +1,9 @@
 import type {
 	IDataProvider,
 	IEventSink,
-	IPlatformProjectGrantStore,
+	PurgeResult,
 	RequestContext,
+	RetentionCutoffs,
 	SchemaVersionReport,
 	UserErasureOptions
 } from '@selvajs/platform';
@@ -23,34 +24,7 @@ import { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
 import { SupabaseApiTokenStore } from './SupabaseApiTokenStore.js';
 import { SupabaseUserProfileProvider } from '../userProfile/SupabaseUserProfileProvider.js';
 import { SupabasePlatformPermissionStore } from '../permissions/SupabasePlatformPermissionStore.js';
-
-/**
- * Stub until the Supabase implementation lands. Reads and mutations throw a
- * 501; cascade hooks are silent no-ops so deleting an org or project doesn't
- * blow up on a deployment without the feature wired.
- */
-const NOT_IMPLEMENTED_MSG = 'Platform projects are not supported on this deployment yet.';
-const notImplementedGrantStore: IPlatformProjectGrantStore = {
-	unsupported: true,
-	listByProject: async () => {
-		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
-	},
-	listByProjects: async () => {
-		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
-	},
-	create: async () => {
-		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
-	},
-	delete: async () => {
-		throw new ProviderError(NOT_IMPLEMENTED_MSG, 501);
-	},
-	deleteByProject: async () => {
-		// No-op: nothing to clean up on a deployment that never accepted grants.
-	},
-	deleteByGranteeOrg: async () => {
-		// No-op: same reasoning.
-	}
-};
+import { SupabasePlatformProjectGrantStore } from './SupabasePlatformProjectGrantStore.js';
 
 /**
  * Composition of every data store for the Supabase backend. Builds one
@@ -67,7 +41,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly apiTokens: SupabaseApiTokenStore;
 	readonly userProfile: SupabaseUserProfileProvider;
 	readonly permissions: SupabasePlatformPermissionStore;
-	readonly platformProjectGrants: IPlatformProjectGrantStore;
+	readonly platformProjectGrants: SupabasePlatformProjectGrantStore;
 	readonly auditQuery: SupabaseAuditQuery;
 	readonly events: IEventSink;
 	/** Built from the same client bundle so wiring `SelvaConfig.solveMetrics` doesn't need a second Supabase client. */
@@ -96,7 +70,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.apiTokens = new SupabaseApiTokenStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
-		this.platformProjectGrants = notImplementedGrantStore;
+		this.platformProjectGrants = new SupabasePlatformProjectGrantStore(clients);
 		this.auditQuery = new SupabaseAuditQuery(clients);
 	}
 
@@ -232,7 +206,7 @@ export class SupabaseDataProvider implements IDataProvider {
 
 	/**
 	 * FK cascade against `auth.users` already removes the profile, memberships,
-	 * and owned rows. Three classes of personal data aren't reachable by those
+	 * and owned rows. Four classes of personal data aren't reachable by those
 	 * FKs and get scrubbed here explicitly, with the RLS-bypassing service client:
 	 *
 	 *  1. `audit_events` keyed by a plain-text `actor_id` (no FK) — deleted.
@@ -243,6 +217,8 @@ export class SupabaseDataProvider implements IDataProvider {
 	 *  3. `solve_metrics.actor_id`, deliberately not FK-cascaded (retention
 	 *     telemetry) — tombstoned to {@link ERASED_ACTOR_ID} so the row's
 	 *     aggregate value survives without identifying the person.
+	 *  4. `platform_project_grants`, whose grantee has no FK: grants to the user
+	 *     are deleted, and those they created lose `created_by`.
 	 *
 	 * Each step tolerates missing rows, so retrying is safe. Email scrubs are
 	 * skipped when `opts.email` is absent — the caller must capture it before
@@ -276,6 +252,8 @@ export class SupabaseDataProvider implements IDataProvider {
 			);
 		}
 
+		await this.platformProjectGrants.eraseUser(userId);
+
 		if (!email) return;
 
 		// `invited_by` FK cascade only removes invites this user SENT, not ones addressed to them.
@@ -294,5 +272,23 @@ export class SupabaseDataProvider implements IDataProvider {
 				500
 			);
 		}
+	}
+
+	async purgeExpired(_ctx: RequestContext, cutoffs: RetentionCutoffs): Promise<PurgeResult> {
+		const client = this.clients.serviceClient;
+		const purge = async (table: 'audit_events' | 'solve_metrics', before?: Date) => {
+			if (!before) return 0;
+			// Both tables carry an `occurred_at` index, so this is a range delete, not a scan.
+			const { error, count } = await client
+				.from(table)
+				.delete({ count: 'exact' })
+				.lt('occurred_at', before.toISOString());
+			if (error) throw new ProviderError(`Failed to purge ${table}: ${error.message}`, 500);
+			return count ?? 0;
+		};
+		return {
+			auditEvents: await purge('audit_events', cutoffs.auditEventsBefore),
+			solveMetrics: await purge('solve_metrics', cutoffs.solveMetricsBefore)
+		};
 	}
 }

@@ -476,6 +476,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		recordMetric('client_abort', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'too_large') {
 		recordMetric('too_large');
+	} else if (outcome.kind === 'request_too_large') {
+		recordMetric('request_too_large', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'shed') {
 		recordMetric('shed', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'compute_error') {

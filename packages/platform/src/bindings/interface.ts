@@ -2,8 +2,10 @@ import type { RequestContext } from '../context.js';
 
 /**
  * Server-side resolver for inputs marked `source: { kind: 'server', key }` in the schema.
- * No solve path calls one: a `server`-kind input solves with its schema default, and the
- * solve path refuses a value a caller posts for it.
+ * A host calls it through `resolveBoundValues` (`@selvajs/server/compute`) and passes the
+ * result as `SolveEngine.solve`'s `boundValues`. Selva's own routes call none: there a
+ * `server`-kind input solves with its schema default. Every solve path refuses a value a
+ * caller posts for one.
  *
  * Keys are opaque strings namespaced by the host (e.g. 'capture.geometry',
  * 'parcel.boundary') and interpreted however it likes — typically as an
