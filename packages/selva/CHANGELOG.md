@@ -1,5 +1,14 @@
 # @selvajs/selva
 
+## 4.21.0-beta.14
+
+### Patch Changes
+
+- 4cfafc9: A solve behind Caddy no longer fails at random with "The connection dropped while waiting for the result". `/api/v1/compute` sent its keep-alive 200 before reading the request, and Caddy stops forwarding a request body once the response starts, so a request still in flight arrived cut off. The request is now read first. A host calling `respondWithKeepalive` must do the same.
+- 9cb820f: A definition page that opens before Rhino.Compute has read the file's saved values now says so. It keeps checking for about two minutes, then puts the values into every input the user has not changed and solves again. `createDefinitionLoader`'s result gains `defaultsPending`.
+
+  The Selva app built a new definition loader for every page load, so the loader forgot the saved values it had read, sent the file to Compute on each load, and never paused after a failed read. Forms then opened with stale or empty defaults whenever the stored schema lacked them. The app now keeps one loader.
+
 ## 4.21.0-beta.13
 
 ### Minor Changes
