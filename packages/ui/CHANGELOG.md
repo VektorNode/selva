@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 7.1.0-beta.11
+
+### Patch Changes
+
+- bb77068: Controls in a form row line up again when one label wraps onto more lines than the labels beside it.
+
 ## 7.1.0-beta.10
 
 ### Minor Changes

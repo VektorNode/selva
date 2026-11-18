@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.21.0-beta.17
+
+### Patch Changes
+
+- bb77068: Controls in a form row line up again when one label wraps onto more lines than the labels beside it.
+
 ## 4.21.0-beta.16
 
 ### Patch Changes
