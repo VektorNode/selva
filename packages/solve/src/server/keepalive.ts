@@ -21,6 +21,10 @@ export function wantsKeepalive(request: Request): boolean {
  *
  * `work` must resolve to every outcome, errors included: once the 200 is out, a rejection can
  * only drop the connection.
+ *
+ * Read the whole request body before calling this. Go's HTTP/1 server, which Caddy is, stops
+ * forwarding a request body once the response starts, so a body still in flight arrives cut
+ * off and the proxy aborts the response.
  */
 export function respondWithKeepalive(
 	work: Promise<Response>,

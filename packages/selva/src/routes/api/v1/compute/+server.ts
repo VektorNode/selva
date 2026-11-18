@@ -33,22 +33,45 @@ interface ComputeRequest {
 //
 // The web app asks for keep-alive, so a solve longer than the reverse proxy's read timeout
 // still lands. Errors then travel inside the 200, which is why they become responses here.
+// The body is read before the 200 goes out, as `respondWithKeepalive` requires.
 
-export const POST: RequestHandler = (event) => {
-	if (!wantsKeepalive(event.request)) return solve(event);
-	return respondWithKeepalive(solve(event).catch((err) => errorResponse(err, event.locals.log)));
+export const POST: RequestHandler = async (event) => {
+	const received = await receive(event);
+	if (!wantsKeepalive(event.request)) return solve(event, received);
+	return respondWithKeepalive(
+		solve(event, received).catch((err) => errorResponse(err, event.locals.log))
+	);
 };
 
-async function solve({ request, locals, url }: RequestEvent): Promise<Response> {
+interface Received {
+	body: ComputeRequest;
+	/** `performance.now()` when the body read began. */
+	loadStart: number;
+	bodyMs: number;
+}
+
+async function receive({ request, locals }: RequestEvent): Promise<Received> {
 	// Reject oversized payloads before buffering.
 	requireMaxBodySize(request, computeRequestCap());
 
-	// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): start of server-side work. The solve metric's
-	// `durationMs` wraps ONLY scheduler.solve, so everything before it (auth, DB reads,
-	// definition fetch, input tree build) and the response serialization after it are
-	// otherwise invisible. `runSolve` continues these marks and logs the breakdown.
 	const loadStart = performance.now();
-	const prepMarks: [string, number][] = [];
+	try {
+		const body: ComputeRequest = await request.json();
+		return { body, loadStart, bodyMs: performance.now() - loadStart };
+	} catch (err) {
+		mapSolveError(err, locals);
+	}
+}
+
+async function solve(
+	{ request, locals, url }: RequestEvent,
+	{ body, loadStart, bodyMs }: Received
+): Promise<Response> {
+	// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the solve metric's `durationMs` wraps ONLY
+	// scheduler.solve, so everything before it (body read, auth, DB reads, definition fetch,
+	// input tree build) and the response serialization after it are otherwise invisible.
+	// `runSolve` continues these marks and logs the breakdown.
+	const prepMarks: [string, number][] = [['body', bodyMs]];
 	let prevMark = performance.now();
 	const mark = (label: string) => {
 		prepMarks.push([label, performance.now() - prevMark]);
@@ -56,9 +79,6 @@ async function solve({ request, locals, url }: RequestEvent): Promise<Response> 
 	};
 
 	try {
-		const body: ComputeRequest = await request.json();
-		mark('body');
-
 		const { inputs, values } = body;
 		const definitionUrl = body.definitionUrl;
 		const channel: 'live' | 'draft' = body.channel ?? 'live';
