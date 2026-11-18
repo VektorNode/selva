@@ -112,6 +112,37 @@ A   app.example.dev   →   <static_ip>     # from `terraform output static_ip`
 Caddy retries ACME every few minutes, so DNS doesn't have to be ready
 when the VM boots — but the cert will only land once DNS resolves.
 
+### Several deployments
+
+One local state file holds one deployment: applying with another
+`project_id` replaces the first. Give each deployment its own workspace and
+tfvars file. `infra/deployments/` and `infra/backend.tf` are gitignored, so
+customer names stay out of the repo.
+
+```bash
+# infra/deployments/acme.tfvars
+project_id   = "your-prefix-selva-test-acme"
+machine_type = "e2-standard-2"   # 8 GB
+labels       = { customer = "acme", env = "test" }
+```
+
+```bash
+terraform workspace new acme
+terraform apply -var-file=deployments/acme.tfvars
+```
+
+To keep the state off your laptop, put it in a versioned GCS bucket with
+an `infra/backend.tf`; each workspace gets its own object under the prefix:
+
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "your-prefix-selva-tfstate"
+    prefix = "selva"
+  }
+}
+```
+
 ---
 
 ## After Deployment

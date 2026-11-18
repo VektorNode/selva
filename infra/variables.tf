@@ -21,6 +21,12 @@ variable "machine_type" {
   default     = "e2-medium"
 }
 
+variable "labels" {
+  description = "Labels on the VM, its disk and its IP, for filtering billing reports (e.g. { customer = \"acme\", env = \"test\" }). Firewall rules take no labels."
+  type        = map(string)
+  default     = {}
+}
+
 variable "ssh_user" {
   description = "SSH username for VM access (used as the Linux user that runs the app)"
   type        = string

@@ -52,26 +52,27 @@ export SUPABASE_ANON_KEY="${supabase_anon_key}"
 export SUPABASE_SERVICE_ROLE_KEY="${supabase_service_role_key}"
 
 # --force makes this idempotent — Terraform re-applies don't error if the
-# directory already has a scaffold.
-npx -y @selvajs/cli@latest . --yes --force
+# directory already has a scaffold. stdin is this heredoc: without the
+# redirect npx reads the rest of it and the lines below never run.
+npx -y @selvajs/cli@latest . --yes --force < /dev/null
 
-# `npm start` → `selva start` → `pm2 start ecosystem.config.cjs`. pm2 is in
-# the scaffold's deps so node_modules/.bin/pm2 already exists by now.
+# No backticks or command substitution in this heredoc: it is unquoted, so
+# root's shell would run them before the selva user ever sees the text.
+# npm start runs selva start, which starts ecosystem.config.cjs under the
+# deployment's own pm2.
 npm start
 ./node_modules/.bin/pm2 save
 USER_EOF
 
-# pm2's "restart on boot" hook needs to be installed by root because it
-# writes a systemd unit. Generate the exact command pm2 wants run, then run it.
-STARTUP_CMD=$(
-  sudo -u ${ssh_user} -H bash -c \
-    "cd '$INSTALL_DIR' && ./node_modules/.bin/pm2 startup systemd -u ${ssh_user} --hp /home/${ssh_user} 2>&1" \
-    | grep -E '^sudo env' || true
-)
-if [ -n "$STARTUP_CMD" ]; then
-  eval "$STARTUP_CMD"
-  sudo -u ${ssh_user} -H bash -c "cd '$INSTALL_DIR' && ./node_modules/.bin/pm2 save"
-fi
+# The boot hook is a systemd unit, so root installs it. Called with the
+# deployment's pm2 by path: the command pm2 prints names a bare pm2 that
+# root's PATH doesn't have.
+env PATH="$PATH:/usr/bin" "$INSTALL_DIR/node_modules/.bin/pm2" startup systemd \
+  -u ${ssh_user} --hp /home/${ssh_user}
+# Hand the app to the unit: a daemon started above belongs to this script and
+# dies with it, and resurrect would only attach to it instead of replacing it.
+sudo -u ${ssh_user} -H "$INSTALL_DIR/node_modules/.bin/pm2" kill
+systemctl restart pm2-${ssh_user}
 
 # ----------------------------------------------------------------------------
 # 3. Caddy in front of 127.0.0.1:3000 (prod mode, Let's Encrypt).
@@ -137,10 +138,11 @@ CADDY_EOF
 
 # The Debian package leaves /var/log/caddy root-owned; the service runs as
 # user `caddy`. Without this chown, Caddy fails to start.
+# validate runs as root and creates access.log, so chown after it.
 mkdir -p /var/log/caddy
+caddy validate --config /etc/caddy/Caddyfile
 chown -R caddy:caddy /var/log/caddy
 
-caddy validate --config /etc/caddy/Caddyfile
 systemctl enable caddy
 systemctl restart caddy
 
