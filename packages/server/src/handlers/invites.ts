@@ -72,6 +72,8 @@ async function mailInvite(
 		actor: { profile: req.profile, user: req.user },
 		orgs: req.deps.orgs,
 		notifications,
+		productName: req.deps.instanceName,
+		render: req.deps.mailTemplates?.invite,
 		fallbackOrgName: req.deps.instanceName
 	});
 }

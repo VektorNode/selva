@@ -34,6 +34,13 @@ describe('renderApiTokenCreatedEmail', () => {
 		expect(mail.text).toContain('September 1, 2026');
 	});
 
+	it('names the product account it is given, Selva by default', () => {
+		expect(renderApiTokenCreatedEmail(BASE).text).toContain('on your Selva account');
+		const mail = renderApiTokenCreatedEmail({ ...BASE, productName: 'Acme Fab' });
+		expect(mail.text).toContain('on your Acme Fab account in Acme');
+		expect(mail.text).not.toContain('Selva');
+	});
+
 	it('escapes markup in the token name, org name and scopes', () => {
 		const mail = renderApiTokenCreatedEmail({
 			...BASE,

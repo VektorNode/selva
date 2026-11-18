@@ -9,6 +9,8 @@ export interface InviteMailInput {
 	/** Display name or email of the admin who minted the invite, when known. */
 	invitedBy?: string;
 	expiresAt: string;
+	/** Product the invitee is joining. Defaults to `Selva`. */
+	productName?: string;
 }
 
 function formatExpiry(iso: string): string {
@@ -25,14 +27,14 @@ function formatExpiry(iso: string): string {
  * is still the only way the invitee can accept.
  */
 export function renderInviteEmail(input: InviteMailInput): OutboundMessage {
-	const { to, acceptUrl, orgName, invitedBy } = input;
+	const { to, acceptUrl, orgName, invitedBy, productName = 'Selva' } = input;
 	const expiry = formatExpiry(input.expiresAt);
 	const inviter = invitedBy ? `${invitedBy} invited you` : 'You have been invited';
 
-	const subject = `${inviter} to join ${orgName} on Selva`;
+	const subject = `${inviter} to join ${orgName} on ${productName}`;
 
 	const text = [
-		`${inviter} to join ${orgName} on Selva.`,
+		`${inviter} to join ${orgName} on ${productName}.`,
 		'',
 		'Open this link to accept and set up your account:',
 		acceptUrl,
@@ -43,7 +45,7 @@ export function renderInviteEmail(input: InviteMailInput): OutboundMessage {
 	].join('\n');
 
 	const html = renderLayout({
-		heading: `Join ${orgName} on Selva`,
+		heading: `Join ${orgName} on ${productName}`,
 		body: `		<p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#4a4a4a;">
 			${escapeHtml(inviter)} to join <strong>${escapeHtml(orgName)}</strong>. Open the link below to accept and set up your account.
 		</p>

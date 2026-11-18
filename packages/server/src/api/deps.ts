@@ -21,6 +21,7 @@ import type { ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
 import type { ApiTokenResolutionCache } from '../http/api-token.js';
 import type { ApiRateLimiter } from './rate-limit.js';
 import type { ApiIdempotencyStore } from './idempotency.js';
+import type { MailTemplates } from '@selvajs/notifications';
 import type {
 	IAuthProvider,
 	IDataProvider,
@@ -128,8 +129,10 @@ export interface SelvaDeps {
 	projectCreateLimiter?: ApiRateLimiter | null;
 	/** Replay store for routes mounted with `idempotent: true`. Absent: the process-wide default. */
 	idempotency?: ApiIdempotencyStore;
-	/** Instance display name, used where a record has none. */
+	/** Instance display name: the product name in outbound mail, and used where a record has none. */
 	instanceName: string;
+	/** Host wording for outbound mail, per kind. A kind left out uses the built-in English template. */
+	mailTemplates?: MailTemplates;
 	/** Where a person manages their API tokens, linked from the new-key email. Host-relative. */
 	apiTokenSettingsPath: string;
 	/**
@@ -184,6 +187,7 @@ export function depsFromConfig(
 		onComputeConfigSaved = () => {},
 		notifications,
 		instanceName = 'Selva',
+		mailTemplates,
 		apiTokenSettingsPath = '/settings/tokens',
 		apiRateLimiter,
 		projectCreateLimiter,
@@ -195,6 +199,7 @@ export function depsFromConfig(
 		onComputeConfigSaved?: SelvaDeps['onComputeConfigSaved'];
 		notifications?: INotificationProvider;
 		instanceName?: string;
+		mailTemplates?: MailTemplates;
 		apiTokenSettingsPath?: string;
 		apiRateLimiter?: ApiRateLimiter | null;
 		projectCreateLimiter?: ApiRateLimiter | null;
@@ -229,6 +234,7 @@ export function depsFromConfig(
 		onComputeConfigSaved,
 		notifications,
 		instanceName,
+		mailTemplates,
 		apiTokenSettingsPath,
 		apiRateLimiter,
 		projectCreateLimiter,

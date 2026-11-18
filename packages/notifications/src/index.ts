@@ -5,3 +5,4 @@ export {
 	renderApiTokenCreatedEmail,
 	type ApiTokenCreatedMailInput
 } from './templates/api-token.js';
+export type { MailRenderer, MailTemplates } from './mail-templates.js';

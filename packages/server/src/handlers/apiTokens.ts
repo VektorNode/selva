@@ -170,14 +170,16 @@ async function mailTokenCreated(req: ApiRequest, token: ApiToken): Promise<void>
 	if (!notifications || !to) return;
 	try {
 		const org = await req.deps.orgs.getOrg(req.ctx!, token.orgId);
+		const render = req.deps.mailTemplates?.apiTokenCreated ?? renderApiTokenCreatedEmail;
 		await notifications.send(
-			renderApiTokenCreatedEmail({
+			await render({
 				to,
 				tokenName: token.name,
 				orgName: org?.name ?? req.deps.instanceName,
 				scopes: token.scopes.map(describeApiScope),
 				expiresAt: token.expiresAt,
-				manageUrl: `${req.url.origin}${req.deps.apiTokenSettingsPath}`
+				manageUrl: `${req.url.origin}${req.deps.apiTokenSettingsPath}`,
+				productName: req.deps.instanceName
 			}),
 			req.log
 		);

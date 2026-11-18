@@ -42,25 +42,11 @@ Tag the result with its `NotificationKind` (declared in
 `@selvajs/platform/notifications`) so the dispatcher can route it and honour a
 user's per-kind preferences.
 
-## Not published
+## Product name and wording
 
-Private on purpose. Everything here is Selva's own content — templates about Selva
-orgs, Selva invites, Selva branding — with one consumer, the Selva app.
-
-The extension point is already public and lives elsewhere: `OutboundMessage` and
-`INotificationProvider` ship in `@selvajs/platform`, so a self-hoster can implement
-a transport or hand-build a message without this package existing.
-
-**Worth revisiting.** Publish this if someone outside the app needs to render Selva
-mail — most plausibly a self-hoster customising invite or magic-link copy rather
-than replacing it wholesale. Two things should settle first, because both are
-likely to move the exported shape:
-
-- `notify()` may change what a template receives (channel, preference metadata,
-  resolved-vs-id inputs).
-- The magic-link template lands in the same pass and is the second data point on
-  what a template signature wants to look like.
-
-Publishing makes every export semver-protected, and that is a bad trade while the
-shape is still moving. Going private → public later is a version bump; going back
-is not. See `plans/features/notifications.md`.
+Templates take `productName` (default `Selva`) instead of naming the product. A
+host that needs other wording or another language replaces a kind wholesale
+through `MailTemplates`; `@selvajs/server` reads it from `deps.mailTemplates`
+and passes `deps.instanceName` as `productName`. A replacement can reuse
+`renderLayout`, `renderButton` and `renderUrlFallback(href, label)` for the frame,
+and must return the built-in's `kind`.

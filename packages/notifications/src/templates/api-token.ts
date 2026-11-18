@@ -11,6 +11,8 @@ export interface ApiTokenCreatedMailInput {
 	expiresAt: string;
 	/** Where the owner can see and revoke the key. */
 	manageUrl: string;
+	/** Product the account belongs to. Defaults to `Selva`. */
+	productName?: string;
 }
 
 function formatDate(iso: string): string {
@@ -25,12 +27,12 @@ function formatDate(iso: string): string {
  * the owner didn't create it, so the revoke link leads.
  */
 export function renderApiTokenCreatedEmail(input: ApiTokenCreatedMailInput): OutboundMessage {
-	const { to, tokenName, orgName, scopes, manageUrl } = input;
+	const { to, tokenName, orgName, scopes, manageUrl, productName = 'Selva' } = input;
 	const expiry = formatDate(input.expiresAt);
 	const subject = `New API token "${tokenName}" in ${orgName}`;
 
 	const text = [
-		`A new API token named "${tokenName}" was created on your Selva account in ${orgName}.`,
+		`A new API token named "${tokenName}" was created on your ${productName} account in ${orgName}.`,
 		'',
 		'It can:',
 		...scopes.map((s) => `- ${s}`),

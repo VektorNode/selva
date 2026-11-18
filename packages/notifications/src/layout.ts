@@ -10,7 +10,7 @@ export interface LayoutInput {
 }
 
 /**
- * The frame every Selva mail shares: card chrome, type stack, colours.
+ * The frame every mail shares: card chrome, type stack, colours.
  * Templates supply a body; this supplies the look, so mail written by
  * different people at different times still reads as coming from one product.
  *
@@ -48,9 +48,12 @@ export function renderButton(href: string, label: string): string {
  * point is a link needs this: a button that does not render leaves the reader
  * with no way to continue.
  */
-export function renderUrlFallback(href: string): string {
+export function renderUrlFallback(
+	href: string,
+	label = 'Or paste this into your browser:'
+): string {
 	return `<p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#6b6b6b;">
-			Or paste this into your browser:<br />
+			${escapeHtml(label)}<br />
 			<span style="word-break:break-all;color:#4a4a4a;">${escapeHtml(href)}</span>
 		</p>`;
 }

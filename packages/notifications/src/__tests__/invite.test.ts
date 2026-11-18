@@ -37,6 +37,19 @@ describe('renderInviteEmail', () => {
 		expect(mail.subject).toContain('Acme');
 	});
 
+	it('says Selva when no product name is given', () => {
+		const mail = renderInviteEmail({ ...BASE, invitedBy: 'Alice' });
+		expect(mail.subject).toBe('Alice invited you to join Acme on Selva');
+	});
+
+	it('names the product it is given in every part, and escapes it', () => {
+		const mail = renderInviteEmail({ ...BASE, productName: 'Acme <Fab>' });
+		expect(mail.subject).toContain('on Acme <Fab>');
+		expect(mail.text).toContain('on Acme <Fab>.');
+		expect(mail.html).toContain('Join Acme on Acme &lt;Fab&gt;');
+		for (const part of [mail.subject, mail.text, mail.html]) expect(part).not.toContain('Selva');
+	});
+
 	it('escapes markup in the org name and inviter label', () => {
 		const mail = renderInviteEmail({
 			...BASE,
