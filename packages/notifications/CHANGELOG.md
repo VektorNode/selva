@@ -1,5 +1,11 @@
 # @selvajs/notifications
 
+## 0.3.1-beta.9
+
+### Patch Changes
+
+- c6dc6d1: Invite and API-token mails name the host's product (`deps.instanceName`) instead of "Selva", and a host can replace their wording per kind with `depsFromConfig(..., { mailTemplates: { invite, apiTokenCreated } })`. `renderUrlFallback` takes an optional label. Defaults are unchanged.
+
 ## 0.3.1-beta.8
 
 ### Patch Changes
