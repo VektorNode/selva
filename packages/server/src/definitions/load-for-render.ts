@@ -40,6 +40,11 @@ export interface LoadedDefinition {
 	definitionSource: Uint8Array;
 	computeServer: ComputeServerConfig;
 	schema: UISchema;
+	/**
+	 * True when `schema` holds the stored defaults because the file's saved values are not read
+	 * yet. A later load carries them once the read behind this one lands.
+	 */
+	defaultsPending: boolean;
 }
 
 /**
@@ -381,16 +386,22 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		};
 
 		const fresh = cachedSchemaFor(version);
-		if (options?.skipComputeDefaults && fresh) return { ...loaded, schema: fresh };
+		if (options?.skipComputeDefaults && fresh)
+			return { ...loaded, schema: fresh, defaultsPending: false };
 
 		const values = savedValues.get(version.id);
-		if (fresh && values) return { ...loaded, schema: applySavedValues(fresh, values) };
+		if (fresh && values)
+			return { ...loaded, schema: applySavedValues(fresh, values), defaultsPending: false };
 
 		// An older format past its recheck window still renders: serve it while Compute is asked.
 		const stored = fresh ?? servableStaleSchema(version);
 		if (stored) {
 			readInBackground(job);
-			return { ...loaded, schema: values ? applySavedValues(stored, values) : stored };
+			return {
+				...loaded,
+				schema: values ? applySavedValues(stored, values) : stored,
+				defaultsPending: !values
+			};
 		}
 
 		// The read carries on past the wait, so a retry finds it done.
@@ -403,7 +414,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 					'Rhino.Compute is still reading this definition. Retry in a moment.'
 				)
 		);
-		return { ...loaded, schema };
+		return { ...loaded, schema, defaultsPending: false };
 	};
 }
 

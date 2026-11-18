@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	import { ComputeApp } from '@selvajs/ui';
+	import { invalidate } from '$app/navigation';
+	import { ComputeApp, toast } from '@selvajs/ui';
+	import {
+		SAVED_VALUES_DEPENDENCY,
+		SAVED_VALUES_RECHECK_MS,
+		lateSavedValues
+	} from '#lib/saved-values.js';
 	import { createComputeFetchSolveFn, createSolveEventStream } from '@selvajs/solve/client';
 	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '#lib/components/ServerFooter.svelte';
@@ -9,7 +15,7 @@
 	import SettingsMenu from '#lib/components/SettingsMenu.svelte';
 	import { loadRhino } from '#lib/load-rhino.js';
 	import { page } from '$app/state';
-	import { untrack } from 'svelte';
+	import { untrack, type ComponentProps } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	let { data }: PageProps = $props();
@@ -56,10 +62,90 @@
 			: undefined,
 		debug: true
 	});
+
+	// A repeated load returns an equal schema as a new object. The form keeps the one it has
+	// until the content changes, or every recheck would re-render it under the user's hands.
+	let held: { json: string; schema: typeof data.schema } | undefined;
+	const formSchema = $derived.by(() => {
+		const json = JSON.stringify(data.schema);
+		if (held?.json !== json) held = { json, schema: data.schema };
+		return held.schema;
+	});
+
+	type AppApi = Parameters<NonNullable<ComponentProps<typeof ComputeApp>['onReady']>>[0];
+	let app: AppApi | undefined;
+	function handleReady(api: AppApi) {
+		app = api;
+	}
+	const SAVED_VALUES_TOAST = 'saved-values';
+
+	// Per definition and version, not per mount: navigating between two definitions keeps this
+	// component.
+	$effect(() => {
+		void [data.currentDefinition, data.channel, data.versionId];
+		return untrack(watchSavedValues);
+	});
+
+	/** Says the form shows stored defaults, and repeats the load until the saved values arrive. */
+	function watchSavedValues(): (() => void) | undefined {
+		if (!data.defaultsPending) return;
+		const before = formSchema;
+		let attempt = 0;
+		let timer: ReturnType<typeof setTimeout>;
+		let stopped = false;
+
+		toast.loading('Reading the values saved in the file', {
+			id: SAVED_VALUES_TOAST,
+			description: 'The form shows stored defaults until they arrive.',
+			duration: Infinity
+		});
+
+		async function recheck() {
+			// `keepState`: an open dialog held in `page.state` must survive the recheck. A failed
+			// recheck counts as "not yet".
+			await invalidate(SAVED_VALUES_DEPENDENCY, true).catch(() => {});
+			if (stopped) return;
+
+			if (!data.defaultsPending) {
+				const late = app ? lateSavedValues(before, data.schema, app.getSession().values) : {};
+				if (Object.keys(late).length === 0) {
+					toast.dismiss(SAVED_VALUES_TOAST);
+					return;
+				}
+				app?.loadValues(late);
+				toast.success('Saved values loaded', {
+					id: SAVED_VALUES_TOAST,
+					description: 'Inputs you had not changed were updated.',
+					duration: 5000
+				});
+				return;
+			}
+
+			attempt += 1;
+			if (attempt >= SAVED_VALUES_RECHECK_MS.length) {
+				toast.warning('Saved values not loaded', {
+					id: SAVED_VALUES_TOAST,
+					description:
+						'Rhino.Compute did not answer in time. The form shows stored defaults. Reload the page to try again.',
+					duration: Infinity
+				});
+				return;
+			}
+			timer = setTimeout(recheck, SAVED_VALUES_RECHECK_MS[attempt]);
+		}
+		timer = setTimeout(recheck, SAVED_VALUES_RECHECK_MS[0]);
+
+		return () => {
+			stopped = true;
+			clearTimeout(timer);
+			toast.dismiss(SAVED_VALUES_TOAST);
+		};
+	}
 </script>
 
 <ComputeApp
-	schema={data.schema}
+	schema={formSchema}
+	onReady={handleReady}
 	{onSolve}
 	definitionKey={data.currentDefinition}
 	title={data.schema?.name || data.schema.description}

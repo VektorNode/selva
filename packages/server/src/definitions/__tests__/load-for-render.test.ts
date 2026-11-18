@@ -101,7 +101,9 @@ describe('schema cache staleness (ADR 0005)', () => {
 		const second = await load(ctx, record, 'live');
 
 		expect(first.schema).toBe(cached);
+		expect(first.defaultsPending).toBe(true);
 		expect(second.schema.inputs[0]).toMatchObject({ default: 42 });
+		expect(second.defaultsPending).toBe(false);
 		expect(getIO).toHaveBeenCalledTimes(1);
 		expect(mocks.fetchSchema).not.toHaveBeenCalled();
 		// The row lacked the saved value, so it is written back for the next process.

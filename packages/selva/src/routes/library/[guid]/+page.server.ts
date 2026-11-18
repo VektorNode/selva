@@ -11,12 +11,14 @@ import { isApiError } from '@selvajs/server/api';
 import { asHttpError, requireCanSolve, scoped } from '#lib/server/access.server.js';
 import { readShareToken, tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { solveDeadlineFor } from '#lib/server/compute/engine.server.js';
+import { SAVED_VALUES_DEPENDENCY } from '#lib/saved-values.js';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
 } from '#lib/server/definitions/loadForRender.server.js';
 
-export const load = (async ({ params, locals, request, url }) => {
+export const load = (async ({ params, locals, request, url, depends }) => {
+	depends(SAVED_VALUES_DEPENDENCY);
 	const meta = getDefinitionMeta();
 
 	const guid = params.guid;
@@ -75,6 +77,8 @@ export const load = (async ({ params, locals, request, url }) => {
 
 		return {
 			schema: loaded.schema,
+			// The page repeats this load until the file's saved values are in `schema`.
+			defaultsPending: loaded.defaultsPending,
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
 			serverLabel: loaded.computeServer.label,

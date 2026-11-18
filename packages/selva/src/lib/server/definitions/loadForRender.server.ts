@@ -23,20 +23,28 @@ import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 export { DefinitionLoadError };
 export type { DefinitionChannel, DefinitionLoadErrorKind, LoadedDefinition };
 
-export async function loadDefinitionForRender(
+// One loader for the process. It keeps the saved values it read, the Compute read that loads
+// share and the pause after a failed read, so a loader per request sends the file to Compute on
+// every page load and never serves what came back. Providers are looked up per call.
+const load = createDefinitionLoader({
+	storage: { get: (key) => getStorageProvider().get(key) },
+	definitions: {
+		getVersion: (ctx, versionId) => getDefinitionMeta().getVersion(ctx, versionId),
+		setVersionSchema: (ctx, versionId, schema) =>
+			getDefinitionMeta().setVersionSchema(ctx, versionId, schema)
+	},
+	projects: { getProject: (ctx, projectId) => getProjectProvider().getProject(ctx, projectId) },
+	resolveServer: (ctx, orgId, opts) =>
+		serverResolver.resolve(ctx, orgId, getComputeServerConfigStore(), opts),
+	getClient,
+	computeDebug: COMPUTE_DEBUG
+});
+
+export function loadDefinitionForRender(
 	ctx: RequestContext,
 	record: DefinitionRecord,
 	channel: DefinitionChannel,
 	explicitVersionId?: string | null
 ): Promise<LoadedDefinition> {
-	const load = createDefinitionLoader({
-		storage: getStorageProvider(),
-		definitions: getDefinitionMeta(),
-		projects: getProjectProvider(),
-		resolveServer: (ctx, orgId, opts) =>
-			serverResolver.resolve(ctx, orgId, getComputeServerConfigStore(), opts),
-		getClient,
-		computeDebug: COMPUTE_DEBUG
-	});
 	return load(ctx, record, channel, explicitVersionId);
 }

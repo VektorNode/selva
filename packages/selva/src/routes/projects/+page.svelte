@@ -185,6 +185,9 @@
 		try {
 			const res = await fetch('/api/v1/definitions', { method: 'POST', body: formData });
 			if (res.ok) {
+				// Read to the end: `/api/v1` answers `no-store`, and Chromium never finishes a fetch
+				// whose `no-store` body stays unread.
+				await res.arrayBuffer();
 				toast.success(`"${formData.get('displayName')}" created`);
 				showAddModal = false;
 				await refreshAll();
