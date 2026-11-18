@@ -2,7 +2,8 @@
 // the daemon before state changes, and pass --update-env on restart so edits to
 // .env actually take effect.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { spawnSync, execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
@@ -12,7 +13,77 @@ import { readEnvFile } from '../env.js';
 import { needsSupabaseProvider } from '../deployment-package.js';
 import { checkSupabaseMigrations, providerTagFor } from '../checks/migrations.js';
 
-export const APP_NAME = 'selva-compute';
+const require = createRequire(import.meta.url);
+const DEFAULT_APP_NAME = 'selva-compute';
+
+/**
+ * The pm2 app name this install's ecosystem file declares. pm2 finds an app by name
+ * alone, so two installs under one daemon need different ones.
+ */
+export function appName(dir) {
+	try {
+		const name = require(join(dir, 'ecosystem.config.cjs'))?.apps?.[0]?.name;
+		if (typeof name === 'string' && name) return name;
+	} catch {
+		// No ecosystem file, or one that doesn't load: pm2 reports that itself.
+	}
+	return DEFAULT_APP_NAME;
+}
+
+/**
+ * The directory pm2 runs `name` from when that is not `dir`, else null. `list` is
+ * `pm2 jlist` parsed.
+ */
+export function foreignOwner(list, name, dir, realpath = realpathSync) {
+	const owner = list.find((proc) => proc.name === name)?.pm2_env?.pm_cwd;
+	if (!owner) return null;
+	const real = (path) => {
+		try {
+			return realpath(path);
+		} catch {
+			return path;
+		}
+	};
+	return real(owner) === real(dir) ? null : owner;
+}
+
+export function nameTakenMessage(name, owner, dir) {
+	return (
+		`pm2's '${name}' runs from ${owner}, not from this install (${dir}). Two installs share ` +
+		`one pm2 app name, and pm2 finds an app by name alone: a stop here would take the other ` +
+		`install down, and a start would restart it instead of starting this one. Give this ` +
+		`install its own \`name\` in ${join(dir, 'ecosystem.config.cjs')}, then run \`npx selva start\`.`
+	);
+}
+
+// pm2's process list, or null when there is no local pm2 or its output is unreadable.
+function pm2List(dir) {
+	try {
+		const out = spawnSync(pm2Bin(dir), ['jlist'], {
+			cwd: dir,
+			encoding: 'utf8',
+			shell: process.platform === 'win32'
+		});
+		// A skewed daemon prints its out-of-date banner ahead of the JSON.
+		const json = String(out.stdout ?? '')
+			.split('\n')
+			.find((line) => line.trimStart().startsWith('['));
+		return JSON.parse(json ?? '');
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * This install's pm2 app name. Throws when pm2's app of that name belongs to another
+ * install.
+ */
+export function requireOwnApp(dir, list = pm2List(dir)) {
+	const name = appName(dir);
+	const owner = foreignOwner(list ?? [], name, dir);
+	if (owner) throw new Error(nameTakenMessage(name, owner, dir));
+	return name;
+}
 
 export function pm2Bin(dir) {
 	const local = join(dir, 'node_modules', '.bin', process.platform === 'win32' ? 'pm2.cmd' : 'pm2');
@@ -68,7 +139,7 @@ function ensurePm2InSync(dir) {
 		throw new Error(
 			`The running PM2 daemon (v${daemon}) is NEWER than this deployment's pm2 (v${local}), ` +
 				`so a global pm2 owns it. Running \`pm2 update\` would downgrade the daemon and drop ` +
-				`its process table, leaving ${APP_NAME} unregistered. Resolve the conflict first: ` +
+				`its process table, leaving ${appName(dir)} unregistered. Resolve the conflict first: ` +
 				`\`which -a pm2\`, \`pm2 -v\`, \`pm2 ping\`.`
 		);
 	}
@@ -112,6 +183,7 @@ export async function runStart() {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
 	ensurePm2InSync(dir);
+	requireOwnApp(dir);
 	const exit = runPm2(dir, ['start', 'ecosystem.config.cjs']);
 	process.exit(exit);
 }
@@ -120,7 +192,7 @@ export async function runStop() {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
 	ensurePm2InSync(dir);
-	const exit = runPm2(dir, ['stop', APP_NAME]);
+	const exit = runPm2(dir, ['stop', requireOwnApp(dir)]);
 	process.exit(exit);
 }
 
@@ -130,14 +202,14 @@ export async function runRestart() {
 	ensurePm2InSync(dir);
 	// --update-env is the whole point of this wrapper — without it, edits to
 	// .env have no effect on the running process.
-	const exit = runPm2(dir, ['restart', APP_NAME, '--update-env']);
+	const exit = runPm2(dir, ['restart', requireOwnApp(dir), '--update-env']);
 	process.exit(exit);
 }
 
 export async function runLogs(argv) {
 	const dir = resolveDeploymentDir();
 	requireDeploymentDir(dir);
-	const exit = runPm2(dir, ['logs', APP_NAME, ...argv]);
+	const exit = runPm2(dir, ['logs', appName(dir), ...argv]);
 	process.exit(exit);
 }
 
@@ -165,10 +237,27 @@ export async function runUpdate() {
 	}
 
 	ensurePm2InSync(dir);
+	const APP_NAME = requireOwnApp(dir);
 
 	const stopStatus = runPm2(dir, ['stop', APP_NAME], { inherit: false });
 	if (stopStatus !== 0) {
-		p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
+		p.log.warn(`pm2 stop did not succeed — ${APP_NAME} may not be running. Continuing.`);
+	}
+
+	// Nothing may answer the port once the app is stopped. A process this pm2 does not
+	// run would keep serving the old build from replaced files, and would answer the
+	// health check below as if it were the new version.
+	if (await stillAnswering(env)) {
+		runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+		p.outro(
+			pc.red(
+				`Something still answers on port ${env.PORT || 3000} after \`pm2 stop ${APP_NAME}\`, so nothing was installed.\n` +
+					`Either this install's pm2 does not run that process, or it did not exit. Find what holds\n` +
+					'the port (`ss -ltnp`), stop it there, run `npx selva start`, then update again.'
+			)
+		);
+		process.exitCode = 1;
+		return;
 	}
 
 	const s = p.spinner();
@@ -294,10 +383,30 @@ function realignPm2Pin(dir, s) {
 	}
 }
 
-// The app was stopped before the update, so the first answer is the new process.
-async function waitForHealth(env, timeoutMs = 30_000) {
+function healthUrl(env) {
 	const host = !env.HOST || env.HOST === '0.0.0.0' || env.HOST === '::' ? '127.0.0.1' : env.HOST;
-	const url = `http://${host.includes(':') ? `[${host}]` : host}:${env.PORT || 3000}/api/health`;
+	return `http://${host.includes(':') ? `[${host}]` : host}:${env.PORT || 3000}/api/health`;
+}
+
+/**
+ * True when the port still answers `seconds` after the stop. pm2 gives the app its kill
+ * timeout (10 s in the scaffold) to drain, so only a refused connection counts as stopped.
+ */
+export async function stillAnswering(env, seconds = 15, probe = fetch, pause = 1000) {
+	for (let i = 0; i < seconds; i++) {
+		try {
+			await probe(healthUrl(env), { signal: AbortSignal.timeout(3000) });
+		} catch {
+			return false;
+		}
+		await new Promise((r) => setTimeout(r, pause));
+	}
+	return true;
+}
+
+// `stillAnswering` saw the port go silent, so the first answer is the new process.
+async function waitForHealth(env, timeoutMs = 30_000) {
+	const url = healthUrl(env);
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		try {
@@ -330,7 +439,7 @@ export function degradedReason(body) {
 		}
 		return 'stored compute API keys cannot be decrypted under the current SELVA_AT_REST_KEY';
 	}
-	return 'see `pm2 logs selva-compute`';
+	return 'see `npx selva logs`';
 }
 
 function readRuntimeVersion(dir) {

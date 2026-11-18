@@ -15,6 +15,8 @@
 module.exports = {
 	apps: [
 		{
+			// pm2 finds an app by this name alone. A second deployment under the same OS
+			// user needs its own name, or the two share one pm2 entry.
 			name: 'selva-compute',
 			script: './node_modules/@selvajs/selva/build/index.js',
 			cwd: '.',

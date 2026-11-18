@@ -38,13 +38,13 @@ const USAGE = {
 		flags: [['--fix', 'Apply the repairs doctor reports as automatic. Prompts before each.']]
 	},
 	start: { usage: 'selva start', blurb: 'pm2 start ecosystem.config.cjs' },
-	stop: { usage: 'selva stop', blurb: 'pm2 stop selva-compute' },
+	stop: { usage: 'selva stop', blurb: "pm2 stop on this install's app" },
 	restart: {
 		usage: 'selva restart',
 		blurb:
-			'pm2 restart selva-compute --update-env. The --update-env is why this\nexists: without it a pm2 restart keeps the old .env in memory.'
+			"pm2 restart --update-env on this install's app. The --update-env is why this\nexists: without it a pm2 restart keeps the old .env in memory."
 	},
-	logs: { usage: 'selva logs', blurb: 'pm2 logs selva-compute' },
+	logs: { usage: 'selva logs', blurb: "pm2 logs for this install's app" },
 	update: {
 		usage: 'selva update',
 		blurb:
@@ -155,9 +155,9 @@ function printHelp() {
 			'  init                    Reconfigure this deployment (prompts again)',
 			'  doctor [--fix]          Validate env, providers, Node engine, and packages',
 			'  start                   pm2 start ecosystem.config.cjs',
-			'  stop                    pm2 stop selva-compute',
-			'  restart                 pm2 restart selva-compute --update-env',
-			'  logs                    pm2 logs selva-compute',
+			'  stop                    pm2 stop',
+			'  restart                 pm2 restart --update-env',
+			'  logs                    pm2 logs',
 			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
 			'  setup-proxy             Install + configure Caddy with TLS for this deployment',

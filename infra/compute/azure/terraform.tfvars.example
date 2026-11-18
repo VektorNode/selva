@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored).
+subscription_id = "00000000-0000-0000-0000-000000000000"   # az account show --query id -o tsv
+rdp_allowed_ips = ["203.0.113.7/32"]                        # your public IP
+# name          = "selva-compute-win"   # resource prefix and DNS label
+# location      = "swedencentral"
+# vm_size       = "Standard_D4s_v4"
+# public_https  = true

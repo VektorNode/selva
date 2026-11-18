@@ -102,9 +102,13 @@ exit 0
 //                      WITHOUT touching the running app. Refuse a target
 //                      that cannot read this deployment's data.
 //   2. pm2 sync      — `pm2 update` if the daemon and CLI versions drifted.
-//   3. pm2 stop      — stop selva-compute before npm overwrites build/, so
+//   2b. ownership    — refuse when pm2's app of this name belongs to another
+//                      install: the stop would take THAT one down.
+//   3. pm2 stop      — stop the app before npm overwrites build/, so
 //                      in-flight requests can't hit ERR_MODULE_NOT_FOUND
 //                      from chunk-hash churn under their feet.
+//   3b. gone?        — refuse when the old process still answers the port:
+//                      this pm2 does not run it, so it cannot replace it.
 //   4. npm update    — refresh @selvajs/* (--prefer-online bypasses the
 //                      packument cache, already baked into npmArgs).
 //   5. pm2 start     — from ecosystem.config.cjs (not `pm2 start name`,
@@ -152,6 +156,31 @@ TAG=${distTag}
 PM2="$(dirname "$ECOSYSTEM")/node_modules/.bin/pm2"
 [ -x "$PM2" ] || PM2=pm2
 
+# pm2 finds an app by name alone, and the name is whatever this install's
+# ecosystem file declares. Two installs under one pm2 daemon need different ones.
+APP=$(node -p "require(process.argv[1]).apps[0].name" "$ECOSYSTEM" 2>/dev/null)
+case "$APP" in ''|undefined|null) APP=selva-compute ;; esac
+HERE=$(cd "$(dirname "$ECOSYSTEM")" 2>/dev/null && pwd -P)
+
+# Read PORT from .env the same way scripts/update.sh does, so non-default
+# ports are respected.
+PORT=$(grep "^PORT=" .env 2>/dev/null \\
+  | head -1 \\
+  | cut -d'=' -f2 \\
+  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
+PORT=\${PORT:-3000}
+
+# Prints one string field of the /api/health body on stdin.
+json_field() {
+  grep -o '"'"$1"'":"[^"]*"' | head -1 | cut -d'"' -f4
+}
+
+# Prints the instanceId of whatever answers this install's port, or nothing while
+# the port is silent.
+serving_instance() {
+  curl -sS --max-time 5 "http://localhost:$PORT/api/health" 2>/dev/null | json_field instanceId
+}
+
 # Under systemd, \`pm2 update\` kills and respawns the daemon. systemd sees its
 # unit's main process die and, with the default KillMode=control-group,
 # SIGTERMs everything in the cgroup — including this runner. setsid escapes
@@ -181,12 +210,24 @@ pm2_under_systemd() {
 # single failure path; fd 0 rather than /dev/stdin because the latter isn't a
 # readable pipe everywhere.
 app_status() {
-  "$PM2" jlist 2>/dev/null | node -e "
+  "$PM2" jlist 2>/dev/null | SELVA_APP="$APP" node -e "
     try {
       const list = JSON.parse(require('fs').readFileSync(0,'utf8'));
-      const app = list.find(p => p.name === 'selva-compute');
+      const app = list.find(p => p.name === process.env.SELVA_APP);
       process.stdout.write(app ? app.pm2_env.status : 'missing');
     } catch { process.stdout.write('error'); }
+  " 2>/dev/null
+}
+
+# Prints the directory pm2 runs this app from, or nothing when pm2 has no app of
+# that name.
+app_dir() {
+  "$PM2" jlist 2>/dev/null | SELVA_APP="$APP" node -e "
+    try {
+      const list = JSON.parse(require('fs').readFileSync(0,'utf8'));
+      const app = list.find(p => p.name === process.env.SELVA_APP);
+      process.stdout.write((app && app.pm2_env.pm_cwd) || '');
+    } catch {}
   " 2>/dev/null
 }
 
@@ -196,10 +237,10 @@ wait_until_stopped() {
     if [ "$STATUS" != "stopping" ]; then
       return 0
     fi
-    echo "[INFO] selva-compute still draining (attempt $i/20) — waiting for SIGKILL escalation"
+    echo "[INFO] $APP still draining (attempt $i/20) — waiting for SIGKILL escalation"
     sleep 1
   done
-  echo "[WARN] selva-compute stuck in 'stopping' after 20s — continuing anyway"
+  echo "[WARN] $APP stuck in 'stopping' after 20s — continuing anyway"
   return 1
 }
 
@@ -213,7 +254,7 @@ start_app() {
     return 0
   fi
   echo "[WARN] pm2 start failed — dropping the stale process entry and retrying"
-  "$PM2" delete selva-compute >/dev/null 2>&1 || true
+  "$PM2" delete "$APP" >/dev/null 2>&1 || true
   "$PM2" start "$ECOSYSTEM" --update-env
 }
 
@@ -231,9 +272,9 @@ on_exit() {
     STATUS=$(app_status)
   fi
   if [ "$STATUS" != "online" ]; then
-    echo "[RECOVER] selva-compute is '$STATUS' — starting from ecosystem.config.cjs"
+    echo "[RECOVER] $APP is '$STATUS' — starting from ecosystem.config.cjs"
     start_app >/dev/null 2>&1 || \\
-      echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && ./node_modules/.bin/pm2 delete selva-compute; ./node_modules/.bin/pm2 start ecosystem.config.cjs"
+      echo "[RECOVER] pm2 start failed — manual intervention required: cd $(dirname "$ECOSYSTEM") && ./node_modules/.bin/pm2 delete $APP; ./node_modules/.bin/pm2 start ecosystem.config.cjs"
   fi
   # Terminal marker: the restarted app's outcome reconciler greps this to turn
   # the run into an audit event (selfUpdate.server.ts). Keep the format stable.
@@ -376,7 +417,27 @@ if echo "$PING_OUT" | grep -q "out-of-date"; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Stop selva-compute BEFORE npm rewrites build/.
+# 2b. This install must own the pm2 app it is about to stop.
+# ---------------------------------------------------------------------------
+# With two installs under one daemon and one name, the stop below takes the
+# OTHER install down while this one keeps serving, and npm then rewrites build/
+# under it.
+OWNER=$(app_dir)
+OWNER_REAL=
+if [ -n "$OWNER" ]; then
+  OWNER_REAL=$(cd "$OWNER" 2>/dev/null && pwd -P)
+fi
+if [ -n "$OWNER" ] && [ -n "$HERE" ] && [ "\${OWNER_REAL:-$OWNER}" != "$HERE" ]; then
+  echo "[FATAL] PM2_NAME_TAKEN: pm2's '$APP' runs from $OWNER, not from this install ($HERE)."
+  echo "[FATAL] Two installs share one pm2 app name, so this update would have stopped the other one."
+  echo "[FATAL] Give this install its own name: change 'name' in $ECOSYSTEM, then from a shell:"
+  echo "[FATAL]   cd $HERE && npx selva start"
+  echo "[FATAL] Aborting WITHOUT stopping the app — it is still running."
+  exit 11
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Stop the app BEFORE npm rewrites build/.
 # ---------------------------------------------------------------------------
 # SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on
 # every request. Letting npm rewrite build/ while the old process still
@@ -388,14 +449,39 @@ fi
 # This is also where the SSE connection to the frontend dies — selva-compute
 # IS the SSE server. From here on, the user sees output via the log-file
 # polling fallback in the admin UI, not over SSE.
-echo "[STEP] Stopping selva-compute"
-if ! "$PM2" stop selva-compute; then
-  echo "[WARN] pm2 stop failed — selva-compute may not be running yet. Continuing."
+echo "[STEP] Stopping $APP"
+if ! "$PM2" stop "$APP"; then
+  echo "[WARN] pm2 stop failed — $APP may not be running yet. Continuing."
 fi
 
 # pm2 stop returns before the process is actually gone. Everything below —
 # npm rewriting build/, then the restart — must happen outside the drain window.
 wait_until_stopped
+
+# ---------------------------------------------------------------------------
+# 3b. Nothing may answer the port once the app is stopped.
+# ---------------------------------------------------------------------------
+# A process this pm2 does not run (another pm2 daemon, a systemd unit, a shell)
+# survives the stop above, and so does one that outlived its kill timeout. Either
+# would keep rendering pages that name the old build's files after npm has
+# replaced them, and would answer the health probe below, so the update would
+# report success with nothing restarted.
+SURVIVOR=
+for i in $(seq 1 5); do
+  SURVIVOR=$(serving_instance)
+  if [ -z "$SURVIVOR" ]; then
+    break
+  fi
+  sleep 1
+done
+if [ -n "$SURVIVOR" ]; then
+  echo "[FATAL] NOT_STOPPED: something still answers on port $PORT after 'pm2 stop $APP'."
+  echo "[FATAL] Either this install's pm2 does not run that process, or it did not exit."
+  echo "[FATAL] Nothing was installed. Find what holds the port, stop it there, then start the app from this install:"
+  echo "[FATAL]   ss -ltnp | grep ':$PORT '"
+  echo "[FATAL]   cd $HERE && npx selva start"
+  exit 12
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Run npm update.
@@ -436,7 +522,7 @@ if [ -n "$PM2_PIN" ] && [ "$PM2_PIN" != "$PM2_DECLARED" ]; then
       echo "[WARN] PM2_RESYNC_NEEDED: pm2 is now $PM2_PIN, but its daemon still runs the old version."
       echo "[WARN] Swapping it here would restart the systemd unit and kill this runner. From a shell:"
       echo "[WARN]   cd $(dirname "$ECOSYSTEM") && npx pm2 update && npx pm2 list"
-      echo "[WARN] Let it finish: interrupting it leaves selva-compute unregistered."
+      echo "[WARN] Let it finish: interrupting it leaves $APP unregistered."
     elif ! "$PM2" update; then
       echo "[WARN] PM2_RESYNC_NEEDED: 'pm2 update' failed — the daemon still runs the old pm2."
       echo "[WARN]   cd $(dirname "$ECOSYSTEM") && npx pm2 update && npx pm2 list"
@@ -453,23 +539,15 @@ fi
 # Start from ecosystem.config.cjs, NOT \`pm2 start selva-compute\` — the latter
 # requires selva-compute to already be in pm2's in-memory process list, which
 # a \`pm2 update\` (step 2) isn't guaranteed to preserve.
-echo "[STEP] Starting selva-compute with new build"
+echo "[STEP] Starting $APP with new build"
 if ! start_app; then
-  echo "[FATAL] pm2 start failed — investigate with \\\`pm2 logs selva-compute\\\`"
+  echo "[FATAL] pm2 start failed — investigate with \\\`pm2 logs $APP\\\`"
   exit 2
 fi
 
 # ---------------------------------------------------------------------------
 # 6. Health probe the new process.
 # ---------------------------------------------------------------------------
-# Read PORT from .env the same way scripts/update.sh does, so non-default
-# ports are respected.
-PORT=$(grep "^PORT=" .env 2>/dev/null \\
-  | head -1 \\
-  | cut -d'=' -f2 \\
-  | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*#.*//')
-PORT=\${PORT:-3000}
-
 echo "[STEP] Health-probing the new process on port $PORT"
 # mktemp for the same reason as the runner itself: /tmp is shared. Without one
 # the probe still runs; only the rollback loses the body it names the cause from.
@@ -537,7 +615,7 @@ if [ -s "$HEALTH_BODY" ]; then
     echo "[FATAL] SELVA_AT_REST_KEY, then re-run the update."
   else
     echo "[FATAL] The health endpoint did not report a known cause. Inspect the body above and"
-    echo "[FATAL] \\\`pm2 logs selva-compute\\\` for what the new version failed on."
+    echo "[FATAL] \\\`pm2 logs $APP\\\` for what the new version failed on."
   fi
 
   rm -f "$HEALTH_BODY"
@@ -559,7 +637,7 @@ if [ "$AFTER_FORMAT" -gt "$INSTALLED_FORMAT" ]; then
 fi
 
 echo "[STEP] Rolling back @selvajs/selva to $BEFORE"
-"$PM2" stop selva-compute >/dev/null 2>&1 || true
+"$PM2" stop "$APP" >/dev/null 2>&1 || true
 wait_until_stopped >/dev/null 2>&1
 # Restore @selvajs/cli alongside the runtime: the forward step installs both at
 # the channel tag, so reverting only the runtime leaves a version pair that was
@@ -578,7 +656,7 @@ if [ "$ROLLBACK_CODE" = "200" ]; then
 fi
 
 echo "[FATAL] Rollback restart also failed health check (HTTP $ROLLBACK_CODE)"
-echo "[FATAL] Manual recovery required. Check: pm2 logs selva-compute"
+echo "[FATAL] Manual recovery required. Check: pm2 logs $APP"
 exit 6
 `;
 }

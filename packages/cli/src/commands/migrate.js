@@ -30,7 +30,7 @@ import {
 	resolveSelvaPins,
 	SELVA_PACKAGES
 } from '../deployment-package.js';
-import { APP_NAME, runPm2 } from './pm2.js';
+import { appName, requireOwnApp, runPm2 } from './pm2.js';
 
 // Where migrate parks the old node_modules while npm installs the new one.
 // Left behind only if the process is killed mid-migration; `selva doctor`
@@ -243,10 +243,11 @@ export async function runMigrate(
 	// under a running server serves a broken page (same reason `update` stops first).
 	// A legacy deployment may predate the local-pm2 layout, so a missing binary
 	// isn't fatal here: there's nothing running for us to stop.
+	const APP_NAME = requireOwnApp(dir);
 	try {
 		const stopStatus = pm2(dir, ['stop', APP_NAME], { inherit: false });
 		if (stopStatus !== 0) {
-			p.log.warn('pm2 stop did not succeed — selva-compute may not be running. Continuing.');
+			p.log.warn(`pm2 stop did not succeed — ${APP_NAME} may not be running. Continuing.`);
 		}
 	} catch {
 		p.log.warn('No deployment-local pm2 to stop — continuing.');
@@ -346,14 +347,14 @@ export async function runMigrate(
 // the operator's problem to act on, so it gets logged, not swallowed.
 function restartAfterRollback(dir, pm2 = runPm2) {
 	try {
-		const status = pm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
+		const status = pm2(dir, ['start', appName(dir), '--update-env'], { inherit: false });
 		if (status === 0) {
-			p.log.success(`Rolled back and restarted ${APP_NAME}.`);
+			p.log.success(`Rolled back and restarted ${appName(dir)}.`);
 			return;
 		}
 		p.log.error(
 			`Rolled back, but \`pm2 start\` exited ${status}. The app may be down — ` +
-				`check \`pm2 logs ${APP_NAME}\` and start it with \`selva start\`.`
+				`check \`pm2 logs ${appName(dir)}\` and start it with \`selva start\`.`
 		);
 	} catch (err) {
 		p.log.error(
@@ -506,7 +507,7 @@ export function buildPm2UpgradeNotice(beforeVersion, afterVersion) {
 		`still the old version. Finish the upgrade (brief restart of managed processes):`,
 		``,
 		`  npx pm2 update`,
-		`  npx pm2 list          # ${APP_NAME} must be listed and 'online' before the next step`,
+		`  npx pm2 list          # the app must be listed and 'online' before the next step`,
 		`  npx pm2 save`,
 		``,
 		`Do not run \`pm2 save\` until the list looks right. \`pm2 update\` empties the`,

@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fixable, green, red, yellow } from './result.js';
 import { PM2_VERSION } from '../deployment-package.js';
-import { APP_NAME } from '../commands/pm2.js';
+import { appName, foreignOwner, nameTakenMessage } from '../commands/pm2.js';
 
 /** The real OS. Tests pass a stand-in with the same shape. */
 export const runtimeEnv = {
@@ -294,6 +294,9 @@ function checkAppProcess(bin, dir, env) {
 	} catch {
 		return yellow(`could not read the pm2 process list — check \`npx pm2 list\` by hand`);
 	}
+	const APP_NAME = appName(dir);
+	const owner = foreignOwner(list, APP_NAME, dir, env.realpath);
+	if (owner) return red(nameTakenMessage(APP_NAME, owner, dir));
 	const app = list.find((proc) => proc.name === APP_NAME);
 	const status = app?.pm2_env?.status;
 	if (status === 'online') return green(`${APP_NAME} is online`);

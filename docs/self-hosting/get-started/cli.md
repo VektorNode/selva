@@ -37,8 +37,8 @@ Session cookies are `Secure` unless `ORIGIN` starts with `http://`, so over plai
 | ----------------------------------- | ------------------------------------------------------------------------------- |
 | `selva doctor [--fix]`              | Checks config, versions, and host tooling; exits non-zero.                      |
 | `selva start`                       | `pm2 start ecosystem.config.cjs`                                                |
-| `selva stop`                        | `pm2 stop selva-compute`                                                        |
-| `selva restart`                     | `pm2 restart selva-compute --update-env`                                        |
+| `selva stop`                        | `pm2 stop` on this deployment's app                                             |
+| `selva restart`                     | `pm2 restart --update-env` on this deployment's app                             |
 | `selva logs`                        | Tails logs. Extra args pass through (`--lines 200`).                            |
 | `selva update`                      | Updates `@selvajs/cli` and `@selvajs/selva`, then restarts.                     |
 | `selva init`                        | Re-asks the setup questions and updates the answered keys in `.env`.            |
@@ -67,6 +67,20 @@ The old key moves to `<KEY>_PREVIOUS`, which the app still accepts for 30 days, 
 ## About pm2
 
 The deployment pins its own pm2 in `node_modules/.bin/` (`npx pm2`). **Don't install pm2 globally or from your distro.** Two versions on one daemon cause skew warnings and hung restarts, so `selva` refuses to use a global copy. When a release changes the pin, or `doctor` reports a global pm2, replace the daemon by hand (the app goes down briefly): see [Upgrading pm2](../deployment/prerequisites.md#upgrading-pm2).
+
+## Running two Selva deployments on one server
+
+pm2 finds an app by name alone, and every deployment is scaffolded as `selva-compute`. Under one OS user, two deployments with that name share one pm2 entry: stopping, restarting or updating either acts on whichever started first.
+
+Give the second deployment its own name before you start it. In its `ecosystem.config.cjs`:
+
+```js
+name: 'selva-test',
+```
+
+Then `npx selva start` and `npx pm2 save`. Every `selva` command and the admin page's update read the name from that file. Give it its own `PORT` in `.env` too.
+
+`selva start`, `stop`, `restart`, `update` and `migrate` refuse to run when pm2's app of that name belongs to another directory, and `doctor` reports it. The admin page's update cancels before it stops anything.
 
 ## Running other Node apps on the same server
 

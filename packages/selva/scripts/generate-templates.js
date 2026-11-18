@@ -55,6 +55,8 @@ const ecosystem = `// PM2 process file — runtime template shipped with @selvaj
 module.exports = {
 \tapps: [
 \t\t{
+\t\t\t// pm2 finds an app by this name alone. A second deployment under the same OS
+\t\t\t// user needs its own name, or the two share one pm2 entry.
 \t\t\tname: 'selva-compute',
 \t\t\tscript: './node_modules/@selvajs/selva/build/index.js',
 \t\t\tcwd: '.',

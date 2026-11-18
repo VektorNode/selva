@@ -72,7 +72,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			title: 'Update failed AND rollback failed — the app may be OFFLINE',
 			detail:
 				'Both the new version and the rollback failed their health check. ' +
-				'SSH into the server and run: `pm2 logs selva-compute`, then ' +
+				'SSH into the server and run: `npx selva logs`, then ' +
 				'`pm2 start ecosystem.config.cjs` from the deployment directory.',
 			from,
 			to
@@ -86,7 +86,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			title: 'App did not come back online within 15 minutes',
 			detail:
 				'The update may still be finishing in the background, or the new ' +
-				'process is crash-looping. Check `pm2 logs selva-compute`. Do not ' +
+				'process is crash-looping. Check `npx selva logs`. Do not ' +
 				're-run the update until you have confirmed the current state.',
 			from,
 			to
@@ -101,7 +101,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			title: 'Update failed and the rollback could not reinstall — the app may be OFFLINE',
 			detail:
 				'The previous version could not be restored from npm. SSH into the ' +
-				'server and run `pm2 logs selva-compute`; if the app is down, reinstall ' +
+				'server and run `npx selva logs`; if the app is down, reinstall ' +
 				'explicitly with `npm install --prefer-online @selvajs/cli@<version> ' +
 				'@selvajs/selva@<version>` from the deployment directory.',
 			from,
@@ -116,7 +116,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			title: 'Update failed its health check and could not be rolled back automatically',
 			detail:
 				'No prior version was recorded, so the previous build could not be ' +
-				'restored. Check `pm2 logs selva-compute` to confirm whether the app ' +
+				'restored. Check `npx selva logs` to confirm whether the app ' +
 				'came back online.',
 			from,
 			to
@@ -134,7 +134,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			detail:
 				'The runner was terminated mid-update, most often by a systemd-supervised ' +
 				'PM2 restarting its whole control group. The version on disk is unchanged. ' +
-				'Check `pm2 logs selva-compute` and confirm the app is online before retrying; ' +
+				'Check `npx selva logs` and confirm the app is online before retrying; ' +
 				'if a global pm2 owns the daemon, reconcile that first.',
 			from,
 			to
@@ -154,6 +154,39 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 				'unit and kills the update mid-run. Nothing was installed and the app is ' +
 				'still serving. SSH in and run `./node_modules/.bin/pm2 update` from the ' +
 				'deployment directory, then retry the update here.',
+			from,
+			to
+		};
+	}
+	// Aborted at the ownership check, before anything was stopped: pm2's app of this
+	// name belongs to another install on the same machine.
+	if (exitCode === 11 || has(logs, 'PM2_NAME_TAKEN')) {
+		const owner = firstMatch(logs, /PM2_NAME_TAKEN: pm2's '[^']*' runs from (\S+),/);
+		return {
+			severity: 'warning',
+			title: `Update cancelled — another Selva install${owner ? ` (${owner})` : ''} uses this install's PM2 app name. The app is untouched.`,
+			detail:
+				'PM2 finds an app by name, so this update would have stopped the other install ' +
+				'and left this one running on replaced files. Nothing was installed. On the ' +
+				'server, give this install its own `name` in its ecosystem.config.cjs, run ' +
+				'`npx selva start` from its directory, then retry the update here.',
+			from,
+			to
+		};
+	}
+	// Aborted after the stop, before npm ran: something still answered this
+	// install's port, so the update could not have replaced it.
+	if (exitCode === 12 || has(logs, 'NOT_STOPPED')) {
+		return {
+			severity: 'warning',
+			title:
+				'Update cancelled — the app kept answering after PM2 stopped it. Nothing was installed.',
+			detail:
+				"Either this install's PM2 does not run the process that is serving (another " +
+				'PM2 daemon, a systemd unit or a shell started it), or it did not exit. Updating ' +
+				'would have replaced its files without restarting it. On the server, find what ' +
+				'holds the port (`ss -ltnp`), stop it there, run `npx selva start` from the ' +
+				'deployment directory, then retry.',
 			from,
 			to
 		};
@@ -281,7 +314,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			title: `Updated${to ? ` to ${to}` : ''}, but the pm2 daemon still runs the old pm2.`,
 			detail:
 				'The app is online. On the server, run `npx pm2 update` in the deployment ' +
-				'directory, let it finish, then check `npx pm2 list` shows selva-compute online.',
+				'directory, let it finish, then check `npx pm2 list` shows the app online.',
 			from,
 			to
 		};
@@ -353,7 +386,7 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 		title: `Update failed (exit code ${exitCode}).`,
 		detail:
 			'The update did not complete cleanly. Review the log below, and check ' +
-			'`pm2 logs selva-compute` to confirm whether the app is currently online.',
+			'`npx selva logs` to confirm whether the app is currently online.',
 		from,
 		to
 	};

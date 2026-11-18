@@ -201,7 +201,7 @@ describe('generated runner script', () => {
 	it('runs the Node engine pre-flight BEFORE stopping the app (issue #176)', () => {
 		const script = runner();
 		const warn = script.indexOf('ENGINE_MISMATCH');
-		const stop = script.indexOf('Stopping selva-compute');
+		const stop = script.indexOf('Stopping $APP');
 		expect(warn).toBeGreaterThan(-1);
 		// A warning after the stop would arrive once downtime had already started.
 		expect(warn).toBeLessThan(stop);
@@ -210,7 +210,7 @@ describe('generated runner script', () => {
 	it('refuses a target that cannot read the stored data before stopping the app', () => {
 		const script = runner();
 		const refuse = script.indexOf('DATA_FORMAT:');
-		const stop = script.indexOf('Stopping selva-compute');
+		const stop = script.indexOf('Stopping $APP');
 		expect(refuse).toBeGreaterThan(-1);
 		expect(refuse).toBeLessThan(stop);
 		expect(script.slice(refuse, stop)).toContain('exit 10');
@@ -219,7 +219,7 @@ describe('generated runner script', () => {
 	it('aborts on pm2 skew before stopping the app (issue #118)', () => {
 		const script = runner();
 		const skew = script.indexOf('PM2_SKEW');
-		const stop = script.indexOf('Stopping selva-compute');
+		const stop = script.indexOf('Stopping $APP');
 		expect(skew).toBeGreaterThan(-1);
 		expect(skew).toBeLessThan(stop);
 		// The abort must leave the app running — it exits before `pm2 stop`.
@@ -234,7 +234,7 @@ describe('generated runner script', () => {
 	// same command and failed identically.
 	it('waits for the drain to finish before npm rewrites build/', () => {
 		const script = runner();
-		const stop = script.indexOf('Stopping selva-compute');
+		const stop = script.indexOf('Stopping $APP');
 		const npm = script.indexOf('Updating @selvajs/* packages');
 		const wait = script.indexOf('wait_until_stopped', stop);
 		expect(wait).toBeGreaterThan(stop);
@@ -248,7 +248,7 @@ describe('generated runner script', () => {
 	it('drops a stale process entry when start fails, instead of retrying it', () => {
 		const script = runner();
 		const start = script.slice(script.indexOf('start_app() {'));
-		expect(start).toContain('"$PM2" delete selva-compute');
+		expect(start).toContain('"$PM2" delete "$APP"');
 	});
 
 	// The EXIT trap is the last thing standing between a failed update and a dark
@@ -428,6 +428,18 @@ describe('exit-code contract', () => {
 			logs: '[FATAL] DATA_FORMAT: @selvajs/selva@4.20.0 reads data format 1, but this deployment is on format 2.\n',
 			severity: 'warning',
 			why: 'data format guard, app untouched'
+		},
+		{
+			code: 11,
+			logs: "[FATAL] PM2_NAME_TAKEN: pm2's 'selva-compute' runs from /home/selva/selva, not from this install (/home/selva/selva-test).\n",
+			severity: 'warning',
+			why: 'another install owns the pm2 name, app untouched'
+		},
+		{
+			code: 12,
+			logs: "[FATAL] NOT_STOPPED: something still answers on port 3001 after 'pm2 stop selva-compute'.\n",
+			severity: 'warning',
+			why: 'the app outlived the stop, nothing installed'
 		}
 	];
 
@@ -592,6 +604,120 @@ describe('Node engine mismatch is never a green success (issue #176)', () => {
 	it('still reports a matching-engine update as success', () => {
 		const clean = '[INFO] New @selvajs/selva: 4.8.0-beta.4\n[DONE] Update complete\n';
 		expect(deriveOutcome(0, clean).severity).toBe('success');
+	});
+});
+
+describe('the update only replaces a process it controls, run for real', () => {
+	// An update reported success on a server whose app it never restarted: pm2
+	// stopped and started an entry, the process serving the port lived on, npm
+	// replaced the files under it, and the health probe took its 200 for the new
+	// version. Every page then named scripts and styles that no longer existed.
+	const HEALTH = (instanceId: string) =>
+		`{"status":"ok","instanceId":"${instanceId}","version":"4.21.0-beta.13"}`;
+
+	/**
+	 * Runs the ownership guard, the stop and the port check cut from the generated
+	 * script. `owner` is the directory pm2 reports for the app; `answers` are the
+	 * bodies `curl` returns in order, the last one repeating, '' for a silent port.
+	 */
+	function stopStep(owner: string, answers: string[]) {
+		const script = runner('4.21.0-beta.13', 'beta');
+		const helpers = script.slice(
+			script.indexOf('json_field() {'),
+			script.indexOf('# Under systemd,')
+		);
+		const fragment = script.slice(
+			script.indexOf('OWNER=$(app_dir)'),
+			script.indexOf('# 4. Run npm update.')
+		);
+		const dir = mkdtempSync(join(tmpdir(), 'selva-runner-'));
+		const file = join(dir, 'stop.sh');
+		const bodies = join(dir, 'bodies');
+		try {
+			writeFileSync(bodies, answers.join('\n') + '\n');
+			writeFileSync(
+				file,
+				[
+					'APP=selva-compute',
+					'PORT=3001',
+					'ECOSYSTEM=/srv/selva-test/ecosystem.config.cjs',
+					'HERE=/srv/selva-test',
+					`BODIES=${shellQuote(bodies.replace(/\\/g, '/'))}`,
+					'pm2_stub() { echo "PM2 $*"; }',
+					'PM2=pm2_stub',
+					`app_dir() { printf %s ${shellQuote(owner)}; }`,
+					'wait_until_stopped() { :; }',
+					'sleep() { :; }',
+					'curl() { head -1 "$BODIES"; if [ "$(wc -l < "$BODIES")" -gt 1 ]; then sed -i 1d "$BODIES"; fi; }',
+					helpers,
+					fragment,
+					'echo CONTINUED'
+				].join('\n')
+			);
+			const run = spawnSync(BASH!, [file], { encoding: 'utf8' });
+			return { status: run.status, out: run.stdout };
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+
+	itParses('goes on once the stopped app has left the port', () => {
+		const { status, out } = stopStep('/srv/selva-test', [HEALTH('old'), '']);
+		expect(status).toBe(0);
+		expect(out).toContain('PM2 stop selva-compute');
+		expect(out).toContain('CONTINUED');
+	});
+
+	itParses('goes on when pm2 has no app of that name yet', () => {
+		expect(stopStep('', ['']).out).toContain('CONTINUED');
+	});
+
+	itParses("refuses to stop a pm2 app that another install's directory owns", () => {
+		const { status, out } = stopStep('/srv/selva', [HEALTH('old')]);
+		expect(status).toBe(11);
+		expect(out).toContain("PM2_NAME_TAKEN: pm2's 'selva-compute' runs from /srv/selva,");
+		expect(out).not.toContain('PM2 stop');
+		expect(out).not.toContain('CONTINUED');
+	});
+
+	itParses('refuses to install under a process that outlived the stop', () => {
+		const { status, out } = stopStep('/srv/selva-test', [HEALTH('old')]);
+		expect(status).toBe(12);
+		expect(out).toContain('NOT_STOPPED: something still answers on port 3001');
+		expect(out).not.toContain('CONTINUED');
+	});
+
+	itParses('refuses when a different process took the port over', () => {
+		// Restarted by whatever really runs it: a new process, but started before
+		// npm replaced the files, so still the old build.
+		const { status } = stopStep('/srv/selva-test', [HEALTH('old'), HEALTH('respawned')]);
+		expect(status).toBe(12);
+	});
+
+	it('checks both before npm touches the files', () => {
+		const script = runner();
+		const npm = script.indexOf('Updating @selvajs/* packages');
+		expect(script.indexOf('PM2_NAME_TAKEN')).toBeLessThan(script.indexOf('Stopping $APP'));
+		expect(script.indexOf('NOT_STOPPED')).toBeGreaterThan(script.indexOf('Stopping $APP'));
+		expect(script.indexOf('NOT_STOPPED')).toBeLessThan(npm);
+	});
+
+	it('names the pm2 app from the ecosystem file, not a fixed string', () => {
+		const script = runner();
+		expect(script).toContain('require(process.argv[1]).apps[0].name');
+		expect(script).not.toMatch(/"\$PM2" (stop|delete|restart) selva-compute/);
+	});
+
+	it('classifies both aborts as the app still serving', () => {
+		const taken = deriveOutcome(
+			11,
+			"[FATAL] PM2_NAME_TAKEN: pm2's 'selva-compute' runs from /home/selva/selva, not from this install (/home/selva/selva-test).\n"
+		);
+		expect(taken.severity).toBe('warning');
+		expect(taken.title).toContain('/home/selva/selva');
+		expect(deriveOutcome(12, '[FATAL] NOT_STOPPED: something still answers\n').title).toContain(
+			'Nothing was installed'
+		);
 	});
 });
 

@@ -2,3 +2,6 @@
 *.tfstate
 *.tfstate.backup
 terraform.tfvars
+azure/.env
+azure/plugins.json
+azure/plugins/
