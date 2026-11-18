@@ -18,6 +18,7 @@ provider "google" {
 resource "google_compute_address" "selva" {
   name   = "selva-compute-ip"
   region = var.region
+  labels = var.labels
 }
 
 # Effective domain: user-supplied if set, otherwise <dashed-ip>.sslip.io.
@@ -68,14 +69,16 @@ resource "google_compute_instance" "selva" {
   name         = "selva-compute-app"
   machine_type = var.machine_type
   zone         = var.zone
+  labels       = var.labels
 
   tags = ["selva-compute", "http-server", "https-server"]
 
   boot_disk {
     initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2204-lts"
-      size  = 20
-      type  = "pd-standard"
+      image  = "ubuntu-os-cloud/ubuntu-2204-lts"
+      size   = 20
+      type   = "pd-standard"
+      labels = var.labels
     }
   }
 

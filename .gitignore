@@ -137,6 +137,9 @@ infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
 infra/.terraform.lock.hcl
+# Per-deployment state backend and tfvars: customer names stay out of the repo.
+infra/backend.tf
+infra/deployments/
 .DS_Store
 
 # Generated API reference (typedoc) — rebuilt by packages/website/scripts/build-api-docs.mjs
