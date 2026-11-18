@@ -75,6 +75,8 @@ fixtures/meshes/local/
 scripts/develop/.dev-caddyfile
 # Solve-bench captures and runs: input values and session cookies
 scripts/develop/solve-bench/out/
+# Stills and videos from scripts/marketing
+/marketing/
 
 # Local provider data directory (user-specific runtime data)
 # Holds users.json, orgs/projects/definitions JSON, compute.config.json,

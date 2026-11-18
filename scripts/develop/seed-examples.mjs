@@ -25,7 +25,7 @@ export function localComputeKey() {
 }
 
 /** Same derivation as `setupToken` in @selvajs/platform/config. */
-function setupToken(hmacKey) {
+export function setupToken(hmacKey) {
 	return createHmac('sha256', hmacKey.trim()).update('selva:setup:v1').digest('base64url');
 }
 
@@ -47,7 +47,7 @@ function displayName(file) {
 		.join(' ');
 }
 
-function client(appUrl) {
+export function client(appUrl) {
 	const origin = new URL(appUrl).origin;
 	const cookies = new Map();
 
@@ -113,7 +113,7 @@ async function signIn(api, { hmacKey, log }) {
 	log(`  signed in as ${SEED_EMAIL}`);
 }
 
-async function ensureCompute(api, { computeUrl, computeKey, log }) {
+export async function ensureCompute(api, { computeUrl, computeKey, log }) {
 	const config = await api.json('/api/admin/compute');
 	if (config.servers.length > 0) return;
 	if (!computeKey) {

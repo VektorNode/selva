@@ -33,6 +33,10 @@ A script's tests sit beside it as `<name>.test.mjs`. `pnpm test:scripts` runs th
 | `compute-deploy.mjs`             | `pnpm compute:deploy`                                | Deploys or inspects Selva's own Rhino.Compute server                                                                           |
 | `compute-local.mjs`              | `pnpm compute:local`                                 | Runs that server in local Docker ([LOCAL.md](./develop/LOCAL.md#compute))                                                      |
 
+## `marketing/`
+
+Stills and videos of the plugin UI, the Grasshopper canvas, Rhino's window and the Selva app, written to the ignored `marketing/` folder. See its [README](./marketing/README.md).
+
 ## `release/`
 
 | Script                                                     | Run                               | Does                                                                                                     |
