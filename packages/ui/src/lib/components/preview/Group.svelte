@@ -153,16 +153,15 @@
 		display: grid;
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
 		gap: 1.25rem var(--column-gap);
-		align-items: start;
 	}
 
+	/* Bottom-aligned so controls in a row line up when one label wraps to more lines than its
+	   neighbours, and a label-less control lines up with the controls beside it. */
 	.grid-cell {
 		grid-column: span var(--span) / span var(--span);
-	}
-
-	/* A control with no label above it lines up with the controls beside it, not their labels. */
-	.grid-cell:has(:global([data-control-line])) {
-		align-self: end;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
 	}
 
 	/* An empty full-width row: the two row gaps around it already read as a break. */
