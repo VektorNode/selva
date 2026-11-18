@@ -12,7 +12,7 @@ export {
 	readSchemaResults,
 	SchemaExtractionError
 } from './schema-extraction.js';
-export type { Extraction, SchemaExtractionResult } from './schema-extraction.js';
+export type { Extraction, SchemaExtractionResult, UploadExtraction } from './schema-extraction.js';
 
 export {
 	createDefinitionLoader,

@@ -221,7 +221,8 @@ describe('extractSchemaForUpload', () => {
 	const json = { 'content-type': 'application/json' };
 	const embedded = { ...schema(UI_SCHEMA_VERSION), inputs: [{ id: 'a', default: 1 }] };
 
-	function routeCompute(io: () => Response, inventory?: unknown) {
+	// Saved values are remembered per file content, so each test that reads them sends its own bytes.
+	function routeCompute(io: () => Response | Promise<Response>, inventory?: unknown) {
 		fetchMock.mockImplementation(async (url: string | URL) =>
 			String(url).endsWith('/io')
 				? io()
@@ -255,30 +256,68 @@ describe('extractSchemaForUpload', () => {
 		expect((await extractSchemaForUpload(new Uint8Array([1]), server)).inventory).toBeNull();
 	});
 
-	it('stores the values saved in the file as input defaults', async () => {
-		routeCompute(
-			() =>
-				new Response(
-					JSON.stringify({
-						Inputs: [
-							{ Id: 'a', Name: 'A', ParamType: 'Number', Minimum: 0, Maximum: 10, Default: '5' }
-						],
-						Outputs: []
-					}),
-					{ status: 200, headers: json }
-				)
+	const savedIo = () =>
+		new Response(
+			JSON.stringify({
+				Inputs: [
+					{ Id: 'a', Name: 'A', ParamType: 'Number', Minimum: 0, Maximum: 10, Default: '5' }
+				],
+				Outputs: []
+			}),
+			{ status: 200, headers: json }
 		);
 
-		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
+	const ioCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/io')).length;
+
+	it('stores the values saved in the file as input defaults', async () => {
+		routeCompute(savedIo);
+
+		const result = await extractSchemaForUpload(new Uint8Array([2]), server);
 
 		expect(result.schema.inputs[0]).toMatchObject({ id: 'a', default: 5 });
+		expect(result.defaultsPending).toBe(false);
 	});
 
 	it('keeps the embedded defaults when /io fails: only the schema gates the upload', async () => {
-		routeCompute(() => new Response('boom', { status: 500 }));
+		routeCompute(failingIo);
 
-		const result = await extractSchemaForUpload(new Uint8Array([1]), server);
+		const result = await extractSchemaForUpload(new Uint8Array([3]), server);
 
 		expect(result.schema.inputs[0]).toMatchObject({ id: 'a', default: 1 });
+		expect(result.defaultsPending).toBe(true);
+	});
+
+	it('reads a file once for the check and the upload that follows, and again after a failure', async () => {
+		const bytes = new Uint8Array([4]);
+		routeCompute(failingIo);
+		await extractSchemaForUpload(bytes, server);
+
+		routeCompute(savedIo);
+		await extractSchemaForUpload(bytes, server);
+		const upload = await extractSchemaForUpload(bytes, server);
+
+		expect(upload.schema.inputs[0]).toMatchObject({ id: 'a', default: 5 });
+		expect(ioCalls()).toBe(2);
+	});
+
+	it('stops waiting for a slow /io, and the next upload of the file finds it read', async () => {
+		vi.useFakeTimers();
+		try {
+			const bytes = new Uint8Array([5]);
+			let answer!: (res: Response) => void;
+			routeCompute(() => new Promise<Response>((resolve) => (answer = resolve)));
+
+			const check = extractSchemaForUpload(bytes, server);
+			await vi.advanceTimersByTimeAsync(45_000);
+			expect((await check).defaultsPending).toBe(true);
+
+			answer(savedIo());
+			const upload = await extractSchemaForUpload(bytes, server);
+
+			expect(upload.schema.inputs[0]).toMatchObject({ id: 'a', default: 5 });
+			expect(ioCalls()).toBe(1);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

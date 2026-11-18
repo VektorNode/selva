@@ -1,0 +1,8 @@
+{
+	"$comment": "Yak packages on the Azure Compute server. Selva itself ships as a local build (DEPLOY_PLUGINS), so it must not be listed here too: the container refuses a duplicate .gha. 'newest' includes prereleases.",
+	"yak": [
+		{ "name": "SheepMetal", "version": "newest" },
+		{ "name": "Selva-Canopy", "version": "stable" }
+	],
+	"local": []
+}

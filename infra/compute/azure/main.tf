@@ -1,5 +1,5 @@
-# A Windows Rhino.Compute server on Azure, for definitions that need Windows-only Grasshopper plugins.
-# Runbook: README.md. Every name carries var.name so it can share a subscription with another server.
+# Selva's Rhino.Compute VM on Azure: the same server as ../gcp, deployed the same way. Runbook: README.md.
+# Every name carries var.name so it can share a subscription with another Compute server.
 
 terraform {
   required_version = ">= 1.5.0"
@@ -7,10 +7,6 @@ terraform {
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.6"
     }
   }
 }
@@ -26,51 +22,59 @@ variable "subscription_id" {
 }
 
 variable "name" {
-  description = "Prefix of every resource, and the DNS label: <name>.<location>.cloudapp.azure.com"
+  description = "Prefix of every resource, the ssh alias, and the DNS label: <name>.<location>.cloudapp.azure.com"
   type        = string
-  default     = "selva-compute-win"
+  default     = "selva-compute-az"
 }
 
 variable "location" {
-  description = "Azure region; swedencentral was the cheapest EU region for a 4-core Windows VM in 2026-11"
+  description = "Azure region; swedencentral was the cheapest EU region for 4 cores in 2026-11"
   type        = string
   default     = "swedencentral"
 }
 
+# v4: new subscriptions get no Dsv5 quota, and v6 needs an NVMe disk controller.
 variable "vm_size" {
-  # v4: new subscriptions get no Dsv5 quota, and v6 needs an NVMe disk controller.
-  description = "Rhino bills per core hour while a child runs, so more cores cost twice"
+  description = "Must be x86: McNeel's arm64 Rhino packages lag months behind. Rhino bills per vCPU while a child runs."
   type        = string
   default     = "Standard_D4s_v4"
 }
 
-variable "rdp_allowed_ips" {
-  description = "CIDRs allowed to RDP in, e.g. [\"203.0.113.7/32\"]"
-  type        = list(string)
+variable "ssh_public_key_path" {
+  description = "Public key installed for the deploy user"
+  type        = string
+  default     = "~/.ssh/google_compute_engine.pub"
 }
 
-variable "public_https" {
-  description = "Open 80 and 443 to everyone for the Let's Encrypt certificate setup.ps1 installs. false leaves only compute_client_ips on plain HTTP 80."
-  type        = bool
-  default     = true
-}
-
-variable "compute_client_ips" {
-  description = "CIDRs allowed on plain HTTP port 80 when public_https is false"
+variable "ssh_public_keys" {
+  description = "Every deploy machine's public key, so an apply from one machine doesn't revoke another's."
   type        = list(string)
   default     = []
 }
 
-resource "random_password" "admin" {
-  length           = 24
-  special          = true
-  override_special = "!#%*-_=+"
+variable "ssh_allowed_ips" {
+  description = "CIDRs allowed to reach SSH"
+  type        = list(string)
 }
 
-resource "random_string" "storage_suffix" {
-  length  = 6
-  special = false
-  upper   = false
+variable "compute_client_ips" {
+  description = "CIDRs allowed on port 6500. Anything listed talks plain HTTP over the internet."
+  type        = list(string)
+  default     = []
+}
+
+variable "public_https" {
+  description = "Open 80 and 443 to everyone for the HTTPS proxy deploy-server.sh runs when DEPLOY_TLS_DOMAIN is set (80 answers Let's Encrypt's challenge)"
+  type        = bool
+  default     = true
+}
+
+locals {
+  # Sorted so every machine renders the same keys and a plan shows no drift.
+  ssh_keys = sort(distinct(concat(
+    [trimspace(file(pathexpand(var.ssh_public_key_path)))],
+    [for k in var.ssh_public_keys : trimspace(k)]
+  )))
 }
 
 resource "azurerm_resource_group" "compute" {
@@ -108,18 +112,17 @@ resource "azurerm_network_security_group" "compute" {
   resource_group_name = azurerm_resource_group.compute.name
 
   security_rule {
-    name                       = "rdp"
+    name                       = "ssh"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "3389"
-    source_address_prefixes    = var.rdp_allowed_ips
+    destination_port_range     = "22"
+    source_address_prefixes    = var.ssh_allowed_ips
     destination_address_prefix = "*"
   }
 
-  # Port 80 stays open with HTTPS on: Let's Encrypt renewals answer on it.
   dynamic "security_rule" {
     for_each = var.public_https ? [1] : []
     content {
@@ -136,7 +139,7 @@ resource "azurerm_network_security_group" "compute" {
   }
 
   dynamic "security_rule" {
-    for_each = !var.public_https && length(var.compute_client_ips) > 0 ? [1] : []
+    for_each = length(var.compute_client_ips) > 0 ? [1] : []
     content {
       name                       = "compute-clients"
       priority                   = 120
@@ -144,7 +147,7 @@ resource "azurerm_network_security_group" "compute" {
       access                     = "Allow"
       protocol                   = "Tcp"
       source_port_range          = "*"
-      destination_port_range     = "80"
+      destination_port_range     = "6500"
       source_address_prefixes    = var.compute_client_ips
       destination_address_prefix = "*"
     }
@@ -169,76 +172,57 @@ resource "azurerm_network_interface_security_group_association" "compute" {
   network_security_group_id = azurerm_network_security_group.compute.id
 }
 
-resource "azurerm_windows_virtual_machine" "compute" {
-  # Windows computer names are capped at 15 characters.
+# No managed identity: the VM runs third-party plugins and needs no Azure API.
+resource "azurerm_linux_virtual_machine" "compute" {
   name                  = "${var.name}-vm"
-  computer_name         = substr(replace(var.name, "-", ""), 0, 15)
   location              = var.location
   resource_group_name   = azurerm_resource_group.compute.name
   size                  = var.vm_size
-  admin_username        = "selvaadmin"
-  admin_password        = random_password.admin.result
   network_interface_ids = [azurerm_network_interface.compute.id]
   tags                  = { owner = "selva" }
+
+  # With passwords off, the Azure agent gives this user passwordless sudo, which deploy-server.sh
+  # needs to install Docker on the first deploy.
+  admin_username                  = "deploy"
+  disable_password_authentication = true
+  dynamic "admin_ssh_key" {
+    for_each = local.ssh_keys
+    content {
+      username   = "deploy"
+      public_key = admin_ssh_key.value
+    }
+  }
 
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Premium_LRS"
-    disk_size_gb         = 128
+    disk_size_gb         = 64
   }
 
   source_image_reference {
-    publisher = "MicrosoftWindowsServer"
-    offer     = "WindowsServer"
-    sku       = "2022-datacenter-azure-edition"
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
     version   = "latest"
   }
 }
 
-# Holds what deploy.ps1 hands the VM: setup.ps1, plugins.json and the local plugin files.
-resource "azurerm_storage_account" "setup" {
-  name                            = "${substr(replace(var.name, "-", ""), 0, 18)}${random_string.storage_suffix.result}"
-  location                        = var.location
-  resource_group_name             = azurerm_resource_group.compute.name
-  account_tier                    = "Standard"
-  account_replication_type        = "LRS"
-  min_tls_version                 = "TLS1_2"
-  allow_nested_items_to_be_public = false
+output "ssh_config" {
+  description = "Add to ~/.ssh/config, then DEPLOY_HOST=<name> in .env"
+  value       = <<-EOT
+    Host ${var.name}
+      HostName ${azurerm_public_ip.compute.ip_address}
+      User deploy
+      IdentityFile ${trimsuffix(pathexpand(var.ssh_public_key_path), ".pub")}
+  EOT
 }
 
-resource "azurerm_storage_container" "setup" {
-  name                  = "setup"
-  storage_account_id    = azurerm_storage_account.setup.id
-  container_access_type = "private"
-}
-
-output "resource_group" {
-  value = azurerm_resource_group.compute.name
-}
-
-output "vm_name" {
-  value = azurerm_windows_virtual_machine.compute.name
-}
-
-output "storage_account" {
-  value = azurerm_storage_account.setup.name
-}
-
-output "fqdn" {
-  description = "setup.ps1 requests the certificate for this name"
+output "tls_domain" {
+  description = "DEPLOY_TLS_DOMAIN in .env"
   value       = azurerm_public_ip.compute.fqdn
 }
 
-output "compute_url" {
-  description = "Rhino.Compute URL for Selva's Compute settings"
-  value       = var.public_https ? "https://${azurerm_public_ip.compute.fqdn}" : "http://${azurerm_public_ip.compute.ip_address}"
-}
-
-output "rdp" {
-  value = "mstsc /v:${azurerm_public_ip.compute.ip_address}  (user selvaadmin, password: terraform output -raw admin_password)"
-}
-
-output "admin_password" {
-  value     = random_password.admin.result
-  sensitive = true
+output "public_url" {
+  description = "Rhino.Compute URL for the clients in compute_client_ips"
+  value       = "http://${azurerm_public_ip.compute.ip_address}:6500"
 }

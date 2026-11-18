@@ -3,21 +3,19 @@
 //   pnpm run compute:deploy [status|logs|ssh]
 //
 // Settings come from infra/compute/.env (template: infra/compute/.env.example), never from the
-// app's .env. The deploy tooling is compute.rhino3d, checked out next to this repo (override with
-// COMPUTE_REPO=/path).
+// app's .env; COMPUTE_ENV=infra/compute/azure/.env deploys another server. The deploy tooling is
+// compute.rhino3d, checked out next to this repo (override with COMPUTE_REPO=/path).
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const envFile = resolve('infra/compute/.env');
+const envFile = resolve(process.env.COMPUTE_ENV ?? 'infra/compute/.env');
 const repo = resolve(process.env.COMPUTE_REPO ?? '../compute.rhino3d');
 const script = resolve(repo, 'setup/deploy-server.sh');
 
 if (!existsSync(envFile)) {
-	console.error(
-		'infra/compute/.env missing — cp infra/compute/.env.example infra/compute/.env and fill it in.'
-	);
+	console.error(`${envFile} missing — copy the .env.example beside it and fill it in.`);
 	process.exit(1);
 }
 if (!existsSync(script)) {

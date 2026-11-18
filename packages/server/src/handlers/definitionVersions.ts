@@ -81,11 +81,28 @@ interface VersionRef {
 const refOf = (v: DefinitionVersion | null): VersionRef | null =>
 	v ? { id: v.id, versionNumber: v.versionNumber } : null;
 
-/** Null without a base, or when the base predates schema caching. */
-const changesFrom = (
+/**
+ * Null without a base, or when the base predates schema caching. With `defaultsPending` the new
+ * file's saved values are unknown, not removed, so its defaults compare as the base's.
+ */
+function changesFrom(
 	base: DefinitionVersion | null,
-	schema: UISchema | undefined
-): SchemaDiff | null => (base?.schema && schema ? diffSchemas(base.schema, schema) : null);
+	schema: UISchema | undefined,
+	defaultsPending = false
+): SchemaDiff | null {
+	if (!base?.schema || !schema) return null;
+	return diffSchemas(base.schema, defaultsPending ? withDefaultsOf(schema, base.schema) : schema);
+}
+
+function withDefaultsOf(schema: UISchema, base: UISchema): UISchema {
+	const defaults = new Map(base.inputs.map((input) => [input.id, input.default]));
+	return {
+		...schema,
+		inputs: schema.inputs.map((input) =>
+			defaults.has(input.id) ? { ...input, default: defaults.get(input.id) } : input
+		)
+	};
+}
 
 // ============================================================================
 // Inventory: what the file holds beyond its form
@@ -174,7 +191,7 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
 	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
 		definitionPin: record.computeServerId ?? null
 	});
-	const { schema, inventory } = await extractSchemaForUpload(data, server);
+	const { schema, inventory, defaultsPending } = await extractSchemaForUpload(data, server);
 	return {
 		ctx,
 		record,
@@ -183,6 +200,7 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
 		data,
 		schema,
 		inventory,
+		defaultsPending,
 		changeNote,
 		acceptMissingPlugins
 	};
@@ -194,7 +212,7 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
  */
 export const checkVersion: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { ctx, record, schema, inventory } = await readVersionUpload(req, guid);
+	const { ctx, record, schema, inventory, defaultsPending } = await readVersionUpload(req, guid);
 	const base = await loadBase(req, ctx, record);
 	return {
 		body: {
@@ -204,7 +222,8 @@ export const checkVersion: ApiHandler = async (req) => {
 				outputs: schema.outputs?.length ?? 0
 			},
 			base: refOf(base),
-			changes: changesFrom(base, schema),
+			changes: changesFrom(base, schema, defaultsPending),
+			defaultsPending,
 			inventory: inventoryReport(inventory, schema, base)
 		}
 	};
@@ -232,7 +251,8 @@ export const uploadVersion: ApiHandler = async (req) => {
 	return created({
 		version,
 		base: refOf(base),
-		changes: changesFrom(base, schema),
+		changes: changesFrom(base, schema, upload.defaultsPending),
+		defaultsPending: upload.defaultsPending,
 		inventory: inventoryReport(inventory, schema, base)
 	});
 };

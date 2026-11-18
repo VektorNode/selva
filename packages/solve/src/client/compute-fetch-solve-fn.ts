@@ -15,6 +15,7 @@ import {
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
 import { KEEPALIVE_REQUEST_HEADERS, unwrapKeepalive } from './keepalive.js';
+import { describeServerTiming, parseServerTiming } from './server-timing.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -58,19 +59,6 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 const DEFAULT_RETRY_AFTER_S = 5;
 /** A server's hint, not a lock: past this the client tries again anyway. */
 const MAX_RETRY_AFTER_S = 3600;
-
-function parseServerTiming(header: string | null): Record<string, number> {
-	const out: Record<string, number> = {};
-	if (!header) return out;
-	for (const part of header.split(',')) {
-		const [name, ...params] = part.split(';').map((s) => s.trim());
-		const dur = params.find((p) => p.startsWith('dur='));
-		if (!name || !dur) continue;
-		const ms = Number(dur.slice(4));
-		if (Number.isFinite(ms)) out[name] = ms;
-	}
-	return out;
-}
 
 /**
  * The server refused the solve. `message` is the text to show; branch on `status` and `code`
@@ -332,7 +320,8 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 
 		if (debug) {
 			const valuesBytes = JSON.stringify(values).length;
-			const serverTiming = parseServerTiming(res.headers.get('Server-Timing'));
+			const timingHeader = res.headers.get('Server-Timing');
+			const serverTiming = parseServerTiming(timingHeader);
 			const serverTotal = serverTiming.total ?? 0;
 			const networkMs = Math.max(0, ttfbMs - serverTotal);
 			const sizeMB = bodyChars / (1024 * 1024);
@@ -347,6 +336,8 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 					`ttfb=${ttfbMs.toFixed(0)}ms (network≈${networkMs.toFixed(0)} + server ${serverTotal.toFixed(0)}) | ` +
 					`download=${downloadMs.toFixed(0)}ms (${size} @ ${mbps} MB/s)${heap}`
 			);
+			const breakdown = describeServerTiming(timingHeader);
+			if (breakdown) log(`[Compute]   └─ server: ${breakdown}`);
 			if (serverTiming.selva_cache !== undefined) {
 				const cacheMsg = serverTiming.selva_cache
 					? 'HIT — served without calling compute'

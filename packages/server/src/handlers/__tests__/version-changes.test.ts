@@ -109,6 +109,32 @@ describe('version check', () => {
 		expect(versions.items).toHaveLength(1);
 	});
 
+	it('leaves defaults out of the changes when the saved values were not read', async () => {
+		const { locals, guid } = await setup();
+		mockSchema({ name: 'Test', inputs: [width], outputs: [] });
+		await callHandler(uploadVersion, { locals, params: { guid }, body: form() });
+
+		const { default: _unsaved, ...embedded } = width;
+		vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) =>
+			String(url).endsWith('/io')
+				? new Response('boom', { status: 500 })
+				: new Response(
+						JSON.stringify([
+							{ fileName: 'def.gh', schemas: [{ name: 'Test', inputs: [embedded], outputs: [] }] }
+						]),
+						{ status: 200, headers: { 'Content-Type': 'application/json' } }
+					)
+		);
+		const unread = new FormData();
+		unread.append('file', new Blob([new Uint8Array([9, 9])]), 'def.gh');
+
+		const res = await callHandler(checkVersion, { locals, params: { guid }, body: unread });
+
+		const body = res.json as Changes & { defaultsPending: boolean };
+		expect(body.defaultsPending).toBe(true);
+		expect(body.changes?.changes).toEqual([]);
+	});
+
 	it('answers a file without a schema the way an upload would, with nothing written', async () => {
 		const { locals, guid } = await setup();
 		vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));

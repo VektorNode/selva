@@ -23,6 +23,8 @@
 		schema: { name: string; inputs: number; outputs: number };
 		base: { id: string; versionNumber: number } | null;
 		changes: SchemaDiff | null;
+		/** Compute had not read the file's saved values in time, so `changes` leaves defaults out. */
+		defaultsPending: boolean;
 		/** Null when the Compute server or its plugin cannot read what is inside a file. */
 		inventory: InventoryReport | null;
 	}
@@ -228,6 +230,12 @@
 						</p>
 					{:else}
 						<p class="text-muted-foreground text-sm">The first version: nothing to compare with.</p>
+					{/if}
+					{#if check.result.defaultsPending}
+						<p class="text-muted-foreground text-xs">
+							Compute has not read the values saved in this file yet, so changed defaults are not
+							listed. The form gets them once it has.
+						</p>
 					{/if}
 					{#if inventory}
 						<InventorySection

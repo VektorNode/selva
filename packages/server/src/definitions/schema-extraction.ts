@@ -2,6 +2,7 @@
 // unreachable compute server, throws here — which is what makes this the upload
 // gate as well as the render path's fallback for un-cached or stale versions.
 
+import { createHash } from 'node:crypto';
 import {
 	fetchParsedDefinitionIO,
 	normalizeUISchemaCasing,
@@ -15,7 +16,7 @@ import {
 	type UISchema
 } from '@selvajs/schemas';
 import type { ComputeServerConfig } from '@selvajs/platform';
-import { applySavedValues, savedValuesFrom } from './saved-values.js';
+import { applySavedValues, savedValuesFrom, type SavedValues } from './saved-values.js';
 import { withTimeout } from './with-timeout.js';
 
 /** One entry of the compute schema endpoint's response, typed to our `UISchema`. */
@@ -240,13 +241,49 @@ function isInventory(value: unknown): value is DocumentInventory {
 }
 
 /**
- * How long an upload waits for the saved values once the schema is in. Missing them costs only
- * the first render its defaults: the render path reads them behind that render.
+ * How long an upload waits for the saved values, counted from its start. Compute takes tens of
+ * seconds to open a large file, and the whole request has to stay under the 60 s many proxies
+ * allow. Missing them costs only the first render its defaults: the render path reads them
+ * behind that render.
  */
-const SAVED_VALUES_GRACE_MS = 5_000;
+const SAVED_VALUES_WAIT_MS = 45_000;
 
 // Bounds the `/io` request itself, which outlives an upload that stopped waiting for it.
 const SAVED_VALUES_TIMEOUT_MS = 120_000;
+
+// A check and the upload that follows send the same bytes, so they share one `/io` read: a file
+// too slow for the check's wait is read by the time the upload asks. Keyed by server and content.
+const savedValueReads = new Map<string, Promise<SavedValues>>();
+const SAVED_VALUE_READS_MAX = 32;
+
+function readSavedValues(
+	definitionBytes: Uint8Array,
+	server: ComputeServerConfig
+): Promise<SavedValues> {
+	const digest = createHash('sha256').update(definitionBytes).digest('hex');
+	const key = `${server.serverUrl}\n${digest}`;
+	const running = savedValueReads.get(key);
+	if (running) return running;
+
+	const read = fetchParsedDefinitionIO(definitionBytes, {
+		serverUrl: server.serverUrl,
+		...(server.apiKey && { apiKey: server.apiKey }),
+		timeoutMs: SAVED_VALUES_TIMEOUT_MS
+	}).then((io) => savedValuesFrom(io.inputs));
+	// A failed read is forgotten, so the next upload of the file asks again.
+	read.catch(() => {
+		if (savedValueReads.get(key) === read) savedValueReads.delete(key);
+	});
+	if (savedValueReads.size >= SAVED_VALUE_READS_MAX)
+		savedValueReads.delete(savedValueReads.keys().next().value!);
+	savedValueReads.set(key, read);
+	return read;
+}
+
+export interface UploadExtraction extends Extraction {
+	/** The saved values were not read, so `schema` carries the embedded defaults instead. */
+	defaultsPending: boolean;
+}
 
 /**
  * `fetchSchemaFromCompute` with the values saved in the file as input defaults, so the stored
@@ -256,21 +293,21 @@ const SAVED_VALUES_TIMEOUT_MS = 120_000;
 export async function extractSchemaForUpload(
 	definitionBytes: Uint8Array,
 	server: ComputeServerConfig
-): Promise<Extraction> {
-	const values = fetchParsedDefinitionIO(definitionBytes, {
-		serverUrl: server.serverUrl,
-		...(server.apiKey && { apiKey: server.apiKey }),
-		timeoutMs: SAVED_VALUES_TIMEOUT_MS
-	}).then((io) => savedValuesFrom(io.inputs));
-	values.catch(() => {});
+): Promise<UploadExtraction> {
+	const startedAt = Date.now();
+	const values = readSavedValues(definitionBytes, server);
 
 	const { schema, inventory } = await fetchExtraction(definitionBytes, server);
 	const saved = await withTimeout(
 		values,
-		SAVED_VALUES_GRACE_MS,
+		Math.max(0, SAVED_VALUES_WAIT_MS - (Date.now() - startedAt)),
 		() => new Error('saved values not read in time')
 	).catch(() => null);
-	return { schema: saved ? applySavedValues(schema, saved) : schema, inventory };
+	return {
+		schema: saved ? applySavedValues(schema, saved) : schema,
+		inventory,
+		defaultsPending: !saved
+	};
 }
 
 /**

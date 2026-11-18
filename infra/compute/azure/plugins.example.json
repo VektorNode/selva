@@ -1,8 +1,0 @@
-{
-	"$comment": "Copy to plugins.json (gitignored). yak: exact Yak package names and versions, installed for RhinoComputeUser. local: files or folders, relative to this folder, copied into its Grasshopper Libraries.",
-	"yak": [
-		{ "name": "Hops", "version": "0.17.2" },
-		{ "name": "Selva", "version": "0.25.2" }
-	],
-	"local": ["plugins"]
-}
