@@ -1,5 +1,31 @@
 # Schema Changelog
 
+## 5.4.0-beta.6
+
+### Minor Changes
+
+- 3bbc0fe: The MCP server can do what an agent setting up a definition needs, without falling back to the REST API:
+
+  - `selva_check_definition` lists the plugins a definition was saved with beside the versions its Compute server loaded, and names what will break: a missing plugin, a component the installed release lacks, obsolete components. `selva_recheck_definition` reads it again after an install. A solve that reports errors points at it.
+  - `selva_update_definition` edits the name, description, category and tags, and moves a definition to another project, by id or name.
+  - `selva_capture_preview` solves and renders the result in Selva's viewer, headless on the server, and returns the picture. `selva_set_cover_image` makes a preview (or a given image) the cover and shows the stored result; `selva_get_cover_image` shows the current one. Rendering needs a Chromium: `npx playwright install --with-deps chromium`, or `MCP_PREVIEW_BROWSER`.
+  - `selva_list_project_members` and `selva_create_project`.
+  - `selva_solve` returns a download link per output file instead of only its name, and clients that show MCP Apps draw the geometry in a 3D view.
+  - Listing and describing a definition say whether it can be solved (it has a live version) apart from whether the library lists it, instead of a `draft` status that read as "can't run".
+
+  `GET /api/v1/definitions/{guid}/image` returns the cover to an API key; `coverImage` is a browser URL that needs a session. A version's inventory records components the Compute server could not load, and its report gains `plugins` and `extractedWith`.
+
+- 3bbc0fe: More MCP tools, and what they needed underneath:
+
+  - `selva_check_upload`, `selva_upload_version` and `selva_create_definition` take a `.gh` or `.ghx` as base64. `selva_solve`, `selva_describe_definition` and `selva_capture_preview` take `version: 'draft'` or a version id, to try an upload before publishing it.
+  - `selva_list_versions` and `selva_compare_versions` show the history and what each version changed, in the form and inside the file. Rolling back is `selva_publish_definition` with an older id.
+  - `selva_describe_definition` lays the form out by group, with each group's description, number units, the conditions that show or hide an input, and output descriptions.
+  - The 3D view in MCP Apps clients draws the definition's inputs beside the geometry, to change and solve again.
+  - `selva_capture_preview` renders with the look and background the definition opens in, lit by the app's HDR.
+  - File links, geometry and previews are kept in the storage provider, so they survive a restart and work across instances.
+  - An upload whose file uses a component the Compute server's plugin release lacks is refused like one with a missing plugin, unless `acceptMissingPlugins`; the version summary lists such components as `unloadedComponents`.
+  - `GET /api/v1/projects/{id}/members` returns each member's `displayName`. Uploads are marked `x-long-running`, so MCP clients give them the solve timeout.
+
 ## 5.4.0-beta.5
 
 ### Minor Changes
