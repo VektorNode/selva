@@ -1,5 +1,12 @@
 # @selvajs/mcp
 
+## 0.2.0-beta.2
+
+### Minor Changes
+
+- 3bbc0fe: `api.call` sends a `FormData` body as multipart, and returns a binary body's bytes with `bytes: true`. `@selvajs/mcp/capture` renders a Rhino.Compute response to a PNG in a headless Chromium, with the optional peer `playwright-core`.
+- 3bbc0fe: A solve view can carry a `form` of inputs to change and solve again (`SolveViewForm`, drawn by `renderViewForm`). `captureSolve` takes `look`, `background` and `hdr`. `evals/` runs a task set against an MCP endpoint with Claude as the agent; it is not published.
+
 ## 0.2.0-beta.1
 
 ### Minor Changes
