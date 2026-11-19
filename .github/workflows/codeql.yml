@@ -11,8 +11,9 @@ name: CodeQL
 on:
   pull_request:
     branches: [main, beta]
+  # Not beta: PRs into beta and the promotion PR into main scan the same code.
   push:
-    branches: [main, beta]
+    branches: [main]
   schedule:
     # Weekly re-scan so newly-published query rules reach unchanged code.
     - cron: '0 5 * * 1'

@@ -2,11 +2,12 @@ name: Test
 
 on:
   pull_request:
-  # Push catches what the PR trigger misses: direct pushes (routine on beta) and
-  # Dependabot auto-merges. Without beta here, beta's first lint, fixture and
-  # changeset check was the promotion PR. Cron catches toolchain drift.
+  # Push catches Dependabot auto-merges to main. Beta pushes run this through
+  # release.yml (workflow_call), which publishes only once it passes: a separate
+  # beta trigger here ran every check twice. Cron catches toolchain drift.
   push:
-    branches: [main, beta]
+    branches: [main]
+  workflow_call:
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
@@ -21,6 +22,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Skips the .NET and Supabase jobs when nothing they read changed. On a push the
+  # diff is against `before`, so a Plugin change in a cancelled beta push is
+  # first tested by the promotion PR, which diffs all of beta.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ github.event_name == 'schedule' || steps.filter.outputs.dotnet == 'true' }}
+      supabase: ${{ github.event_name == 'schedule' || steps.filter.outputs.supabase == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: filter
+        if: github.event_name != 'schedule'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            dotnet:
+              - 'Plugin/**'
+              # Golden wire and codec fixtures the .NET tests read.
+              - 'packages/schemas/**'
+              - 'global.json'
+              - '.github/actions/dotnet-test/**'
+              - '.github/workflows/test.yml'
+            supabase:
+              - 'packages/providers/supabase/**'
+              - 'packages/platform/**'
+              - 'packages/schemas/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/test.yml'
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -160,6 +190,8 @@ jobs:
   # The provider's conformance and RLS suites against a real stack: the JS job
   # above skips them. SELVA_REQUIRE_SUPABASE turns a skip into a failure here.
   supabase:
+    needs: changes
+    if: needs.changes.outputs.supabase == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -199,6 +231,8 @@ jobs:
 
   # Rhino-free .NET libraries; runs in parallel with the JS job.
   dotnet:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -207,6 +241,8 @@ jobs:
   # Rhino 9 on Windows is the primary platform, and the GDI+ raster tests and the
   # Windows Credential Manager round trip skip on Linux.
   dotnet-windows:
+    needs: changes
+    if: needs.changes.outputs.dotnet == 'true'
     runs-on: windows-latest
     env:
       # The runner, and the credential it writes, is thrown away after the job.

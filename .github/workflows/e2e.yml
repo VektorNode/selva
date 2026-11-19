@@ -2,9 +2,11 @@ name: E2E
 
 on:
   pull_request:
-  # beta takes direct pushes; without this its first e2e run is the promotion PR.
-  push:
-    branches: [beta]
+  # beta takes direct pushes. Nightly rather than per push: a regression shows up
+  # within a day, and the promotion PR runs it again before main.
+  schedule:
+    - cron: '0 3 * * 1-5' # weekdays 03:00 UTC
+  workflow_dispatch:
 
 # Read-only: this workflow builds and uploads artifacts, never writes to the repo.
 permissions:
@@ -32,6 +34,9 @@ jobs:
       # Must precede `uses: ./...` below — GitHub resolves local actions from
       # the runner's filesystem.
       - uses: actions/checkout@v7
+        with:
+          # Schedules run on main; the nightly run is for beta.
+          ref: ${{ github.event_name == 'schedule' && 'beta' || '' }}
 
       - name: Setup workspace
         uses: ./.github/actions/setup

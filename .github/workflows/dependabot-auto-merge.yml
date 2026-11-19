@@ -196,10 +196,12 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Names as they appear in the checks list (the job's name, not the
-          # workflow's): `test` and `dotnet` from test.yml, `e2e` from e2e.yml.
+          # workflow's): `test` and `dotnet` from test.yml, one `e2e (<app>)` per
+          # matrix entry in e2e.yml.
           # A rename here without a rename there = a merge that times out,
-          # which is the safe direction.
-          REQUIRED_CHECKS: 'test,dotnet,e2e'
+          # which is the safe direction. `skipping` counts as passed: test.yml
+          # path-filters `dotnet` off for bumps that don't touch Plugin/.
+          REQUIRED_CHECKS: 'test,dotnet,e2e (selva),e2e (plugin-ui)'
         run: |
           deadline=$(( $(date +%s) + 45 * 60 ))
           required=$(echo "$REQUIRED_CHECKS" | tr ',' '\n' | sed '/^$/d')
@@ -221,7 +223,7 @@ jobs:
             missing=$(
               while IFS= read -r name; do
                 echo "$others" | jq -e --arg n "$name" \
-                  'any(.[]; .name == $n and .bucket == "pass")' >/dev/null || echo "$name"
+                  'any(.[]; .name == $n and (.bucket == "pass" or .bucket == "skipping"))' >/dev/null || echo "$name"
               done <<< "$required"
             )
 

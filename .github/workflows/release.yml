@@ -27,9 +27,22 @@ concurrency:
   cancel-in-progress: ${{ github.ref == 'refs/heads/beta' }}
 
 jobs:
+  # Beta's publish gate and its only CI run per push: test.yml has no beta
+  # trigger of its own. Main keeps the inline gate in `release`.
+  test:
+    if: github.ref == 'refs/heads/beta'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/test.yml
+
   release:
+    needs: test
     # A manual run from any other branch would fall through to the main path and publish.
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta'
+    if: >-
+      !cancelled() && (
+        (github.ref == 'refs/heads/main' && needs.test.result == 'skipped') ||
+        (github.ref == 'refs/heads/beta' && needs.test.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -196,49 +209,43 @@ jobs:
       # input, so the tasks that dominate this job miss regardless.
 
       # ── beta path ────────────────────────────────────────────────────────
-      # Versioning BEFORE the gate is deliberate, for two reasons:
-      #   · `changeset version` rewrites every package.json and every internal
-      #     dependency range. Testing the pre-version tree gates a tree that is
-      #     not the one being published — a bump that pushes a package outside a
-      #     sibling's peer range would ship green.
-      #   · package.json is a turbo build input, so versioning after the gate
-      #     invalidates every `^build` the gate just did, and `pnpm release`
-      #     rebuilds all of it from scratch.
-      # Nothing is pushed until the gate passes, so a failing test leaves no
+      # Beta's gate is the `test` job, which runs on the pre-version tree: a
+      # bump that pushes a package outside a sibling's peer range can ship as a
+      # beta. Accepted for prereleases; main gates the versioned tree below.
+      # This job starts only after `test` passes, so a failing test leaves no
       # version commit behind on beta.
       - name: Version beta packages
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
         run: pnpm changeset version
 
-      # Gates the publish: on main, catches regressions in the version-PR merge
-      # commit; on beta, runs against the freshly versioned tree. test.yml runs
-      # the same checks, but this workflow does not wait for it.
+      # Gates main's publish: catches regressions in the version-PR merge commit.
+      # Beta skips it: the `test` job already ran these checks on this push.
       - name: Check component signatures and generated code
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         run: |
           node scripts/plugin/check-component-signatures.mjs --check
           pnpm check:generated
 
       - name: Lint
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         run: pnpm lint
 
       - name: Type-check
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         run: pnpm type-check
 
       # svelte-check owns type coverage for the SvelteKit packages (selva,
       # plugin-ui); they have no tsc task, so type-check alone would skip them.
       - name: Check
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         run: pnpm check
 
       - name: Test
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
         run: pnpm exec turbo run test
 
       - uses: ./.github/actions/dotnet-test
-        if: steps.check.outputs.should_run == 'true'
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta != 'true'
 
       - name: Commit beta version bumps
         if: steps.check.outputs.is_beta == 'true' && steps.check.outputs.needs_version == 'true'
