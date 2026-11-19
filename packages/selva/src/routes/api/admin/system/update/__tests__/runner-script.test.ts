@@ -648,7 +648,7 @@ describe('the update only replaces a process it controls, run for real', () => {
 					`app_dir() { printf %s ${shellQuote(owner)}; }`,
 					'wait_until_stopped() { :; }',
 					'sleep() { :; }',
-					'curl() { head -1 "$BODIES"; if [ "$(wc -l < "$BODIES")" -gt 1 ]; then sed -i 1d "$BODIES"; fi; }',
+					'curl() { head -1 "$BODIES"; if [ "$(wc -l < "$BODIES")" -gt 1 ]; then tail -n +2 "$BODIES" > "$BODIES.next" && mv "$BODIES.next" "$BODIES"; fi; }',
 					helpers,
 					fragment,
 					'echo CONTINUED'
