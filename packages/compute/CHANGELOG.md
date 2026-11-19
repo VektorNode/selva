@@ -1,5 +1,11 @@
 # @selvajs/compute
 
+## 5.1.0-beta.4
+
+### Minor Changes
+
+- df6905f: `onServerTiming` gets the VektorNode fork's `X-Compute-Profile` as `timing.profile`: the objects a solve spent longest in, slowest first (`ComputeProfileEntry`). It reaches `@selvajs/solve`'s `metrics.rhino` too, so a server logging those sees which component made a solve slow.
+
 ## 5.1.0-beta.3
 
 ### Minor Changes
