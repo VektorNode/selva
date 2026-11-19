@@ -126,10 +126,6 @@ The solve session is not a layer here: it lives in `@selvajs/solve/client`.
 `@selvajs/ui` never imports rhino3dm: the host passes `loadRhino` to `ComputeApp`, or the wasm
 lands in every host's bundle, the plugin's `.gha` included.
 
-### `@selvajs/platform`
-
-Pluggable provider interfaces (auth, data stores, storage, permissions, access rules) with Zod schemas. Granular exports for tree-shaking: see [packages/platform/src/](packages/platform/src/). `@selvajs/local-provider` is the filesystem-backed implementation (HMAC sessions, atomic-write JSON, WebP image transcoding).
-
 ### Grasshopper components
 
 [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is authoritative for canvas wiring and schema identity:
@@ -215,7 +211,3 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 
 - Rhino 9 (primary) or Rhino 8.21+ (Rhino 7 is not supported)
 - Rhino.Compute: the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
-
-## Issues
-
-Use the templates in [.github/ISSUE_TEMPLATE/](./.github/ISSUE_TEMPLATE/).
