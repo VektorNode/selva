@@ -118,5 +118,14 @@ export interface ServerTiming {
 	 * got one. `none`: no claim was made, because routing is off or the chosen child was gone.
 	 */
 	affinity?: AffinityOutcome;
+	/** The VektorNode fork's `X-Compute-Profile`: the objects this solve spent longest in, slowest first. */
+	profile?: ComputeProfileEntry[];
 	raw: string;
+}
+
+/** One Grasshopper object's processor time in a solve. */
+export interface ComputeProfileEntry {
+	name: string;
+	nick: string;
+	ms: number;
 }

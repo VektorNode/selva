@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchCompute } from '../compute-fetch';
-import { parseServerTiming } from '../server-timing';
+import { parseComputeProfile, parseServerTiming } from '../server-timing';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -73,6 +73,17 @@ describe('parseServerTiming', () => {
 	});
 });
 
+describe('parseComputeProfile', () => {
+	it.each([
+		['a missing header', null],
+		['invalid JSON', '[{'],
+		['a non-array', '{"name":"a","nick":"a","ms":1}'],
+		['no valid entry', '[{"name":"a","ms":"slow"}]']
+	])('returns null for %s', (_name, header) => {
+		expect(parseComputeProfile(header)).toBeNull();
+	});
+});
+
 describe('onServerTiming callback', () => {
 	it('fires with the parsed timing on a successful solve', async () => {
 		const onServerTiming = vi.fn();
@@ -90,6 +101,28 @@ describe('onServerTiming callback', () => {
 			expect.objectContaining({ decode: 2, solve: 50, encode: 4 }),
 			expect.any(String)
 		);
+	});
+
+	it('adds the X-Compute-Profile entries as profile', async () => {
+		const onServerTiming = vi.fn();
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(
+				{ values: [] },
+				{
+					headers: {
+						'Server-Timing': 'solve;dur=90',
+						'X-Compute-Profile':
+							'[{"name":"ProfJob","nick":"Job","ms":80000,"guid":"x"},{"name":"bad"}]'
+					}
+				}
+			)
+		);
+
+		await fetchCompute('grasshopper', {}, { ...config, onServerTiming });
+
+		expect(onServerTiming.mock.calls[0][0].profile).toEqual([
+			{ name: 'ProfJob', nick: 'Job', ms: 80000 }
+		]);
 	});
 
 	it('passes the same requestId sent as the X-Request-ID header', async () => {

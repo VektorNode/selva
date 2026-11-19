@@ -1,6 +1,11 @@
 import { getLogger } from '../utils/logger';
 
-import { AFFINITY_OUTCOMES, type AffinityOutcome, type ServerTiming } from '../types';
+import {
+	AFFINITY_OUTCOMES,
+	type AffinityOutcome,
+	type ComputeProfileEntry,
+	type ServerTiming
+} from '../types';
 
 /**
  * Parse a W3C Server Timing header, as the solve endpoint emits it:
@@ -38,6 +43,31 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
 	return sawMetric ? timing : null;
 }
 
+/**
+ * Parse `X-Compute-Profile`, a JSON array of `{ name, nick, ms }`. Entries of another shape are
+ * dropped; null when none is left or the header is not JSON.
+ */
+export function parseComputeProfile(headerValue: string | null): ComputeProfileEntry[] | null {
+	if (!headerValue) return null;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(headerValue);
+	} catch {
+		return null;
+	}
+	if (!Array.isArray(parsed)) return null;
+	const entries = parsed.filter(
+		(e): e is ComputeProfileEntry =>
+			typeof e === 'object' &&
+			e !== null &&
+			typeof e.name === 'string' &&
+			typeof e.nick === 'string' &&
+			typeof e.ms === 'number' &&
+			Number.isFinite(e.ms)
+	);
+	return entries.length > 0 ? entries.map(({ name, nick, ms }) => ({ name, nick, ms })) : null;
+}
+
 function isAffinity(value: string | undefined): value is AffinityOutcome {
 	return (AFFINITY_OUTCOMES as readonly (string | undefined)[]).includes(value);
 }
@@ -60,6 +90,8 @@ export function fireServerTiming(
 	if (!onServerTiming) return;
 	const timing = parseServerTiming(response.headers.get('Server-Timing'));
 	if (!timing) return;
+	const profile = parseComputeProfile(response.headers.get('X-Compute-Profile'));
+	if (profile) timing.profile = profile;
 	try {
 		onServerTiming(timing, requestId);
 	} catch (err) {

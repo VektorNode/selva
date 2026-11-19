@@ -26,6 +26,7 @@ export { decodeBase64ToBinary } from './utils/encoding';
 export type {
 	ComputeAuth,
 	ComputeConfig,
+	ComputeProfileEntry,
 	RetryPolicy,
 	ServerErrorCodeMap,
 	ServerTiming
