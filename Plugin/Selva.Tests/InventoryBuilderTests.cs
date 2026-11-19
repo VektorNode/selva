@@ -14,9 +14,24 @@ public class InventoryBuilderTests
         IEnumerable<CanvasObject>? objects = null,
         IEnumerable<CanvasValue>? values = null,
         IEnumerable<CanvasScript>? scripts = null,
-        IEnumerable<CanvasWire>? wires = null) =>
+        IEnumerable<CanvasWire>? wires = null,
+        IEnumerable<ArchiveObject>? unloaded = null) =>
         JObject.Parse(InventoryBuilder.ToJson(InventoryBuilder.Build("1.2.3",
-            saved ?? [], loaded ?? [], objects ?? [], values ?? [], scripts ?? [], wires ?? [])));
+            saved ?? [], loaded ?? [], objects ?? [], values ?? [], scripts ?? [], wires ?? [], unloaded)));
+
+    [Fact]
+    public void Unloaded_objects_keep_their_type_and_library()
+    {
+        var id = Guid.NewGuid();
+        var type = Guid.NewGuid();
+        var json = Build(unloaded: [new(id, type, "Repeat", SelvaLib), new(Guid.NewGuid(), type, "Mystery", Guid.Empty)]);
+        var unloaded = (JArray)json["unloaded"]!;
+        Assert.Equal(2, unloaded.Count);
+        Assert.Equal("Repeat", (string?)unloaded[0]["name"]);
+        Assert.Equal(type.ToString(), (string?)unloaded[0]["type"]);
+        Assert.Equal(SelvaLib.ToString(), (string?)unloaded[0]["library"]);
+        Assert.Null(unloaded[1]["library"]);
+    }
 
     [Fact]
     public void Core_libraries_collapse_and_count_as_loaded()

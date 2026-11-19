@@ -644,6 +644,12 @@ namespace Selva.Schema.Models
 
         [JsonProperty("wires")]
         public InventoryWires Wires { get; set; }
+
+/// <summary>
+/// Objects the file holds that the Compute server could not create: their type is in no plugin it loaded, or in an older release of one that lacks it. Grasshopper drops them on load, so `components` never lists them. Absent from inventories built before it was read.
+/// </summary>
+        [JsonProperty("unloaded")]
+        public List<InventoryUnloaded> Unloaded { get; set; } = new List<InventoryUnloaded>();
     }
 
     public class InventoryLibrary
@@ -685,6 +691,36 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("serverVersion")]
         public string ServerVersion { get; set; }
+    }
+
+    public class InventoryUnloaded
+    {
+
+/// <summary>
+/// InstanceGuid, as the archive stores it.
+/// </summary>
+        [JsonProperty("id")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Id { get; set; }
+
+/// <summary>
+/// ComponentGuid of its type.
+/// </summary>
+        [JsonProperty("type")]
+        [JsonConverter(typeof(TolerantGuidConverter))]
+        public Guid Type { get; set; }
+
+/// <summary>
+/// Type name, as the archive stores it.
+/// </summary>
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+/// <summary>
+/// Id of the library the archive says provides it; absent when the archive does not say.
+/// </summary>
+        [JsonProperty("library")]
+        public string Library { get; set; }
     }
 
     public class InventoryComponent

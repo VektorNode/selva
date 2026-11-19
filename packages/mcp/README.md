@@ -38,8 +38,10 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
 
 - **`calls` is the contract.** A tool lists every operationId it may hit. Annotations come from
   those operations (all `read` → read-only, any DELETE → destructive, any `solve` → open-world),
-  and `api.call` refuses anything not listed. Internal and multipart operations are refused at
-  startup.
+  and `api.call` refuses anything not listed. Internal operations are refused at startup.
+  `inputFrom` can't derive a multipart operation's input; `api.call` sends one a `FormData` body.
+- **A binary body comes back as its size** (`BinaryBody`), unless the call passes
+  `bytes: true`, which adds `data` (`BinaryData`).
 - **Errors are tool results**, with the next step for the model. A 403 names the missing scope.
 - **429**: a `Retry-After` up to 10 s is waited out (twice at most, same `Idempotency-Key`);
   longer goes back to the model with the wait.
@@ -124,6 +126,41 @@ tools: [
 (add listeners in its callback, or the first result arrives before them), `mountSolveViewer`
 draws a Rhino.Compute response. A view's CSP allows no `fetch` and no outside script unless the
 `appResource` lists them, so the renderer loads no HDR there.
+
+A view's data can carry a `form` (`SolveViewForm`): inputs the view draws beside the
+geometry, and the tool it calls with them to solve again. That tool must answer with
+`SolveViewData` too; usually it is the tool that made the first result. After such a solve the
+view tells the model what the user tried through `updateModelContext`, since the model never saw
+that call. `renderViewForm` from `@selvajs/mcp/view` draws the same form in a view of your own.
+
+## Rendering on the server
+
+`captureSolve(response, { view, width, height, grid, look, background, hdr })` from
+`@selvajs/mcp/capture` draws a Rhino.Compute response in the same viewer as the 3D view, in a
+headless Chromium, and resolves to a base64 PNG for a tool's `images`. `hdr` is the environment
+map as a URL; the page loads nothing from an origin, so a `data:` URL is the reliable form. Captures run one at a time on one browser, which closes after
+two idle minutes. It needs the optional peer `playwright-core` and a browser
+(`npx playwright install --with-deps chromium`, or `executablePath`); without them it throws
+`CaptureUnavailableError`, whose message says so. A bundled host passes the page as `html`,
+since bundling moves `dist/views/capture.html` away from the module that reads it: with Vite,
+`() => import('@selvajs/mcp/views/capture.html?raw').then((m) => m.default)`.
+
+## Evals
+
+`evals/run.ts` runs the tasks in `evals/tasks.json` against a Selva MCP endpoint with Claude as
+the agent, and records per task whether it passed, its tool calls, tokens, invalid-argument
+errors and wall time. It needs a running instance seeded with `--examples` (see
+`scripts/develop/LOCAL.md`), Rhino.Compute behind it, and Anthropic API credit, so it is not in CI.
+
+```bash
+SELVA_MCP_URL=http://localhost:5273/mcp SELVA_API_KEY=selva_… pnpm --filter @selvajs/mcp eval
+pnpm --filter @selvajs/mcp eval --task kitchen-file --effort high
+pnpm --filter @selvajs/mcp eval --held-out   # only when checking, never while tuning
+```
+
+A task's `expect` checks which tools it called, what the answer contains, a number, and a rubric
+that a second Claude call grades. A `number` with `expected: null` is reported, not graded:
+fill it in once the value is checked in the app. Results go to `evals/results/`, which git ignores.
 
 ## Typed calls
 

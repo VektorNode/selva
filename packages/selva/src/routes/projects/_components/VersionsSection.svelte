@@ -208,6 +208,14 @@
 										needs {version.inventorySummary.missingPlugins.join(', ')}
 									</span>
 								{/if}
+								{#if version.inventorySummary?.unloadedComponents?.length}
+									<span
+										class="bg-destructive/10 text-destructive text-2xs rounded-full px-2 py-0.5"
+										title="The Compute server's plugin release has no such component. Open the version and read it again once the plugin is updated."
+									>
+										needs {version.inventorySummary.unloadedComponents.join(', ')}
+									</span>
+								{/if}
 								{#if version.inventorySummary?.obsoleteComponents}
 									<span
 										class="bg-warning/10 text-warning text-2xs rounded-full px-2 py-0.5"

@@ -90,7 +90,12 @@ export function fakeFetch(responses: (Response | Error)[]) {
 			url: String(input),
 			headers: init?.headers as Record<string, string>,
 			credentials: init?.credentials,
-			body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
+			body:
+				typeof init?.body === 'string'
+					? JSON.parse(init.body)
+					: init?.body instanceof FormData
+						? init.body
+						: undefined
 		});
 		const next = responses.shift();
 		if (!next) throw new Error('fakeFetch: no response queued');

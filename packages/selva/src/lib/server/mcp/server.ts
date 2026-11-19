@@ -6,6 +6,8 @@ import { oauthServer } from '#lib/server/oauth/server.js';
 import { buildOpenApiDocument } from '#lib/server/api/v1/openapi.js';
 import { getLogger } from '#lib/server/providers.server.js';
 import { INSTRUCTIONS, selvaTools } from './tools';
+import { selvaViews } from './views';
+import { mcpStash } from './stash-instance';
 
 /** Every action the key's scopes cover, as `scopeAllows` decides at /api/v1. */
 export async function grantedActions(api: UntypedApi): Promise<ScopeAction[]> {
@@ -66,7 +68,8 @@ function serverFor(origin: string): ReturnType<typeof createMcpServer> {
 		instructions: INSTRUCTIONS,
 		baseUrl: origin,
 		openapi,
-		tools: selvaTools(origin),
+		tools: selvaTools(origin, { stash: mcpStash(), previewBrowser: env.MCP_PREVIEW_BROWSER }),
+		resources: selvaViews(),
 		grantedActions,
 		allowedOrigins: mcpAllowedOrigins(),
 		challenge: challengeFor(origin),

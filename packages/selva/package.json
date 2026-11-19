@@ -60,6 +60,7 @@
 		"mode-watcher": "catalog:",
 		"nodemailer": "catalog:",
 		"pino": "^10.4.0",
+		"playwright-core": "catalog:",
 		"rhino3dm": "catalog:",
 		"sharp": "catalog:",
 		"tailwind-merge": "catalog:",

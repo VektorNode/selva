@@ -3,6 +3,9 @@ import type { ResourceDefinition } from './server.js';
 /** The MIME type a client renders as an MCP App view rather than reading as text. */
 export const MCP_APP_MIME_TYPE = 'text/html;profile=mcp-app';
 
+/** The `extensions` key under which a client declares that it renders MCP App views. */
+export const MCP_APP_EXTENSION = 'io.modelcontextprotocol/ui';
+
 /**
  * Who may call a tool that has a view. `model` lists it for the agent; `app` lets its view call
  * it. A client hides a tool without `model` from the agent, so an `['app']` tool can return
@@ -73,4 +76,33 @@ export interface SolveViewData {
 	/** A Rhino.Compute response, or only its display trees (`values`, `modelunits`). */
 	response?: unknown;
 	load?: { tool: string; arguments?: Record<string, unknown> };
+	/** Inputs the view shows beside the geometry, to change and solve again. */
+	form?: SolveViewForm;
+}
+
+/**
+ * A form the view draws. Solving calls `tool` with `arguments` plus the values under
+ * `valuesKey`, and shows that result in place of this one, so `tool` must answer with
+ * {@link SolveViewData} too. A tool with a view may call itself this way.
+ */
+export interface SolveViewForm {
+	tool: string;
+	arguments: Record<string, unknown>;
+	/** The argument the values go under, keyed by {@link ViewInput.name}. */
+	valuesKey: string;
+	inputs: ViewInput[];
+}
+
+/** One control. Inputs a form can't edit (geometry, files) are left out by the tool. */
+export interface ViewInput {
+	name: string;
+	kind: 'number' | 'boolean' | 'text' | 'choice';
+	value?: unknown;
+	min?: number;
+	max?: number;
+	step?: number;
+	/** For `choice`: what the value may be. */
+	options?: string[];
+	unit?: string;
+	description?: string;
 }

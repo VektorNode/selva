@@ -61,12 +61,73 @@
 				padding: 2px 10px;
 				cursor: pointer;
 			}
-			#stage {
-				position: relative;
+			main {
+				display: flex;
 				height: 420px;
 			}
-			body.fullscreen #stage {
+			body.fullscreen main {
 				height: calc(100vh - 41px);
+			}
+			#stage {
+				position: relative;
+				flex: 1;
+				min-width: 0;
+			}
+			#form {
+				width: 240px;
+				flex: none;
+				overflow-y: auto;
+				padding: 10px 12px;
+				border-right: 1px solid var(--line);
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+			#form[hidden] {
+				display: none;
+			}
+			@media (max-width: 560px) {
+				main {
+					flex-direction: column;
+					height: auto;
+				}
+				#stage {
+					height: 320px;
+				}
+				#form {
+					width: auto;
+					border-right: 0;
+					border-bottom: 1px solid var(--line);
+				}
+			}
+			.field {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+			.field.inline {
+				flex-direction: row-reverse;
+				justify-content: flex-end;
+				align-items: center;
+				gap: 8px;
+			}
+			.field .name {
+				color: var(--muted);
+				font-size: 12px;
+			}
+			.field input:not([type='checkbox']),
+			.field select {
+				font: inherit;
+				color: inherit;
+				background: transparent;
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				padding: 4px 6px;
+				min-width: 0;
+			}
+			button.solve {
+				align-self: flex-start;
+				padding: 4px 14px;
 			}
 			#status {
 				position: absolute;
@@ -86,7 +147,10 @@
 			<button id="fit" type="button" hidden>Fit</button>
 			<button id="fullscreen" type="button" hidden>Fullscreen</button>
 		</header>
-		<div id="stage"><div id="status">Waiting for the solve…</div></div>
+		<main>
+			<div id="form" hidden></div>
+			<div id="stage"><div id="status">Waiting for the solve…</div></div>
+		</main>
 		<script type="module" src="./main.ts"></script>
 	</body>
 </html>

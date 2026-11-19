@@ -11,9 +11,9 @@ import {
 	setTextureAnisotropy
 } from '@selvajs/visualization/parse';
 import { initThree, updateScene } from '@selvajs/visualization/render';
-import { SOLVE_VIEW_KEY, type SolveViewData } from '../app.js';
+import { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm } from '../app.js';
 
-export { SOLVE_VIEW_KEY, type SolveViewData } from '../app.js';
+export { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm, type ViewInput } from '../app.js';
 export type { App } from '@modelcontextprotocol/ext-apps';
 
 /** A tool result as the host hands it to a view. */
@@ -105,6 +105,97 @@ export function mountSolveViewer(container: HTMLElement): SolveViewer {
 			// Parsed geometry outlives the viewer otherwise: the cache is page-wide.
 			clearGeometryCache();
 			canvas.remove();
+		}
+	};
+}
+
+export interface ViewFormHandle {
+	/** The values as the user left them, by input name. A field left empty is absent. */
+	values(): Record<string, unknown>;
+	/** Disables the controls while a solve runs. */
+	setBusy(busy: boolean): void;
+}
+
+/**
+ * Draws `form`'s inputs into `container`, replacing what was there, with a Solve button that
+ * calls `onSolve`. Plain DOM, styled by the page.
+ */
+export function renderViewForm(
+	container: HTMLElement,
+	form: SolveViewForm,
+	onSolve: (values: Record<string, unknown>) => void
+): ViewFormHandle {
+	container.replaceChildren();
+	// A reader returns undefined for a field left empty, so the solve keeps the file's value.
+	const readers: (() => [string, unknown] | undefined)[] = [];
+	const controls: (HTMLInputElement | HTMLSelectElement | HTMLButtonElement)[] = [];
+
+	for (const input of form.inputs) {
+		const field = document.createElement('label');
+		field.className = 'field';
+		const name = document.createElement('span');
+		name.className = 'name';
+		name.textContent = input.unit ? `${input.name} (${input.unit})` : input.name;
+		if (input.description) field.title = input.description;
+		field.append(name);
+
+		let control: HTMLInputElement | HTMLSelectElement;
+		if (input.kind === 'choice') {
+			const select = document.createElement('select');
+			if (typeof input.value !== 'string') select.add(new Option('', ''));
+			for (const option of input.options ?? []) select.add(new Option(option, option));
+			select.value = typeof input.value === 'string' ? input.value : '';
+			control = select;
+			readers.push(() => (select.value === '' ? undefined : [input.name, select.value]));
+		} else if (input.kind === 'boolean') {
+			const box = document.createElement('input');
+			box.type = 'checkbox';
+			box.checked = input.value === true;
+			control = box;
+			readers.push(() => [input.name, box.checked]);
+			field.classList.add('inline');
+		} else {
+			const box = document.createElement('input');
+			box.type = input.kind === 'number' ? 'number' : 'text';
+			if (input.min !== undefined) box.min = String(input.min);
+			if (input.max !== undefined) box.max = String(input.max);
+			box.step = input.step !== undefined ? String(input.step) : 'any';
+			const initial = input.value !== undefined && input.value !== null ? String(input.value) : '';
+			box.value = initial;
+			control = box;
+			readers.push(() => {
+				if (input.kind === 'number')
+					return box.value === '' ? undefined : [input.name, Number(box.value)];
+				// A text field emptied on purpose is a value; one that started empty is not.
+				return box.value === '' && initial === '' ? undefined : [input.name, box.value];
+			});
+		}
+		controls.push(control);
+		field.append(control);
+		container.append(field);
+	}
+
+	const button = document.createElement('button');
+	button.type = 'button';
+	button.className = 'solve';
+	button.textContent = 'Solve';
+	controls.push(button);
+	container.append(button);
+
+	const values = () =>
+		Object.fromEntries(
+			readers.map((read) => read()).filter((entry) => entry !== undefined)
+		) as Record<string, unknown>;
+	button.addEventListener('click', () => onSolve(values()));
+	container.addEventListener('keydown', (e) => {
+		if (e.key === 'Enter' && !button.disabled) onSolve(values());
+	});
+
+	return {
+		values,
+		setBusy(busy) {
+			for (const c of controls) c.disabled = busy;
+			button.textContent = busy ? 'Solving…' : 'Solve';
 		}
 	};
 }

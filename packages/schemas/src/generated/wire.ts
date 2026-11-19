@@ -357,6 +357,10 @@ export interface DocumentInventory {
 	values: InventoryValue[];
 	scripts: InventoryScript[];
 	wires: InventoryWires;
+	/**
+	 * Objects the file holds that the Compute server could not create: their type is in no plugin it loaded, or in an older release of one that lacks it. Grasshopper drops them on load, so `components` never lists them. Absent from inventories built before it was read.
+	 */
+	unloaded?: InventoryUnloaded[];
 }
 export interface InventoryLibrary {
 	/**
@@ -469,6 +473,24 @@ export interface InventoryWires {
 	 * Hash of the sorted source→target id pairs.
 	 */
 	sha256: string;
+}
+export interface InventoryUnloaded {
+	/**
+	 * InstanceGuid, as the archive stores it.
+	 */
+	id: string;
+	/**
+	 * ComponentGuid of its type.
+	 */
+	type: string;
+	/**
+	 * Type name, as the archive stores it.
+	 */
+	name: string;
+	/**
+	 * Id of the library the archive says provides it; absent when the archive does not say.
+	 */
+	library?: string;
 }
 export interface ScriptSource {
 	id: string;

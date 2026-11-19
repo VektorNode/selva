@@ -6,6 +6,7 @@ import {
 	diffLines,
 	inventoryDiffToMarkdown,
 	inventoryWarnings,
+	inventoryWarningText,
 	summarizeInventory
 } from '../inventory.js';
 
@@ -80,12 +81,81 @@ describe('inventoryWarnings', () => {
 			scripts: [{ ...inventory().scripts[0], secrets: ['github-token'] }]
 		});
 		expect(inventoryWarnings(inv)).toEqual([
-			{ kind: 'pluginVersion', plugin: 'Selva', version: '0.25.0.0', serverVersion: '0.26.0.0' },
 			{ kind: 'missingPlugin', plugin: 'Charts', version: '1.3.0.0' },
+			{ kind: 'pluginVersion', plugin: 'Selva', version: '0.25.0.0', serverVersion: '0.26.0.0' },
 			{ kind: 'obsolete', component: 'Web Display', plugin: 'Selva', count: 2 },
 			{ kind: 'secret', in: 'script', label: 'Panels', rules: ['github-token'] }
 		]);
-		expect(summarizeInventory(inv)).toEqual({ missingPlugins: ['Charts'], obsoleteComponents: 2 });
+		expect(summarizeInventory(inv)).toEqual({
+			missingPlugins: ['Charts'],
+			unloadedComponents: [],
+			obsoleteComponents: 2
+		});
+	});
+
+	it('names components an older plugin release lacks, but not those of a missing plugin', () => {
+		const inv = inventory({
+			libraries: [
+				...inventory().libraries.slice(0, 1),
+				{
+					id: SELVA,
+					name: 'Selva',
+					author: 'VN',
+					version: '0.27.0.0',
+					core: false,
+					serverVersion: '0.25.0.0'
+				},
+				{ id: CHARTS, name: 'Charts', author: 'VN', version: '1.3.0.0', core: false }
+			],
+			unloaded: [
+				{ id: 'u1', type: 't-repeat', name: 'Repeat', library: SELVA },
+				{ id: 'u2', type: 't-repeat', name: 'Repeat', library: SELVA },
+				{ id: 'u3', type: 't-bar', name: 'Bar Chart', library: CHARTS }
+			]
+		});
+		const unloaded = inventoryWarnings(inv).filter((w) => w.kind === 'unloaded');
+		expect(unloaded).toEqual([
+			{
+				kind: 'unloaded',
+				component: 'Repeat',
+				plugin: 'Selva',
+				version: '0.27.0.0',
+				serverVersion: '0.25.0.0',
+				count: 2
+			}
+		]);
+		expect(summarizeInventory(inv).unloadedComponents).toEqual(['Repeat']);
+		expect(inventoryWarningText(unloaded[0])).toContain(
+			'saved with Selva 0.27.0.0; the server runs 0.25.0.0, which lacks it'
+		);
+	});
+
+	it('lists an unloaded component before a version note', () => {
+		const inv = inventory({
+			libraries: [
+				{
+					id: SELVA,
+					name: 'Selva',
+					author: 'VN',
+					version: '0.27.0.0',
+					core: false,
+					serverVersion: '0.25.0.0'
+				}
+			],
+			unloaded: [{ id: 'u1', type: 't-repeat', name: 'Repeat', library: SELVA }]
+		});
+		expect(inventoryWarnings(inv).map((w) => w.kind)).toEqual(['unloaded', 'pluginVersion']);
+	});
+
+	it('warns about, but does not count, a component no named plugin provides', () => {
+		const inv = inventory({
+			unloaded: [
+				{ id: 'u1', type: 't-py', name: 'GhPython Script', library: 'unnamed-core-assembly' },
+				{ id: 'u2', type: 't-x', name: 'Mystery' }
+			]
+		});
+		expect(inventoryWarnings(inv).filter((w) => w.kind === 'unloaded')).toHaveLength(2);
+		expect(summarizeInventory(inv).unloadedComponents).toEqual([]);
 	});
 
 	it('has nothing to say about a clean file', () => {

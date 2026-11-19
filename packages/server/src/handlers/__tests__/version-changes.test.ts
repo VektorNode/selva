@@ -238,8 +238,33 @@ describe('inventory', () => {
 		});
 		expect(accepted.status).toBe(201);
 		const listed = (await tp!.config.data.definitions.listVersions(locals.ctx, guid)).items[0];
-		expect(listed.inventorySummary).toEqual({ missingPlugins: ['Charts'], obsoleteComponents: 0 });
+		expect(listed.inventorySummary).toEqual({
+			missingPlugins: ['Charts'],
+			unloadedComponents: [],
+			obsoleteComponents: 0
+		});
 		expect(listed.inventory).toBeUndefined();
+	});
+
+	it('blocks a file with a component the loaded plugin release lacks', async () => {
+		const { locals, guid } = await setup();
+		const withRepeat = {
+			...inventory({ charts: 'loaded' }),
+			unloaded: [
+				{
+					id: 'u1',
+					type: 't-repeat',
+					name: 'Repeat',
+					library: '2e872be7-90c2-496a-b80c-f2623c249347'
+				}
+			]
+		};
+		mockSchema({ name: 'Test', inputs: [], outputs: [] }, withRepeat);
+		const refused = await callHandler(uploadVersion, { locals, params: { guid }, body: form() });
+		expect(refused.status).toBe(422);
+		expect(refused.json).toMatchObject({
+			details: { missingPlugins: '', unloadedComponents: 'Repeat' }
+		});
 	});
 
 	it('says what changed inside, to editors only', async () => {

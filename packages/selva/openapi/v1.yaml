@@ -429,6 +429,7 @@ paths:
       tags:
         - Definitions
       x-scope: upload
+      x-long-running: true
       parameters:
         - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
@@ -464,7 +465,7 @@ paths:
                   description: Pin to a compute server.
                 acceptMissingPlugins:
                   type: string
-                  description: "`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422."
+                  description: "`true` uploads a file that needs a plugin, or a component, the Compute server lacks. Without it, such a file is refused with 422."
               required:
                 - file
                 - projectId
@@ -960,6 +961,7 @@ paths:
       tags:
         - Definitions
       x-scope: upload
+      x-long-running: true
       parameters:
         - name: guid
           in: path
@@ -982,7 +984,7 @@ paths:
                   description: "Markdown, at most 10,000 characters. Longer is refused with 400."
                 acceptMissingPlugins:
                   type: string
-                  description: "`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422."
+                  description: "`true` uploads a file that needs a plugin, or a component, the Compute server lacks. Without it, such a file is refused with 422."
               required:
                 - file
       responses:
@@ -1047,6 +1049,7 @@ paths:
       tags:
         - Definitions
       x-scope: upload
+      x-long-running: true
       parameters:
         - name: guid
           in: path
@@ -1324,7 +1327,7 @@ paths:
             type: string
       responses:
         "200":
-          description: "Editors also get `inventory`: warnings about the file and what changed inside it (plugins, components, values, scripts, wiring)."
+          description: "Editors also get `inventory`: warnings about the file (missing plugins, components the server could not load, version mismatches), `plugins` with the version each was saved with beside the one the Compute server had loaded, and what changed inside it (plugins, components, values, scripts, wiring)."
           content:
             application/json:
               schema:
@@ -1372,6 +1375,7 @@ paths:
       tags:
         - Definitions
       x-scope: upload
+      x-long-running: true
       parameters:
         - name: guid
           in: path
@@ -1385,7 +1389,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Success.
+          description: "`summary`, `warnings` and `plugins`, as in the `inventory` of `/changes`."
           content:
             application/json:
               schema:
@@ -1578,6 +1582,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/image":
+    get:
+      summary: "The cover image, as WebP. 404 when there is none. `coverImage` on the record is a browser URL that needs a session; this one takes a key."
+      operationId: getDefinitionsByGuidImage
+      tags:
+        - Definitions
+      x-scope: read
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Binary payload.
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Upload a cover image.
       operationId: postDefinitionsByGuidImage
@@ -2219,7 +2279,7 @@ paths:
         - $ref: "#/components/parameters/orderDir"
       responses:
         "200":
-          description: A page of results.
+          description: "Each item has `displayName`, or null when the member never set one. No emails."
           content:
             application/json:
               schema:

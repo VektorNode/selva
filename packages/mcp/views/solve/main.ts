@@ -2,10 +2,12 @@ import {
 	connectView,
 	loadSolveResponse,
 	mountSolveViewer,
+	renderViewForm,
 	resultText,
 	solveViewData,
 	type App,
 	type SolveViewer,
+	type SolveViewForm,
 	type ViewToolResult
 } from '../../src/view/index.js';
 
@@ -14,6 +16,7 @@ const title = byId('title');
 const status = byId('status');
 const fit = byId<HTMLButtonElement>('fit');
 const fullscreen = byId<HTMLButtonElement>('fullscreen');
+const formPanel = byId('form');
 
 const say = (text: string) => {
 	status.textContent = text;
@@ -34,6 +37,11 @@ async function show(view: App, result: ViewToolResult) {
 	const current = () => turn === latest;
 	const data = solveViewData(result);
 	title.textContent = data?.title ?? '';
+	if (data?.form) showForm(view, data.form);
+	if (result.isError) {
+		say(resultText(result) || 'The solve failed.');
+		return;
+	}
 	if (!data) {
 		say(resultText(result) || 'This result has no geometry.');
 		return;
@@ -54,6 +62,36 @@ async function show(view: App, result: ViewToolResult) {
 	} catch (err) {
 		if (current()) say(`Could not draw the solve: ${message(err)}`);
 	}
+}
+
+function showForm(view: App, form: SolveViewForm) {
+	formPanel.hidden = form.inputs.length === 0;
+	const handle = renderViewForm(formPanel, form, (values) => {
+		handle.setBusy(true);
+		say('Solving…');
+		view
+			.callServerTool({
+				name: form.tool,
+				arguments: { ...form.arguments, [form.valuesKey]: values }
+			})
+			.then(async (result) => {
+				await show(view, result as ViewToolResult);
+				// The model didn't see this solve; tell it what the user tried and got.
+				const text = resultText(result as ViewToolResult);
+				await view
+					.updateModelContext({
+						content: [
+							{
+								type: 'text',
+								text: `The user solved again from the 3D view with ${JSON.stringify(values)}.\n${text}`
+							}
+						]
+					})
+					.catch(() => {});
+			})
+			.catch((err: unknown) => say(`Could not solve: ${message(err)}`))
+			.finally(() => handle.setBusy(false));
+	});
 }
 
 fit.addEventListener('click', () => viewer?.fitToView());

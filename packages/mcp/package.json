@@ -32,6 +32,12 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
+		"./capture": {
+			"selva-source": "./src/capture.ts",
+			"types": "./dist/capture.d.ts",
+			"import": "./dist/capture.js"
+		},
+		"./views/*": "./dist/views/*",
 		"./view": {
 			"selva-source": "./src/view/index.ts",
 			"types": "./dist/view/index.d.ts",
@@ -45,9 +51,10 @@
 		"!**/*.spec.*"
 	],
 	"scripts": {
-		"build": "tsc && tsc -p src/view && vite build --config views/vite.config.ts",
+		"build": "tsc && tsc -p src/view && vite build --config views/vite.config.ts && vite build --config views/vite.config.ts --mode capture",
 		"dev": "tsc --watch",
-		"type-check": "tsc --noEmit && tsc -p src/view --noEmit && tsc -p views",
+		"type-check": "tsc --noEmit && tsc -p src/view --noEmit && tsc -p views && tsc -p evals",
+		"eval": "node evals/run.ts",
 		"prepack": "publint --strict",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -59,6 +66,7 @@
 		"zod": "catalog:"
 	},
 	"devDependencies": {
+		"@anthropic-ai/sdk": "catalog:",
 		"@modelcontextprotocol/client": "catalog:",
 		"@modelcontextprotocol/ext-apps": "catalog:",
 		"@selvajs/config": "workspace:*",
@@ -75,6 +83,7 @@
 	"peerDependencies": {
 		"@modelcontextprotocol/ext-apps": "^2.0.4",
 		"@selvajs/visualization": "workspace:^",
+		"playwright-core": "^1.64.1",
 		"three": ">=0.179.0"
 	},
 	"peerDependenciesMeta": {
@@ -82,6 +91,9 @@
 			"optional": true
 		},
 		"@selvajs/visualization": {
+			"optional": true
+		},
+		"playwright-core": {
 			"optional": true
 		},
 		"three": {

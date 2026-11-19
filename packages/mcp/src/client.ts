@@ -27,6 +27,8 @@ interface CallOptions {
 	signal?: AbortSignal;
 	/** Overrides the client's default for this call. */
 	timeoutMs?: number;
+	/** A non-JSON success body comes back as {@link BinaryData} instead of its size alone. */
+	bytes?: boolean;
 }
 
 export type TypedCallArgs<O> = CallOptions & {
@@ -38,6 +40,7 @@ export type TypedCallArgs<O> = CallOptions & {
 export interface UntypedCallArgs extends CallOptions {
 	params?: Record<string, string | number>;
 	query?: Record<string, unknown>;
+	/** JSON, or `FormData` for a multipart operation. */
 	body?: unknown;
 }
 
@@ -59,6 +62,11 @@ export interface BinaryBody {
 	binary: true;
 	contentType: string;
 	bytes: number;
+}
+
+/** A binary success body with its bytes, for a call made with `bytes: true`. */
+export interface BinaryData extends BinaryBody {
+	data: Uint8Array;
 }
 
 // ============================================================================
@@ -157,7 +165,9 @@ export function createApiClient(
 			Authorization: `Bearer ${options.apiKey}`,
 			Accept: 'application/json'
 		};
-		if (args.body !== undefined) headers['Content-Type'] = 'application/json';
+		const form = args.body instanceof FormData;
+		// FormData sets its own multipart boundary.
+		if (args.body !== undefined && !form) headers['Content-Type'] = 'application/json';
 		// One key for every attempt: a retry after a timeout replays instead of running twice.
 		if (op.idempotent) headers['Idempotency-Key'] = crypto.randomUUID();
 
@@ -182,7 +192,12 @@ export function createApiClient(
 					// The key is the only credential: a host fetch that forwards the incoming
 					// request's cookies must not let a session ride along.
 					credentials: 'omit',
-					body: args.body === undefined ? undefined : JSON.stringify(args.body),
+					body:
+						args.body === undefined
+							? undefined
+							: form
+								? (args.body as FormData)
+								: JSON.stringify(args.body),
 					signal
 				});
 			} catch (err) {
@@ -208,7 +223,7 @@ export function createApiClient(
 			}
 			if (!res.ok) throw await toError(operationId, res);
 			tally.status = res.status;
-			return readBody(res);
+			return readBody(res, args.bytes);
 		}
 	}
 
@@ -233,12 +248,15 @@ function queryString(query: UntypedCallArgs['query']): string {
 	return s ? `?${s}` : '';
 }
 
-async function readBody(res: Response): Promise<unknown> {
+async function readBody(res: Response, keepBytes = false): Promise<unknown> {
 	if (res.status === 204) return undefined;
 	const type = res.headers.get('Content-Type') ?? '';
 	if (type.includes('json')) return res.json();
-	const bytes = (await res.arrayBuffer()).byteLength;
-	return { binary: true, contentType: type, bytes } satisfies BinaryBody;
+	const data = new Uint8Array(await res.arrayBuffer());
+	if (keepBytes) {
+		return { binary: true, contentType: type, bytes: data.byteLength, data } satisfies BinaryData;
+	}
+	return { binary: true, contentType: type, bytes: data.byteLength } satisfies BinaryBody;
 }
 
 async function toError(

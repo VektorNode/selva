@@ -33,7 +33,8 @@ public static class InventoryExtractor
             objects.Select(CanvasObjectOf),
             objects.SelectMany(ValuesOf),
             objects.Select(ScriptOf).Where(s => s != null),
-            Wires(objects));
+            Wires(objects),
+            UnloadedObjects(archive, doc));
         return InventoryBuilder.ToJson(inventory);
     }
 
@@ -77,6 +78,27 @@ public static class InventoryExtractor
     }
 
     static string Text(GH_IReader chunk, string name) => chunk.ItemExists(name) ? chunk.GetString(name) ?? "" : "";
+
+    // Grasshopper skips an object whose type no loaded assembly provides, including a component an
+    // older release of a loaded plugin lacks. Only the archive still has it.
+    static IEnumerable<ArchiveObject> UnloadedObjects(GH_Archive archive, GH_Document doc)
+    {
+        var chunks = archive?.GetRootNode?.FindChunk("Definition")?.FindChunk("DefinitionObjects");
+        if (chunks == null) yield break;
+        var loaded = new HashSet<Guid>(doc.Objects.Select(o => o.InstanceGuid));
+        foreach (var chunk in chunks.Chunks.OfType<GH_IReader>())
+        {
+            if (chunk.Name != "Object") continue;
+            var container = chunk.FindChunk("Container");
+            var id = container != null && container.ItemExists("InstanceGuid") ? container.GetGuid("InstanceGuid") : Guid.Empty;
+            if (id == Guid.Empty || loaded.Contains(id)) continue;
+            yield return new ArchiveObject(
+                id,
+                chunk.ItemExists("GUID") ? chunk.GetGuid("GUID") : Guid.Empty,
+                Text(chunk, "Name"),
+                chunk.ItemExists("Lib") ? chunk.GetGuid("Lib") : Guid.Empty);
+        }
+    }
 
     static CanvasObject CanvasObjectOf(IGH_DocumentObject obj) => new(
         obj.InstanceGuid,

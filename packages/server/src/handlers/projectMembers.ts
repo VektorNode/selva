@@ -36,7 +36,17 @@ export const listProjectMembers: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 	await requireCanManage(req, id, 'members');
 
-	return collection(await req.deps.projects.listProjectMembers(ctx, id, parseListOptions(req.url)));
+	const page = await req.deps.projects.listProjectMembers(ctx, id, parseListOptions(req.url));
+	// Names only, never emails: whoever manages members already sees them on the project page.
+	const profiles = await req.deps.userProfile.getProfiles(
+		SYSTEM_CONTEXT,
+		page.items.map((m) => m.userId)
+	);
+	const names = new Map(profiles.map((p) => [p.userId, p.displayName]));
+	return collection({
+		...page,
+		items: page.items.map((m) => ({ ...m, displayName: names.get(m.userId) ?? null }))
+	});
 };
 
 export const addProjectMember: ApiHandler = async (req) => {

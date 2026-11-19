@@ -30,7 +30,8 @@ export {
 	updateDefinition,
 	getDefinitionSchema,
 	publishDefinition,
-	uploadDefinitionImage
+	uploadDefinitionImage,
+	getDefinitionImage
 } from './definitions.js';
 export {
 	listVersions,

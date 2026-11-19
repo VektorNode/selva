@@ -107,6 +107,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'POST',
 		path: '/definitions',
 		scope: 'upload',
+		longRunning: true,
 		idempotent: true,
 		summary: 'Create a definition from a Grasshopper file.',
 		response: 'object',
@@ -124,7 +125,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 				field: 'acceptMissingPlugins',
 				required: false,
 				description:
-					'`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422.'
+					'`true` uploads a file that needs a plugin, or a component, the Compute server lacks. Without it, such a file is refused with 422.'
 			}
 		],
 		errors: [400, 403, 422, 503]
@@ -186,6 +187,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'POST',
 		path: '/definitions/{guid}/versions',
 		scope: 'upload',
+		longRunning: true,
 		idempotent: true,
 		summary: 'Upload a new version.',
 		response: 'object',
@@ -201,7 +203,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 				field: 'acceptMissingPlugins',
 				required: false,
 				description:
-					'`true` uploads a file that needs a plugin the Compute server lacks. Without it, such a file is refused with 422.'
+					'`true` uploads a file that needs a plugin, or a component, the Compute server lacks. Without it, such a file is refused with 422.'
 			}
 		],
 		errors: [400, 404, 422, 503]
@@ -210,6 +212,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'POST',
 		path: '/definitions/{guid}/versions/check',
 		scope: 'upload',
+		longRunning: true,
 		summary:
 			'Dry run of an upload: validates the file through Compute and diffs it against the version it would follow, form and inventory. Writes nothing.',
 		response: 'object',
@@ -247,7 +250,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		summary:
 			'What this version changed in inputs, outputs and settings, against `?against=<versionId>` or the version before it.',
 		returns:
-			'Editors also get `inventory`: warnings about the file and what changed inside it (plugins, components, values, scripts, wiring).',
+			'Editors also get `inventory`: warnings about the file (missing plugins, components the server could not load, version mismatches), `plugins` with the version each was saved with beside the one the Compute server had loaded, and what changed inside it (plugins, components, values, scripts, wiring).',
 		response: 'object',
 		errors: [404]
 	},
@@ -257,6 +260,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'upload',
 		summary:
 			"Re-read a version's inventory from its stored file through Compute: for versions uploaded before inventories, or after installing a missing plugin.",
+		returns: '`summary`, `warnings` and `plugins`, as in the `inventory` of `/changes`.',
+		longRunning: true,
 		response: 'object',
 		errors: [404, 422, 503]
 	},
@@ -277,6 +282,16 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		response: 'object',
 		requestBody: PublishVersionBodySchema,
 		errors: [400, 404]
+	},
+	{
+		method: 'GET',
+		path: '/definitions/{guid}/image',
+		scope: 'read',
+		summary:
+			'The cover image, as WebP. 404 when there is none. `coverImage` on the record is a browser URL that needs a session; this one takes a key.',
+		response: 'binary',
+		contentType: 'image/webp',
+		errors: [404]
 	},
 	{
 		method: 'POST',
@@ -370,6 +385,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'read',
 		summary: 'List project members.',
 		response: 'collection',
+		returns: 'Each item has `displayName`, or null when the member never set one. No emails.',
 		errors: [403, 404]
 	},
 	{

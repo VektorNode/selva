@@ -108,16 +108,7 @@ Pure solve/data: see the `three` prohibition above. Anything that turns a respon
 
 ### `@selvajs/visualization`
 
-`packages/visualization`. Framework-free (no Svelte, no runes); `three` is a peer dep. Four layers that **depend downward only**: `scene`, `render`, and `parse` are siblings (none imports another) and each may import `shared`. Each layer has its own barrel and README naming its extension points.
-
-- `/scene`: `createSceneOutliner`: reads a scene (visibility/selection/layers), never owns content
-- `/render`: `initThree` plus the CAD viewer toolkit (camera, edges, grid, gizmo, measure)
-- `/parse`: backend payload → THREE meshes (`webdisplay`, `display-items`)
-- `shared/`: **internal**: coordinate frame, look presets, errors, logging, geometry/color math. Not a published entrypoint; what consumers need is re-exported from `/render`.
-
-**The public API is deliberately minimal: do not re-export a symbol just because it exists.** `initThree` owns the render toolkit and hands live instances back on `ThreeViewer`, so their factories stay unexported; `createSceneOutliner` composes the scene layer's parts; the SLVA binary wire format is private to `parseMeshBatch*`. Export handle _types_ so hosts can annotate, keep constructors internal. The root `.` entrypoint intentionally re-exports nothing; import from a layer.
-
-**One seam must be preserved so a layer never depends upward:** `render/` takes an `onMaxAnisotropy` hook rather than calling into `parse/` (the host wires it to `setTextureAnisotropy` from `/parse`).
+`packages/visualization`, framework-free; layer and public-API rules are in its own CLAUDE.md.
 
 Two traps, both of which produce correct values that never re-render:
 
@@ -130,19 +121,10 @@ The solve session is not a layer here: it lives in `@selvajs/solve/client`.
 
 ### `@selvajs/sketch`
 
-`packages/sketch`. Points, lines, polylines and NURBS curves as Get Point / Get Line / Get
-Geometry inputs. Three entrypoints that depend downward only: `/model` (plain data and math, no
-deps), `/io` (DXF reader; Rhino archive codec and 3DM reader that take a loaded rhino3dm module),
-`/tool` (the viewer draw tool, on `ThreeViewer`'s public seams). Items are in model units and
-Rhino's axes; the scene is in metres.
-
-It is meant to be built on: `createSketchTool` is `createCurveLayer` plus `createPointPicker`,
-both exported, and a host adds a shape with a `DrawModeSpec` instead of forking the tool. In the
-app the handle is `SketchController` (`ComputeApp` `onReady` → `getSketch()`).
+`packages/sketch`, curve and point inputs; details in its own CLAUDE.md.
 
 `@selvajs/ui` never imports rhino3dm: the host passes `loadRhino` to `ComputeApp`, or the wasm
-lands in every host's bundle, the plugin's `.gha` included. Design:
-[curve-inputs](./plans/features/curve-inputs.md).
+lands in every host's bundle, the plugin's `.gha` included.
 
 ### `@selvajs/platform`
 
@@ -157,13 +139,6 @@ Component authoring is covered by video, not prose. For the display wire format,
 [docs/contributing/slva-format.md](./docs/contributing/slva-format.md); its C# codec lives in
 the Rhino-free `Plugin/Selva.Slva/` library ([README](./Plugin/Selva.Slva/README.md)), not in
 `Selva.GH`.
-
-`Plugin/Selva.GH/Features/`:
-
-- **UIBuilder**: `GH_UIBuilderComponent`, schema linking and WebSocket communication
-- **Display**: `ThreeMaterial`, 3D web visualization config
-- **FileIO**: `GH_DataToFileGeneric`, `GH_BlockToFile`, geometry export
-- **ComputeIO**: `GetValueListParameter`, `GH_ValueListDataGoo`, and other interactive-selection params (colors, images, files)
 
 **Adding or removing a param on a released component is a breaking change.** Snapshot the old shape into `Features/<Name>/OBSOLETE/`, give the live component a new GUID, and add an `IGH_UpgradeObject` remapping the indices. Full procedure: [STRUCTURE.md](./STRUCTURE.md#changing-a-components-parameters-obsolete--upgrader).
 
@@ -203,24 +178,9 @@ pnpm run stage <auth>       # real install in Docker under pm2 + Caddy, self-upd
                             # `run` is required: pnpm 11 has a built-in `stage`.
 pnpm compute:local          # Rhino.Compute as the GCP server runs it (:6510)
 
-pnpm build                  # every package in dep order, cached
-pnpm build --filter=@selvajs/selva
 pnpm run build:plugin       # production .gha with embedded web assets
-
-pnpm check                  # svelte-check
-pnpm type-check             # tsc --noEmit
-pnpm lint                   # ESLint, each package's own config
-pnpm format                 # Prettier
-pnpm test                   # vitest across packages that have tests
 pnpm generate               # regenerate TS + C# from ui-schema.json and wire-schema.json
-
-pnpm clean                  # remove node_modules, .svelte-kit, pnpm-lock.yaml
-pnpm rebuild                # clean + install + build
 ```
-
-Single package: `cd packages/<name> && pnpm test` (or `pnpm test:watch`).
-
-.NET: `cd Plugin && dotnet build` (add `--configuration Release`), `dotnet test`, `dotnet test --filter "FullyQualifiedName~SchemaMigrator"`.
 
 ### Before calling work done
 
@@ -236,33 +196,7 @@ Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build`
 
 ### Installing to Grasshopper
 
-Rhino 9 on Windows is the primary platform: develop, debug and test against it first. Rhino 8 stays supported and must not regress.
-
-`pnpm install:plugin` builds the production plugin and installs it into Rhino 8's and 9's package folders, where a released install lives (`--skip-build` reinstalls the last build). Close Rhino first: it locks `Selva.gha`.
-
-For debugging, install with `pnpm install:plugin:dev` instead. Then:
-
-- `pnpm plugin:logs` follows a JSON-lines log of every Logger call, every bridge message in and out, and unhandled exceptions with stacks. Filter with `--level warn`, `--grep <session>` or `--since 10m`; `--json` gives raw lines.
-- `pnpm plugin:session` lists live sessions with their full URL, secret included.
-- `lab:record` and `bridge-drive.mjs` connect to the newest live session when no URL is given.
-- The Selva app is on: Export as app in the builder, app files, and the `SelvaApp` command. A released install has none of it. Spec: [selva-app](./plans/features/selva-app.md).
-
-A plain `install:plugin` turns this off again.
-
-To load a build from the Libraries folder instead, uninstall the package first, or Grasshopper loads both. Copy the whole TFM folder: `Selva.Panel.rhp` and the dependencies sit beside `Selva.gha`.
-
-```bash
-# Windows (Rhino 9)
-xcopy /E /Y "Plugin\Selva.GH\bin\Release\net10.0\*" "%APPDATA%\Grasshopper\Libraries-9\Selva\"
-
-# Windows (Rhino 8)
-xcopy /E /Y "Plugin\Selva.GH\bin\Release\net8.0\*" "%APPDATA%\Grasshopper\Libraries-8\Selva\"
-
-# macOS (Rhino 8)
-cp -R Plugin/Selva.GH/bin/Release/net8.0/ ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/Selva/
-```
-
-Restart Rhino completely afterwards.
+Rhino 9 on Windows is the primary platform: develop, debug and test against it first. Rhino 8 stays supported and must not regress. Install, debug-install, logs and Libraries-folder loading: the `install-plugin` skill.
 
 ## Data privacy
 
@@ -279,9 +213,6 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 
 ## Requirements
 
-- [pnpm](https://pnpm.io) >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
-- Node.js >= 24.0.0
-- .NET SDK 10 (plugin development; pinned in `global.json`)
 - Rhino 9 (primary) or Rhino 8.21+ (Rhino 7 is not supported)
 - Rhino.Compute: the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 

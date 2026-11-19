@@ -1163,6 +1163,16 @@ var APP_SETTINGS = composeManifest([
 		description: 'Browser origins /mcp accepts besides its own.'
 	}),
 	defineSetting({
+		key: 'MCP_PREVIEW_BROWSER',
+		label: 'MCP preview browser',
+		type: 'string',
+		default: '',
+		onInvalid: 'default',
+		class: 'setting',
+		description:
+			'Chromium or Chrome executable that selva_capture_preview renders with. Empty: the one `npx playwright install chromium` installs.'
+	}),
+	defineSetting({
 		key: 'LOG_LEVEL',
 		label: 'Log level',
 		type: 'enum',

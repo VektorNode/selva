@@ -9,6 +9,11 @@ export interface ToolContext {
 	signal: AbortSignal;
 	/** The host's operations, for tools that read the spec at run time. */
 	spec: OperationIndex;
+	/**
+	 * False when the client declared its capabilities without MCP Apps: it never shows a view,
+	 * so work only a view needs can be skipped. True when it declared none.
+	 */
+	apps: boolean;
 }
 
 /** A tool's input, derived from an operation once the spec is known. See `inputFrom`. */

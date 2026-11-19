@@ -21,7 +21,7 @@
 	let openScript = $state<string | null>(null);
 
 	const tone = (w: InventoryWarning) =>
-		w.kind === 'missingPlugin'
+		w.kind === 'missingPlugin' || w.kind === 'unloaded'
 			? 'text-destructive'
 			: w.kind === 'pluginVersion'
 				? 'text-muted-foreground'

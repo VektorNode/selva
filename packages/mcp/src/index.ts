@@ -14,6 +14,8 @@ export {
 	type AppResourceOptions,
 	type ToolUi,
 	type SolveViewData,
+	type SolveViewForm,
+	type ViewInput,
 	type ToolVisibility
 } from './app.js';
 export { solveView, SOLVE_VIEW_URI } from './views.js';
@@ -30,6 +32,7 @@ export type {
 	ApiCallRecord,
 	ApiClientOptions,
 	BinaryBody,
+	BinaryData,
 	TypedApi,
 	TypedCallArgs,
 	UntypedApi,

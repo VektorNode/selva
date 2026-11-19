@@ -32,6 +32,11 @@ On every provider:
 Login IPs go through the rate limiter but stay in memory, expire within the rate-limit window, and are
 never persisted.
 
+An MCP solve's output files, its geometry and rendered previews are kept in the storage provider
+under `mcp-stash/`, by a random token, so the agent can hand out a download link or set a cover.
+They expire after an hour and are deleted within the next two, or when the server next starts if it
+was down then. Erasure does not track them.
+
 ## Who owns the identity data
 
 - **Supabase**: credentials, email and sign-in time live in Supabase `auth.users`. Selva holds only the

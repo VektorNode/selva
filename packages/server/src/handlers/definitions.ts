@@ -26,7 +26,12 @@ import {
 	UpdateDefinitionBodySchema
 } from '../api/index.js';
 import type { ApiHandler } from '../api/index.js';
-import { toDefinitionListItem, toSourceDocumentId, type DefinitionStatus } from '@selvajs/platform';
+import {
+	definitionPaths,
+	toDefinitionListItem,
+	toSourceDocumentId,
+	type DefinitionStatus
+} from '@selvajs/platform';
 import { CreateDefinitionInputSchema, GuidSchema } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../access/index.js';
@@ -318,4 +323,19 @@ export const uploadDefinitionImage: ApiHandler = async (req) => {
 	return {
 		body: { coverImage: await definitionService(req.deps).saveCoverImage(ctx, guid, data) }
 	};
+};
+
+/** The cover image's bytes, by the same visibility rule as the definition. */
+export const getDefinitionImage: ApiHandler = async (req) => {
+	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
+	const { ctx } = requireCaller(req);
+
+	const record = await getVisibleDefinition(ctx, guid, req.deps);
+	if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	const bytes = record.coverImage ? await req.deps.storage.get(definitionPaths.image(guid)) : null;
+	if (!bytes) apiError(404, ApiErrorCode.NOT_FOUND, 'This definition has no cover image');
+
+	return new Response(Buffer.from(bytes), {
+		headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=60' }
+	});
 };

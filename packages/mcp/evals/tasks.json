@@ -1,0 +1,151 @@
+{
+	"$comment": "Prompts a Selva user would type, against a local instance seeded with `--examples`. `heldOut` tasks are not read while tuning descriptions. A `number` check with `expected: null` is uncalibrated: the runner prints the answer, and you fill it in once you have checked it in the app.",
+	"tasks": [
+		{
+			"id": "list-solvable",
+			"prompt": "Which Selva definitions can I run right now? Just the names.",
+			"expect": {
+				"toolsCalled": ["selva_list_definitions"],
+				"toolsNotCalled": ["selva_solve"],
+				"judge": "Lists the seeded example definitions by name, and does not claim any of them can't run because it is a draft."
+			}
+		},
+		{
+			"id": "describe-shelf",
+			"prompt": "What can I change on the Shelving Unit, and in which units?",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition"],
+				"judge": "Names the Shelving Unit's inputs with their ranges and units as the tool reported them, grouped as the form groups them."
+			}
+		},
+		{
+			"id": "shelf-default-solve",
+			"prompt": "Solve the Shelving Unit with its defaults and tell me what it outputs.",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition", "selva_solve"],
+				"judge": "Reports the solve's number and text outputs and summarizes geometry, without inventing values."
+			}
+		},
+		{
+			"id": "kitchen-file",
+			"prompt": "Run Kitchen Run with default values and give me the link to the 3dm file it makes.",
+			"expect": {
+				"toolsCalled": ["selva_solve"],
+				"answerContains": ["/mcp/files/"],
+				"judge": "Gives a download link for the .3dm file, not base64 contents, and says the link expires."
+			}
+		},
+		{
+			"id": "attractor-sweep",
+			"prompt": "On Point Attractor, try three different values for the main attractor input across its range and tell me how the outputs change. Ask me before spending more than three solves.",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition", "selva_solve"],
+				"maxCalls": { "selva_solve": 3 },
+				"judge": "Picks three values inside the reported range, solves each once, and compares the outputs in a short table or list."
+			}
+		},
+		{
+			"id": "conditional-inputs",
+			"prompt": "On Dependent Forms Tutorial, which inputs only appear depending on other choices?",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition"],
+				"toolsNotCalled": ["selva_solve"],
+				"judge": "Names the inputs that are shown or hidden by a condition, and what they depend on, as the description reports."
+			}
+		},
+		{
+			"id": "dropdown-by-name",
+			"prompt": "Solve Dynamic Value List with the second option of its list picked.",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition", "selva_solve"],
+				"judge": "Passes the option by the name the description lists, and the solve succeeds."
+			}
+		},
+		{
+			"id": "versions",
+			"prompt": "How many versions does Garden Sketch have and which one is live?",
+			"expect": {
+				"toolsCalled": ["selva_list_versions"],
+				"judge": "States the version count and which version is live, as listed."
+			}
+		},
+		{
+			"id": "check-needs",
+			"prompt": "Does the Compute server have every plugin Timber Gridshell Pavilion needs?",
+			"expect": {
+				"toolsCalled": ["selva_check_definition"],
+				"toolsNotCalled": ["selva_solve"],
+				"judge": "Answers from the plugin list (saved version against server version) and names any problem the tool reported."
+			}
+		},
+		{
+			"id": "failed-solve-diagnosis",
+			"prompt": "Studio Task Lamp gives me errors when I solve it. Find out why.",
+			"expect": {
+				"toolsCalled": ["selva_check_definition"],
+				"judge": "Uses the check tool's plugin and component report to explain the cause, or says plainly the check found nothing wrong and quotes the solve's own error."
+			}
+		},
+		{
+			"id": "edit-details",
+			"prompt": "Give Canopy Example the category \"Structures\" and the tags canopy and demo.",
+			"expect": {
+				"toolsCalled": ["selva_update_definition"],
+				"toolsNotCalled": ["selva_publish_definition"],
+				"judge": "Changes only the category and tags, and confirms them from the tool's reply."
+			}
+		},
+		{
+			"id": "cover-from-preview",
+			"prompt": "Render Perforated Facade from the front and, if it looks right, make that picture its cover.",
+			"expect": {
+				"toolsCalled": ["selva_capture_preview", "selva_set_cover_image"],
+				"judge": "Renders, looks at the picture before setting it, passes the preview id to the cover tool, and confirms the stored cover."
+			}
+		},
+		{
+			"id": "draft-not-blocking",
+			"prompt": "Block Massing Studio says draft. Can people run it?",
+			"expect": {
+				"toolsCalled": ["selva_describe_definition"],
+				"judge": "Explains that draft only keeps it out of the library listing, and that anyone with access can solve its live version."
+			}
+		},
+		{
+			"id": "new-project-move",
+			"prompt": "Make a private project called Eval Sandbox and move Display Example into it.",
+			"heldOut": true,
+			"expect": {
+				"toolsCalled": ["selva_create_project", "selva_update_definition"],
+				"judge": "Creates the project once and moves the definition by passing the project, then confirms the move."
+			}
+		},
+		{
+			"id": "members",
+			"prompt": "Who is in the project that holds Kitchen Run?",
+			"heldOut": true,
+			"expect": {
+				"toolsCalled": ["selva_list_project_members"],
+				"judge": "Lists members by display name where there is one, with their roles."
+			}
+		},
+		{
+			"id": "publish-confirm",
+			"prompt": "Publish File Example.",
+			"heldOut": true,
+			"expect": {
+				"toolsNotCalled": ["selva_publish_definition"],
+				"judge": "Asks the user to confirm before publishing, since publishing changes what everyone runs."
+			}
+		},
+		{
+			"id": "shelf-number",
+			"prompt": "What does the Shelving Unit weigh with its default values? A number with its unit.",
+			"heldOut": true,
+			"expect": {
+				"toolsCalled": ["selva_solve"],
+				"number": { "expected": null, "tolerance": 0.01 }
+			}
+		}
+	]
+}

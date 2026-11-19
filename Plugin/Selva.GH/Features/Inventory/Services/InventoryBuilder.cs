@@ -18,6 +18,9 @@ public sealed record LoadedLibrary(Guid Id, string Name, string Version);
 
 public sealed record CanvasObject(Guid Id, Guid Type, string Name, string NickName, Guid Library, bool Obsolete);
 
+/// <summary>An object chunk in the archive with no counterpart in the loaded document.</summary>
+public sealed record ArchiveObject(Guid Id, Guid Type, string Name, Guid Library);
+
 public sealed record CanvasValue(
     string Id,
     string? Owner,
@@ -52,7 +55,8 @@ public static class InventoryBuilder
         IEnumerable<CanvasObject> objects,
         IEnumerable<CanvasValue> values,
         IEnumerable<CanvasScript> scripts,
-        IEnumerable<CanvasWire> wires)
+        IEnumerable<CanvasWire> wires,
+        IEnumerable<ArchiveObject>? unloaded = null)
     {
         var loadedById = loaded.GroupBy(l => l.Id).ToDictionary(g => g.Key, g => g.First());
         var wireList = wires.Distinct().ToList();
@@ -85,7 +89,16 @@ public static class InventoryBuilder
                 Sha256 = Sha256(string.Join("\n", wireList
                     .Select(w => $"{w.Source}>{w.Target}")
                     .OrderBy(s => s, StringComparer.Ordinal)))
-            }
+            },
+            Unloaded = (unloaded ?? Enumerable.Empty<ArchiveObject>())
+                .Select(o => new InventoryUnloaded
+                {
+                    Id = o.Id,
+                    Type = o.Type,
+                    Name = o.Name,
+                    Library = o.Library == Guid.Empty ? null : o.Library.ToString()
+                })
+                .ToList()
         };
     }
 

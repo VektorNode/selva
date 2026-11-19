@@ -27,7 +27,8 @@ import {
 } from '#lib/server/providers.server.js';
 import { signInMaxAgeMs } from '#lib/server/signInMaxAge.server.js';
 import { apiTokenCodec, apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
-import { MCP_PATH } from '#lib/server/mcp/path.js';
+import { MCP_FILES_PREFIX, MCP_PATH } from '#lib/server/mcp/path.js';
+import { startStashJanitor } from '#lib/server/mcp/stash-instance.js';
 import { readShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { looksLikeShareToken } from '#lib/server/shareLinks/token.server.js';
 import { requestMemo } from '#lib/server/requestMemo.server.js';
@@ -78,6 +79,7 @@ let proxyAuthLoginMissWarned = false;
 export const init: ServerInit = () => {
 	checkConfigAtBoot();
 	requestTiming.markBooted();
+	startStashJanitor();
 	// Not in dev: Vite owns the signals there, and HMR would stack a listener per reload.
 	if (!dev) {
 		process.once('SIGINT', closeAllSolveEventStreams);
@@ -258,7 +260,10 @@ const routeClassifier = createRouteClassifier({
 	// No trailing slash on solve-events: the SSE route IS that path, with the
 	// stream in a query param, so a trailing slash would deny the stream while
 	// letting the callback (which has a solveId segment) through.
-	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events'],
+	//
+	// `/mcp/files/` serves an MCP solve's output files by an unguessable token
+	// that expires within the hour, so a link works where the model hands it on.
+	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events', MCP_FILES_PREFIX],
 	// Static-asset paths SvelteKit/adapter-node serves directly.
 	staticPrefixes: ['/_app/', '/favicon/'],
 	staticPaths: ['/favicon.svg', '/robots.txt']

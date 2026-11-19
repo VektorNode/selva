@@ -116,8 +116,25 @@ function withDefaultsOf(schema: UISchema, base: UISchema): UISchema {
 interface InventoryReport {
 	summary: InventorySummary;
 	warnings: InventoryWarning[];
+	/** Each plugin the file was saved with, beside what the server had loaded when it read the file. */
+	plugins: PluginRequirement[];
+	/** The Selva plugin version on the server that read the file. */
+	extractedWith: string;
 	diff: InventoryDiff | null;
 	missing: 'base' | null;
+}
+
+interface PluginRequirement {
+	name: string;
+	version: string;
+	/** Null when the server had not loaded it. */
+	serverVersion: string | null;
+}
+
+function pluginRequirements(inventory: DocumentInventory): PluginRequirement[] {
+	return inventory.libraries
+		.filter((l) => !l.core)
+		.map((l) => ({ name: l.name, version: l.version, serverVersion: l.serverVersion ?? null }));
 }
 
 function inventoryReport(
@@ -130,27 +147,39 @@ function inventoryReport(
 	return {
 		summary: summarizeInventory(inventory),
 		warnings: inventoryWarnings(inventory),
+		plugins: pluginRequirements(inventory),
+		extractedWith: inventory.extractedWith,
 		diff: base?.inventory ? diffInventories(base.inventory, inventory, { formIds }) : null,
 		missing: base && !base.inventory ? 'base' : null
 	};
 }
 
 /**
- * A plugin the server lacks makes every solve drop its components and succeed with outputs
- * missing, so it blocks the upload unless the caller accepts that, e.g. while the plugin is still
- * being installed. The version's summary keeps saying so until a check finds the plugin.
+ * A plugin the server lacks, or a component its installed release lacks, makes every solve drop
+ * those components and succeed with outputs missing, so it blocks the upload unless the caller
+ * accepts that, e.g. while the plugin is still being installed. The version's summary keeps
+ * saying so until a check finds them.
  */
 export function guardPlugins(inventory: DocumentInventory | null, accepted: boolean): void {
-	const missing = inventory ? summarizeInventory(inventory).missingPlugins : [];
-	if (!missing.length || accepted) return;
+	if (!inventory || accepted) return;
+	const { missingPlugins, unloadedComponents = [] } = summarizeInventory(inventory);
+	if (!missingPlugins.length && !unloadedComponents.length) return;
+	const lacks = [
+		missingPlugins.length && `${missingPlugins.join(', ')} installed`,
+		unloadedComponents.length &&
+			`the components ${unloadedComponents.join(', ')} (its plugin release is older than the file's)`
+	].filter(Boolean);
 	apiError(
 		422,
 		ApiErrorCode.UNPROCESSABLE,
-		`The Compute server does not have ${missing.join(', ')} installed, so solves would drop ` +
-			`those components and miss their outputs. Install the plugin first, or upload anyway with ` +
-			`acceptMissingPlugins=true.`,
+		`The Compute server does not have ${lacks.join(', nor ')}, so solves would drop those ` +
+			`components and miss their outputs. Install or update the plugin first, or upload anyway ` +
+			`with acceptMissingPlugins=true.`,
 		undefined,
-		{ missingPlugins: missing.join(', ') }
+		{
+			missingPlugins: missingPlugins.join(', '),
+			unloadedComponents: unloadedComponents.join(', ')
+		}
 	);
 }
 
@@ -349,7 +378,14 @@ export const refreshVersionInventory: ApiHandler = async (req) => {
 	}
 	const summary = summarizeInventory(inventory);
 	await req.deps.definitionMeta.setVersionInventory(ctx, version.id, inventory, summary);
-	return { body: { summary, warnings: inventoryWarnings(inventory) } };
+	return {
+		body: {
+			summary,
+			warnings: inventoryWarnings(inventory),
+			plugins: pluginRequirements(inventory),
+			extractedWith: inventory.extractedWith
+		}
+	};
 };
 
 /**

@@ -103,6 +103,8 @@
 	const inventory = $derived(check.state === 'valid' ? check.result.inventory : null);
 	const breaking = $derived(diff?.counts.breaking ?? 0);
 	const missingPlugins = $derived(inventory?.summary.missingPlugins ?? []);
+	const unloadedComponents = $derived(inventory?.summary.unloadedComponents ?? []);
+	const blocked = $derived(missingPlugins.length > 0 || unloadedComponents.length > 0);
 	const suggestion = $derived.by(() => {
 		const form = diff && !diff.identical ? schemaDiffToMarkdown(diff) : '';
 		const inside = inventory?.diff ? inventoryDiffToMarkdown(inventory.diff) : '';
@@ -116,7 +118,7 @@
 			!uploading &&
 			changeNote.length <= MAX_CHANGE_NOTE_LENGTH &&
 			(breaking === 0 || breakingAcknowledged) &&
-			(missingPlugins.length === 0 || pluginsAccepted)
+			(!blocked || pluginsAccepted)
 	);
 
 	async function readBase(baseId: string) {
@@ -252,14 +254,19 @@
 					{/if}
 				</div>
 
-				{#if missingPlugins.length}
+				{#if blocked}
 					<Callout
 						tone="danger"
-						title="The Compute server does not have {missingPlugins.join(', ')}"
+						title="The Compute server does not have {[
+							...missingPlugins,
+							...unloadedComponents
+						].join(', ')}"
 					>
 						<p class="text-sm">
 							Grasshopper drops components it cannot load, so solves would succeed with outputs
-							missing. Install the plugin on the server first.
+							missing. Install the plugin on the server first{unloadedComponents.length
+								? ', or update it: its installed release is older than the file'
+								: ''}.
 						</p>
 						<label class="mt-2 flex items-start gap-2 text-sm">
 							<input type="checkbox" class="mt-0.5" bind:checked={pluginsAccepted} />

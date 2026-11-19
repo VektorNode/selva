@@ -14,7 +14,7 @@ import {
 	type ApiClientOptions,
 	type UntypedApi
 } from './client.js';
-import { MCP_APP_MIME_TYPE } from './app.js';
+import { MCP_APP_EXTENSION, MCP_APP_MIME_TYPE } from './app.js';
 import { ApiCallError, describeError, type ErrorHint } from './errors.js';
 import type { ToolOutput } from './output.js';
 import { indexOperations, type JsonSchema, type OperationIndex, type ScopeAction } from './spec.js';
@@ -138,6 +138,14 @@ export interface SelvaMcpServer {
 	 * for this request, for hosts whose fetch is bound to the incoming request.
 	 */
 	handle(request: Request, overrides?: { fetch?: typeof fetch }): Promise<Response>;
+}
+
+function rendersApps(capabilities: object | undefined): boolean {
+	if (!capabilities) return true;
+	const { extensions } = capabilities as {
+		extensions?: Record<string, { mimeTypes?: string[] } | undefined>;
+	};
+	return !!extensions?.[MCP_APP_EXTENSION]?.mimeTypes?.includes(MCP_APP_MIME_TYPE);
 }
 
 export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
@@ -266,7 +274,11 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 					new Set(resolved.def.calls)
 				);
 				const args: unknown = resolved.input.parse(req.params.arguments ?? {});
-				const out = await resolved.def.run(api, args, { signal: ctx.mcpReq.signal, spec });
+				const out = await resolved.def.run(api, args, {
+					signal: ctx.mcpReq.signal,
+					spec,
+					apps: rendersApps(server.getClientCapabilities())
+				});
 				result = toResult(typeof out === 'string' ? { text: out } : out, !!resolved.output);
 				return result;
 			} catch (err) {

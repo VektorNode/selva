@@ -13,34 +13,62 @@ import type { DocumentInventory, InventoryValue } from './generated/index.js';
 
 export type InventoryWarning =
 	| { kind: 'missingPlugin'; plugin: string; version: string }
+	| {
+			kind: 'unloaded';
+			component: string;
+			plugin: string | null;
+			/** What the file was saved with, and what the server runs; null when unknown. */
+			version: string | null;
+			serverVersion: string | null;
+			count: number;
+	  }
 	| { kind: 'pluginVersion'; plugin: string; version: string; serverVersion: string }
 	| { kind: 'obsolete'; component: string; plugin: string | null; count: number }
 	| { kind: 'secret'; in: 'script' | 'value'; label: string; rules: string[] };
 
-/** Missing plugins first: they are the ones that make solves fail. */
+/** Missing plugins and components first: they are the ones that make solves fail. */
 export function inventoryWarnings(inventory: DocumentInventory): InventoryWarning[] {
 	const warnings: InventoryWarning[] = [];
-	const pluginName = new Map(inventory.libraries.map((l) => [l.id, l.name]));
+	const libraryById = librariesById(inventory);
+	const plugins = inventory.libraries.filter((l) => !l.core);
 
-	for (const lib of inventory.libraries) {
-		if (lib.core) continue;
-		if (!lib.serverVersion) {
+	for (const lib of plugins) {
+		if (!lib.serverVersion)
 			warnings.push({ kind: 'missingPlugin', plugin: lib.name, version: lib.version });
-		} else if (lib.serverVersion !== lib.version) {
+	}
+
+	const unloaded = new Map<string, Extract<InventoryWarning, { kind: 'unloaded' }>>();
+	for (const o of unloadedOfLoadedPlugins(inventory)) {
+		const lib = o.library ? libraryById.get(o.library.toLowerCase()) : undefined;
+		const key = `${o.name}\u0000${o.library ?? ''}`;
+		const entry = unloaded.get(key) ?? {
+			kind: 'unloaded',
+			component: o.name,
+			plugin: lib?.name ?? null,
+			version: lib?.version ?? null,
+			serverVersion: lib?.serverVersion ?? null,
+			count: 0
+		};
+		entry.count += 1;
+		unloaded.set(key, entry);
+	}
+	warnings.push(...unloaded.values());
+
+	for (const lib of plugins) {
+		if (lib.serverVersion && lib.serverVersion !== lib.version)
 			warnings.push({
 				kind: 'pluginVersion',
 				plugin: lib.name,
 				version: lib.version,
 				serverVersion: lib.serverVersion
 			});
-		}
 	}
 
 	const obsolete = new Map<string, { plugin: string | null; count: number }>();
 	for (const c of inventory.components) {
 		if (!c.obsolete) continue;
 		const entry = obsolete.get(c.name) ?? {
-			plugin: (c.library && pluginName.get(c.library)) || null,
+			plugin: (c.library && libraryById.get(c.library.toLowerCase())?.name) || null,
 			count: 0
 		};
 		entry.count += 1;
@@ -65,6 +93,16 @@ export function inventoryWarningText(w: InventoryWarning): string {
 	switch (w.kind) {
 		case 'missingPlugin':
 			return `${w.plugin} ${w.version} is not installed on the Compute server: its components are dropped and solves miss their outputs.`;
+		case 'unloaded': {
+			const what = `${w.count > 1 ? `${w.count}× ` : ''}${w.component}`;
+			if (!w.plugin)
+				return `${what} did not load on the Compute server: no plugin it has provides it, so solves skip it and miss what it computes.`;
+			const versions =
+				w.version && w.serverVersion && w.version !== w.serverVersion
+					? ` The file was saved with ${w.plugin} ${w.version}; the server runs ${w.serverVersion}, which lacks it.`
+					: '';
+			return `${what} (${w.plugin}) did not load on the Compute server, so solves skip it and miss what it computes.${versions} Install a ${w.plugin} release that has it.`;
+		}
 		case 'pluginVersion':
 			return `Saved with ${w.plugin} ${w.version}; the Compute server runs ${w.serverVersion}.`;
 		case 'obsolete':
@@ -74,10 +112,45 @@ export function inventoryWarningText(w: InventoryWarning): string {
 	}
 }
 
+const librariesById = (inventory: DocumentInventory) =>
+	new Map(inventory.libraries.map((l) => [l.id.toLowerCase(), l]));
+
+/**
+ * Objects that did not load, less those of a plugin the server lacks altogether: the missing
+ * plugin already explains them.
+ */
+function unloadedOfLoadedPlugins(inventory: DocumentInventory) {
+	const missing = new Set(
+		inventory.libraries.filter((l) => !l.core && !l.serverVersion).map((l) => l.id.toLowerCase())
+	);
+	return (inventory.unloaded ?? []).filter(
+		(o) => !o.library || !missing.has(o.library.toLowerCase())
+	);
+}
+
+/**
+ * Objects that did not load although the server runs the plugin the file names for them: that
+ * release lacks them. Core components, and those whose plugin the file does not name, are left
+ * out: a Compute server that cannot load a core component (one that needs Windows, say) never
+ * will, and no plugin install changes that.
+ */
+function unloadedOfInstalledPlugins(inventory: DocumentInventory) {
+	const libraryById = librariesById(inventory);
+	return (inventory.unloaded ?? []).filter((o) => {
+		const lib = o.library ? libraryById.get(o.library.toLowerCase()) : undefined;
+		return !!lib && !lib.core && !!lib.serverVersion;
+	});
+}
+
 /** What the version list shows without loading the inventory. */
 export interface InventorySummary {
 	/** Plugins the file needs that the Compute server had not loaded at the last check. */
 	missingPlugins: string[];
+	/**
+	 * Components the server could not create although their plugin loaded: an older release
+	 * lacks them. Absent from summaries stored before it was counted.
+	 */
+	unloadedComponents?: string[];
 	obsoleteComponents: number;
 }
 
@@ -86,6 +159,7 @@ export function summarizeInventory(inventory: DocumentInventory): InventorySumma
 		missingPlugins: inventory.libraries
 			.filter((l) => !l.core && !l.serverVersion)
 			.map((l) => l.name),
+		unloadedComponents: [...new Set(unloadedOfInstalledPlugins(inventory).map((o) => o.name))],
 		obsoleteComponents: inventory.components.filter((c) => c.obsolete).length
 	};
 }

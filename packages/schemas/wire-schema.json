@@ -525,6 +525,13 @@
 				},
 				"wires": {
 					"$ref": "#/definitions/InventoryWires"
+				},
+				"unloaded": {
+					"type": "array",
+					"description": "Objects the file holds that the Compute server could not create: their type is in no plugin it loaded, or in an older release of one that lacks it. Grasshopper drops them on load, so `components` never lists them. Absent from inventories built before it was read.",
+					"items": {
+						"$ref": "#/definitions/InventoryUnloaded"
+					}
 				}
 			},
 			"required": ["extractedWith", "libraries", "components", "values", "scripts", "wires"],
@@ -561,6 +568,32 @@
 				}
 			},
 			"required": ["id", "name", "author", "version", "core"],
+			"additionalProperties": false
+		},
+		"InventoryUnloaded": {
+			"type": "object",
+			"description": "One object in the archive that did not load on the Compute server.",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "InstanceGuid, as the archive stores it."
+				},
+				"type": {
+					"type": "string",
+					"format": "guid",
+					"description": "ComponentGuid of its type."
+				},
+				"name": {
+					"type": "string",
+					"description": "Type name, as the archive stores it."
+				},
+				"library": {
+					"type": "string",
+					"description": "Id of the library the archive says provides it; absent when the archive does not say."
+				}
+			},
+			"required": ["id", "type", "name"],
 			"additionalProperties": false
 		},
 		"InventoryComponent": {

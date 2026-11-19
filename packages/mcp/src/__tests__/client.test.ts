@@ -45,6 +45,29 @@ describe('api.call', () => {
 		expect(calls[0].credentials).toBe('omit');
 	});
 
+	it('sends FormData as multipart, leaving the boundary to fetch', async () => {
+		const { api, calls } = client([json({ id: 'u1' }, 201)]);
+		const form = new FormData();
+		form.append('file', new Blob(['x']), 'a.gh');
+		await api.call('postUploads', { body: form });
+		expect(calls[0].body).toBe(form);
+		expect(calls[0].headers['Content-Type']).toBeUndefined();
+	});
+
+	it('hands back a binary body with its bytes only when asked', async () => {
+		const png = () =>
+			new Response(new Uint8Array([1, 2]), { headers: { 'Content-Type': 'image/png' } });
+		const { api } = client([png(), png()]);
+		await expect(api.call('getOrdersById', { params: { id: '1' } })).resolves.toEqual({
+			binary: true,
+			contentType: 'image/png',
+			bytes: 2
+		});
+		await expect(
+			api.call('getOrdersById', { params: { id: '1' }, bytes: true })
+		).resolves.toMatchObject({ bytes: 2, data: new Uint8Array([1, 2]) });
+	});
+
 	it('sends one Idempotency-Key across a retried create', async () => {
 		const { api, calls } = client([new TypeError('socket hang up'), json({ id: 'o1' }, 201)]);
 		await expect(api.call('postOrders', { body: { name: 'A' } })).resolves.toEqual({ id: 'o1' });

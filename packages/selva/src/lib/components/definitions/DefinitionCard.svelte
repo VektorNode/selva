@@ -3,7 +3,7 @@
 	import type { DefinitionRecord, ProjectVisibility } from '@selvajs/platform';
 	import { huesFor, monogram } from './cardStyles';
 	import { formatRelative } from '#lib/format/relativeTime.js';
-	import { statusRing, statusDot } from '../../../routes/projects/_components/statusStyles';
+	import { statusDot } from '../../../routes/projects/_components/statusStyles';
 
 	interface Props {
 		record: DefinitionRecord;
@@ -90,9 +90,7 @@
 		{#if showStatus}
 			<div class="absolute top-2.5 left-2.5">
 				<span
-					class="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] tracking-wide {statusRing(
-						record.status
-					)}"
+					class="bg-raised text-foreground shadow-raised inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[11px] tracking-wide"
 				>
 					<span class="h-1.5 w-1.5 rounded-full {statusDot(record.status)}"></span>
 					{record.status}
