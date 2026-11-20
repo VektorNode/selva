@@ -124,6 +124,16 @@ function classifyFailure(err: unknown, durationMs: number, args: SolvePipelineAr
 				'. Its admin can raise RHINO_COMPUTE_MAX_REQUEST_SIZE.'
 		};
 	}
+	// Rhino.Compute answers 504 when it stops a solve at its own `--timeout`. `@selvajs/compute`
+	// files every 504 as a network error, which would show a running server as unreachable.
+	if (err.statusCode === 504) {
+		return {
+			kind: 'timeout',
+			durationMs,
+			message:
+				"The solve ran past the compute server's time limit. Its admin can raise RHINO_COMPUTE_TIMEOUT."
+		};
+	}
 	switch (err.code) {
 		case ErrorCodes.TIMEOUT_ERROR:
 			return {

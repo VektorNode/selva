@@ -183,6 +183,14 @@ describe('runSolvePipeline — how a solve fails', () => {
 		expect(outcome.message).toContain('RHINO_COMPUTE_MAX_REQUEST_SIZE');
 	});
 
+	it("reads the compute server's 504 as a timeout, not an unreachable server", async () => {
+		const err = new ComputeError('Gateway timeout', 'NETWORK_ERROR', { statusCode: 504 });
+		const outcome = await runSolvePipeline(args({ client: throws(err) }));
+		expect(outcome.kind).toBe('timeout');
+		if (outcome.kind !== 'timeout') return;
+		expect(outcome.message).toContain('RHINO_COMPUTE_TIMEOUT');
+	});
+
 	it("reads the scheduler's own deadline as a timeout, phrased from the server's limit", async () => {
 		const outcome = await runSolvePipeline(args({ client: throws(computeError('TIMEOUT_ERROR')) }));
 		expect(outcome.kind).toBe('timeout');
