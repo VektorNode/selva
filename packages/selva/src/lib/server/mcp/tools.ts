@@ -29,6 +29,7 @@ import {
 import { z } from 'zod';
 import { ProjectVisibilitySchema } from '@selvajs/platform';
 import { describeInputs, formText, resolveValues, viewInputs } from './form.js';
+import { solvedOptions } from './readable-outputs.js';
 import {
 	channelText,
 	definitionArg,
@@ -638,6 +639,8 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 				? {
 						[SOLVE_VIEW_KEY]: {
 							title: schema.name,
+							look: schema.viewerOptions?.look,
+							background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
 							load: {
 								tool: 'selva_solve_geometry',
 								arguments: {
@@ -653,7 +656,7 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 								tool: 'selva_solve',
 								arguments: { definition: guid, ...(version && { version }) },
 								valuesKey: 'values',
-								inputs: viewInputs(schema, values)
+								inputs: viewInputs(schema, values, solvedOptions(schema, res.values ?? []))
 							}
 						} satisfies SolveViewData
 					}

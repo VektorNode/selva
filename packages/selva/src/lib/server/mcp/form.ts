@@ -97,7 +97,13 @@ function inputLine(
 		parts.push(', a button: true runs it once');
 	}
 	const options = optionsOf(item);
-	if (options)
+	if (item?.widgetType === 'dynamicValueList') {
+		const defaults = Object.keys(options ?? {});
+		parts.push(
+			', options computed by the solve from other inputs: selva_solve lists the current ones' +
+				(defaults.length ? ` (defaults: ${defaults.map((k) => `"${k}"`).join(', ')})` : '')
+		);
+	} else if (options)
 		parts.push(
 			`, one of: ${Object.keys(options)
 				.map((k) => `"${k}"`)
@@ -222,7 +228,11 @@ export function resolveValues(
  * them, holding `given` where the model set it and the default otherwise. Geometry, files,
  * colours and lists stay as the definition has them.
  */
-export function viewInputs(schema: UISchema, given: Record<string, unknown>): ViewInput[] {
+export function viewInputs(
+	schema: UISchema,
+	given: Record<string, unknown>,
+	solved: Map<string, Record<string, string>> = new Map()
+): ViewInput[] {
 	const inputs: ViewInput[] = [];
 	for (const d of describeInputs(schema)) {
 		const { input, item, label } = d;
@@ -231,11 +241,17 @@ export function viewInputs(schema: UISchema, given: Record<string, unknown>): Vi
 		const value =
 			given[label] ?? given[input.nickname] ?? given[input.id] ?? (input.default as unknown);
 		const description = item?.description || input.description || undefined;
-		const options = optionsOf(item);
+		const computed = solved.get(input.id);
+		const options = computed ?? optionsOf(item);
 		if (options) {
 			const names = Object.keys(options);
-			// The default is stored as the option's value; the view shows its name.
-			const name = names.find((n) => n === value) ?? names.find((n) => options[n] === value);
+			const same = (a: unknown, b: unknown) =>
+				typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+			// The default is stored as the option's value; the view shows its name. A pick the solve
+			// no longer offers resolves to the first option, as Grasshopper resolves it.
+			const name =
+				names.find((n) => same(n, value) || same(options[n], value)) ??
+				(computed ? names[0] : undefined);
 			inputs.push({ name: label, kind: 'choice', options: names, value: name, description });
 			continue;
 		}

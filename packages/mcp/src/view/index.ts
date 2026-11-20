@@ -10,11 +10,12 @@ import {
 	getThreeObjectsFromComputeResponse,
 	setTextureAnisotropy
 } from '@selvajs/visualization/parse';
-import { initThree, updateScene } from '@selvajs/visualization/render';
+import { initThree, LOOKS, updateScene, type Look } from '@selvajs/visualization/render';
 import { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm } from '../app.js';
 
 export { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm, type ViewInput } from '../app.js';
 export type { App } from '@modelcontextprotocol/ext-apps';
+export { LOOKS, type Look } from '@selvajs/visualization/render';
 
 /** A tool result as the host hands it to a view. */
 export interface ViewToolResult {
@@ -72,33 +73,71 @@ export async function loadSolveResponse(app: App, data: SolveViewData): Promise<
 	return solveViewData(loaded)?.response;
 }
 
+/** `look` as a viewer look; a saved schema can name one this build lacks, and an unknown look throws. */
+export function toLook(look: string | undefined): Look {
+	return LOOKS.includes(look as Look) ? (look as Look) : 'technical';
+}
+
 export interface SolveViewer {
 	/** Replaces what it shows; the camera frames the first geometry it gets. */
 	show(response: unknown): Promise<number>;
+	setLook(look: Look): void;
+	/** Draws again, at the container's new size after a layout change. */
+	redraw(): void;
 	fitToView(): void;
 	dispose(): void;
 }
 
+export interface SolveViewerOptions {
+	look?: string;
+	/** Hex colour; fixed once the viewer is made. */
+	background?: string;
+}
+
 /** A 3D viewer filling `container`, drawing Rhino.Compute responses. */
-export function mountSolveViewer(container: HTMLElement): SolveViewer {
+export function mountSolveViewer(
+	container: HTMLElement,
+	options: SolveViewerOptions = {}
+): SolveViewer {
 	const canvas = document.createElement('canvas');
 	canvas.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
 	container.append(canvas);
+	let look = toLook(options.look);
 	// No HDR: a view may not fetch, and the generated reflection environment lights it well enough.
 	const viewer = initThree(canvas, {
+		look,
 		onMaxAnisotropy: setTextureAnisotropy,
-		environment: { hdrPath: false }
+		environment: {
+			hdrPath: false,
+			...(options.background && { backgroundColor: options.background })
+		}
 	});
 	let framed = false;
+	// The sun's shadow frustum and the lamps a look lights from both follow the drawn geometry.
+	const relight = () => {
+		viewer.updateShadowBounds();
+		viewer.syncEmissiveLights();
+		viewer.invalidate();
+	};
 	return {
 		async show(response) {
-			const objects = await getThreeObjectsFromComputeResponse(response as never);
+			const objects = await getThreeObjectsFromComputeResponse(response as never, {
+				parsing: { material: viewer.getMaterialAppearance() }
+			});
 			updateScene(viewer.scene, objects, viewer.camera, viewer.controls, framed);
 			framed ||= objects.length > 0;
+			// The parser built plain materials; a look that overrides them has to be applied again.
+			viewer.setLook(look, { deferEmissiveLights: true });
 			viewer.updateGridScale();
-			viewer.invalidate();
+			relight();
 			return objects.length;
 		},
+		setLook(next) {
+			look = next;
+			viewer.setLook(next);
+			relight();
+		},
+		redraw: () => viewer.invalidate(),
 		fitToView: () => viewer.fitToView(),
 		dispose() {
 			viewer.dispose();

@@ -73,6 +73,10 @@ export const SOLVE_VIEW_KEY = 'selva/solve-view';
  */
 export interface SolveViewData {
 	title?: string;
+	/** The viewer look the view opens in; an unknown one draws as `technical`. */
+	look?: string;
+	/** Hex background colour, for looks that don't set their own. */
+	background?: string;
 	/** A Rhino.Compute response, or only its display trees (`values`, `modelunits`). */
 	response?: unknown;
 	load?: { tool: string; arguments?: Record<string, unknown> };

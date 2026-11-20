@@ -20,20 +20,11 @@ export function selvaViews(): ResourceDefinition[] {
 	];
 }
 
-let hdr: Promise<string> | undefined;
-
 /**
  * The environment Selva's viewer lights with, as a `data:` URL: the capture page loads nothing
- * from Selva's origin, which the server may not be able to reach from inside.
+ * from Selva's origin, which the server may not be able to reach from inside. Inlined at build
+ * time, not read with `$app/server`'s `read`: a lazily imported asset never reaches the
+ * production manifest, so `read` fails there and only there.
  */
-export function captureHdr(): Promise<string> {
-	hdr ??= Promise.all([import('$app/server'), import('../../../../static/baseHDR.hdr?url')]).then(
-		async ([{ read }, { default: url }]) => {
-			const bytes = Buffer.from(await read(url).arrayBuffer());
-			return `data:application/octet-stream;base64,${bytes.toString('base64')}`;
-		}
-	);
-	// A failed read isn't kept: the next capture tries again.
-	hdr.catch(() => (hdr = undefined));
-	return hdr;
-}
+export const captureHdr = () =>
+	import('../../../../static/baseHDR.hdr?inline').then((m) => m.default as string);
