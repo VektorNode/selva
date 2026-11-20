@@ -264,6 +264,17 @@ const CAPTURE_VIEWS = [
 	'bottom'
 ] as const satisfies readonly CaptureView[];
 
+const PREVIEW_LOOKS = [
+	'technical',
+	'studio',
+	'showcase',
+	'arctic',
+	'xray',
+	'lineart',
+	'wireframe',
+	'night'
+] as const satisfies readonly NonNullable<NonNullable<UISchema['viewerOptions']>['look']>[];
+
 // The app's own background when a definition sets none.
 const DEFAULT_BACKGROUND = '#E6E6E6';
 
@@ -282,6 +293,8 @@ export const SolveOutput = z.object({
 	errors: z.array(z.string()),
 	warnings: z.array(z.string()),
 	link: z.string(),
+	/** For selva_capture_preview, which renders it without solving again. */
+	solveId: z.string().optional(),
 	response: z.unknown().optional()
 });
 
@@ -633,25 +646,22 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 		async run(api, { definition, values, version, detail }, { signal, apps }) {
 			const { guid, schema, res } = await runSolve(api, definition, values, version, signal);
 			const summary = await summarizeSolve(res, schema, { origin, link: pageOf(guid), stash });
-			// The stashed response carries every display mesh: only worth writing for a client
-			// that will show the view.
+			// Held for the 3D view and for selva_capture_preview, so neither solves again.
+			const solveId = await stash.put({
+				kind: 'solve',
+				name: schema.name,
+				contentType: 'application/json',
+				data: jsonBytes(res)
+			});
+			const text = `${summary.text}\nSolve id ${solveId}: selva_capture_preview draws it without solving again, for an hour.`;
+			const structured = { ...summary.structured, solveId };
 			const meta = apps
 				? {
 						[SOLVE_VIEW_KEY]: {
 							title: schema.name,
 							look: schema.viewerOptions?.look,
 							background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
-							load: {
-								tool: 'selva_solve_geometry',
-								arguments: {
-									token: await stash.put({
-										kind: 'solve',
-										name: schema.name,
-										contentType: 'application/json',
-										data: jsonBytes(res)
-									})
-								}
-							},
+							load: { tool: 'selva_solve_geometry', arguments: { token: solveId } },
 							form: {
 								tool: 'selva_solve',
 								arguments: { definition: guid, ...(version && { version }) },
@@ -661,9 +671,9 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 						} satisfies SolveViewData
 					}
 				: undefined;
-			if (detail !== 'full') return { ...summary, meta };
+			if (detail !== 'full') return { text, structured, meta };
 			const response = { ...res, values: res.values?.filter((t) => !isPlumbing(t)) };
-			return { ...summary, structured: { ...summary.structured, response }, meta };
+			return { text, structured: { ...structured, response }, meta };
 		}
 	});
 
@@ -689,30 +699,60 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 		name: 'selva_capture_preview',
 		title: 'Render a preview',
 		description:
-			"Solves a definition and draws the result in Selva's own 3D viewer, with the look and " +
-			'background the definition opens in, then returns the picture. Spends compute like ' +
-			'selva_solve. The picture is kept for an hour under a preview id: pass it to ' +
+			"Draws a solve in Selva's own 3D viewer and returns a picture per view, with the look " +
+			'and background the definition opens in unless `look` says otherwise. Pass `solve`, the ' +
+			'solve id selva_solve returned, to draw that result without solving again; otherwise it ' +
+			'solves `values` first and spends compute like selva_solve. Extra views cost no compute. ' +
+			'Each picture is kept for an hour under a preview id: pass one to ' +
 			'selva_set_cover_image to make it the cover.',
 		input: z.object({
 			definition: definitionArg,
+			solve: z
+				.string()
+				.optional()
+				.describe('A solve id from selva_solve. When given, `values` is ignored.'),
 			values: valuesArg,
 			version: versionArg,
-			view: z.enum(CAPTURE_VIEWS).default('iso').describe('Camera direction.'),
+			views: z
+				.array(z.enum(CAPTURE_VIEWS))
+				.min(1)
+				.max(4)
+				.default(['iso'])
+				.describe('Camera directions, a picture each.'),
+			look: z
+				.enum(PREVIEW_LOOKS)
+				.optional()
+				.describe("The viewer look. Default: the definition's own. `night` lights lamps."),
 			width: z.number().int().min(256).max(2048).default(1200),
 			height: z.number().int().min(256).max(2048).default(800),
 			grid: z.boolean().default(false).describe("Draw the viewer's ground grid.")
 		}),
 		calls: SOLVE_CALLS,
-		async run(api, { definition, values, version, view, width, height, grid }, { signal }) {
-			const { schema, res } = await runSolve(api, definition, values, version, signal);
+		async run(api, args, { signal }) {
+			const { definition, solve, values, version, views, look, width, height, grid } = args;
+			let schema: UISchema;
+			let res: SolveResponse;
+			if (solve) {
+				const guid = await resolveDefinition(api, definition, signal);
+				const held = await stash.get(solve, 'solve');
+				if (!held) {
+					throw new Error(
+						'That solve id has expired or is unknown. Leave `solve` out to solve `values` again.'
+					);
+				}
+				({ schema } = await schemaFor(api, guid, version, signal));
+				res = fromJsonBytes(held.data) as SolveResponse;
+			} else {
+				({ schema, res } = await runSolve(api, definition, values, version, signal));
+			}
 			let capture;
 			try {
 				capture = await captureSolve(res, {
-					view,
+					views,
 					width,
 					height,
 					grid,
-					look: schema.viewerOptions?.look,
+					look: look ?? schema.viewerOptions?.look,
 					background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
 					hdr: captureHdr,
 					html: captureHtml,
@@ -721,24 +761,30 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 				});
 			} catch (err) {
 				if (err instanceof CaptureUnavailableError) {
-					throw new Error(`${err.message} An operator sets this up; the solve itself worked.`, {
-						cause: err
-					});
+					throw new Error(
+						`${err.message} An operator sets this up. The solve itself worked: ` +
+							'selva_solve still returns its numbers.',
+						{ cause: err }
+					);
 				}
 				throw err;
 			}
 			if (!capture.drawn) {
 				return `${schema.name} solved, but drew nothing: it has no Display output with geometry for these values.`;
 			}
-			const previewId = await stash.put({
-				kind: 'preview',
-				name: `${schema.name}.png`,
-				contentType: 'image/png',
-				data: new Uint8Array(Buffer.from(capture.png, 'base64'))
-			});
+			const lines = [`${schema.name}, ${width}×${height}${look ? `, ${look} look` : ''}.`];
+			for (const [i, png] of capture.pngs.entries()) {
+				const previewId = await stash.put({
+					kind: 'preview',
+					name: `${schema.name}.png`,
+					contentType: 'image/png',
+					data: new Uint8Array(Buffer.from(png, 'base64'))
+				});
+				lines.push(`${views[i]} view: preview id ${previewId}.`);
+			}
 			return {
-				text: `${schema.name}, ${view} view, ${width}×${height}. Preview id ${previewId}.`,
-				images: [{ data: capture.png, mimeType: 'image/png' }]
+				text: lines.join('\n'),
+				images: capture.pngs.map((data) => ({ data, mimeType: 'image/png' }))
 			};
 		}
 	});

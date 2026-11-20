@@ -4,7 +4,10 @@ import { readFile } from 'node:fs/promises';
 export type CaptureView = 'iso' | 'top' | 'front' | 'back' | 'left' | 'right' | 'bottom';
 
 export interface CaptureOptions {
+	/** One view; ignored when `views` is given. Default `iso`. */
 	view?: CaptureView;
+	/** Several views of the one scene, a PNG each, in order. Costs a render each, not a solve. */
+	views?: CaptureView[];
 	/** Pixels. Default 1200 × 800. */
 	width?: number;
 	height?: number;
@@ -36,8 +39,10 @@ export interface CaptureOptions {
 }
 
 export interface Capture {
-	/** Base64 PNG. */
+	/** Base64 PNG of the first view. */
 	png: string;
+	/** Base64 PNG per view, in the order asked. */
+	pngs: string[];
 	/** Objects drawn. Zero means the response had no display geometry and `png` is empty. */
 	drawn: number;
 }
@@ -137,22 +142,23 @@ async function capture(response: unknown, options: CaptureOptions): Promise<Capt
 		await page.setViewportSize({ width: options.width ?? 1200, height: options.height ?? 800 });
 		await page.setContent(html, { waitUntil: 'load' });
 		const hdr = options.hdr ? await options.hdr() : undefined;
-		return await page.evaluate(
+		const { pngs, drawn } = await page.evaluate(
 			(req) =>
 				(
 					globalThis as unknown as {
-						selvaCapture(r: typeof req): Promise<Capture>;
+						selvaCapture(r: typeof req): Promise<{ pngs: string[]; drawn: number }>;
 					}
 				).selvaCapture(req),
 			{
 				response,
-				view: options.view ?? 'iso',
+				views: options.views?.length ? options.views : [options.view ?? 'iso'],
 				grid: options.grid ?? true,
 				look: options.look,
 				background: options.background,
 				hdr
 			}
 		);
+		return { png: pngs[0] ?? '', pngs, drawn };
 	} finally {
 		options.signal?.removeEventListener('abort', closePage);
 		await page.close().catch(() => {});

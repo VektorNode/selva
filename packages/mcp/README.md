@@ -135,9 +135,10 @@ that call. `renderViewForm` from `@selvajs/mcp/view` draws the same form in a vi
 
 ## Rendering on the server
 
-`captureSolve(response, { view, width, height, grid, look, background, hdr })` from
+`captureSolve(response, { views, width, height, grid, look, background, hdr })` from
 `@selvajs/mcp/capture` draws a Rhino.Compute response in the same viewer as the 3D view, in a
-headless Chromium, and resolves to a base64 PNG for a tool's `images`. `hdr` is the environment
+headless Chromium, and resolves to a base64 PNG per view (`pngs`; `png` is the first) for a
+tool's `images`. The views share one scene, so each extra one costs a render, not a solve. `hdr` is the environment
 map as a URL; the page loads nothing from an origin, so a `data:` URL is the reliable form. Captures run one at a time on one browser, which closes after
 two idle minutes. It needs the optional peer `playwright-core` and a browser
 (`npx playwright install --with-deps chromium`, or `executablePath`); without them it throws

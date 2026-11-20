@@ -8,7 +8,11 @@ import { SolveOutput, selvaTools } from '../tools.js';
 import { selvaViews } from '../views.js';
 
 const capture = vi.hoisted(() => ({
-	run: vi.fn(async (): Promise<{ png: string; drawn: number }> => ({ png: 'iVBO', drawn: 3 }))
+	run: vi.fn(async (): Promise<{ png: string; pngs: string[]; drawn: number }> => ({
+		png: 'iVBO',
+		pngs: ['iVBO'],
+		drawn: 3
+	}))
 }));
 vi.mock('@selvajs/mcp/capture', async (original) => ({
 	...(await original<typeof import('@selvajs/mcp/capture')>()),
@@ -341,13 +345,14 @@ describe('selva MCP tools', () => {
 		expect(geometry._meta?.[SOLVE_VIEW_KEY]).toEqual({ response: SOLVED });
 	});
 
-	it('leaves out the 3D view, and stashes nothing for it, for a client without MCP Apps', async () => {
+	it('leaves out the 3D view for a client without MCP Apps, and hands out a solve id', async () => {
 		const { server } = serve([SCHEMA, SOLVED]);
-		const put = vi.spyOn(stash, 'put');
 		const result = await call(server, 'selva_solve', { definition: GUID }, {});
 		expect(result.isError).toBeFalsy();
 		expect(result._meta?.[SOLVE_VIEW_KEY]).toBeUndefined();
-		expect(put).not.toHaveBeenCalled();
+		const solveId = (result.structuredContent as { solveId: string }).solveId;
+		expect(result.content[0].text).toContain(`Solve id ${solveId}`);
+		expect(await stash.get(solveId, 'solve')).toBeDefined();
 	});
 
 	it('hands the view to a client that declares MCP Apps', async () => {
@@ -631,19 +636,51 @@ describe('selva MCP tools for editors', () => {
 		const result = await call(server, 'selva_capture_preview', {
 			definition: GUID,
 			values: { Width: 20 },
-			view: 'top'
+			views: ['top']
 		});
 		expect(capture.run).toHaveBeenLastCalledWith(
 			SOLVED,
-			expect.objectContaining({ view: 'top', width: 1200, height: 800, grid: false })
+			expect.objectContaining({ views: ['top'], width: 1200, height: 800, grid: false })
 		);
 		expect(result.content[1]).toEqual({ type: 'image', data: 'iVBO', mimeType: 'image/png' });
-		const previewId = /Preview id ([\w-]+)\./.exec(result.content[0].text)![1];
+		const previewId = /top view: preview id ([\w-]+)\./.exec(result.content[0].text)![1];
 		expect((await stash.get(previewId, 'preview'))?.contentType).toBe('image/png');
 	});
 
+	it('draws a held solve in several views and another look, without solving again', async () => {
+		const solved = serve([SCHEMA, SOLVED]);
+		const { structuredContent } = await call(solved.server, 'selva_solve', { definition: GUID });
+		const solveId = (structuredContent as { solveId: string }).solveId;
+
+		capture.run.mockResolvedValueOnce({ png: 'AAAA', pngs: ['AAAA', 'BBBB'], drawn: 3 });
+		const { server, sent } = serve([SCHEMA]);
+		const result = await call(server, 'selva_capture_preview', {
+			definition: GUID,
+			solve: solveId,
+			views: ['iso', 'front'],
+			look: 'night'
+		});
+		expect(sent.some((r) => r.url.includes('/solve'))).toBe(false);
+		expect(capture.run).toHaveBeenLastCalledWith(
+			SOLVED,
+			expect.objectContaining({ views: ['iso', 'front'], look: 'night' })
+		);
+		expect(result.content.slice(1).map((c) => c.data)).toEqual(['AAAA', 'BBBB']);
+		expect(result.content[0].text).toMatch(/iso view: preview id .*\n.*front view: preview id/s);
+	});
+
+	it('refuses an unknown solve id', async () => {
+		const { server } = serve([SCHEMA]);
+		const result = await call(server, 'selva_capture_preview', {
+			definition: GUID,
+			solve: '1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+		});
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain('expired or is unknown');
+	});
+
 	it('says when the solve drew nothing, and when the server has no browser', async () => {
-		capture.run.mockResolvedValueOnce({ png: '', drawn: 0 });
+		capture.run.mockResolvedValueOnce({ png: '', pngs: [], drawn: 0 });
 		const empty = serve([SCHEMA, SOLVED]);
 		const nothing = await call(empty.server, 'selva_capture_preview', { definition: GUID });
 		expect(nothing.content[0].text).toContain('drew nothing');

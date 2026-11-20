@@ -1,5 +1,5 @@
 // Loaded by `captureSolve` in a headless browser, never by an MCP client: it draws one
-// Rhino.Compute response and hands back a PNG through `window.selvaCapture`.
+// Rhino.Compute response and hands back a PNG per view through `window.selvaCapture`.
 
 import {
 	getThreeObjectsFromComputeResponse,
@@ -15,7 +15,8 @@ import {
 
 export interface CaptureRequest {
 	response: unknown;
-	view: ViewPreset;
+	/** Rendered in order, from one scene. */
+	views: ViewPreset[];
 	grid: boolean;
 	look?: string;
 	background?: string;
@@ -24,8 +25,8 @@ export interface CaptureRequest {
 }
 
 export interface CaptureResult {
-	/** Base64 PNG, no `data:` prefix; empty when nothing was drawn. */
-	png: string;
+	/** Base64 PNG per view, no `data:` prefix; empty when nothing was drawn. */
+	pngs: string[];
 	drawn: number;
 }
 
@@ -40,7 +41,7 @@ const ENVIRONMENT_WAIT_MS = 10_000;
 const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
 // One capture per page: the look and environment are fixed when the viewer is made.
-window.selvaCapture = async ({ response, view, grid, look, background, hdr }) => {
+window.selvaCapture = async ({ response, views, grid, look, background, hdr }) => {
 	const canvas = document.createElement('canvas');
 	canvas.style.cssText = 'display:block;width:100%;height:100%';
 	document.getElementById('stage')!.append(canvas);
@@ -60,21 +61,27 @@ window.selvaCapture = async ({ response, view, grid, look, background, hdr }) =>
 		parsing: { material: viewer.getMaterialAppearance() }
 	});
 	updateScene(viewer.scene, objects, viewer.camera, viewer.controls, false);
-	if (!objects.length) return { png: '', drawn: 0 };
+	if (!objects.length) return { pngs: [], drawn: 0 };
 	viewer.grid?.setVisible(grid);
 	viewer.updateGridScale();
 	viewer.updateShadowBounds();
 	viewer.syncEmissiveLights();
-	viewer.cameraController.setView(view, false);
-	// Edges attach off-thread for large meshes; two frames let them land.
-	await frame();
-	await frame();
-	const blob = await viewer.captureImage('image/png');
-	if (!blob) return { png: '', drawn: objects.length };
-	const bytes = new Uint8Array(await blob.arrayBuffer());
+	const pngs: string[] = [];
+	for (const view of views) {
+		viewer.cameraController.setView(view, false);
+		// Edges attach off-thread for large meshes; two frames let them land.
+		await frame();
+		await frame();
+		const blob = await viewer.captureImage('image/png');
+		pngs.push(blob ? toBase64(new Uint8Array(await blob.arrayBuffer())) : '');
+	}
+	return { pngs, drawn: objects.length };
+};
+
+function toBase64(bytes: Uint8Array): string {
 	let binary = '';
 	for (let i = 0; i < bytes.length; i += 0x8000) {
 		binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
 	}
-	return { png: btoa(binary), drawn: objects.length };
-};
+	return btoa(binary);
+}
