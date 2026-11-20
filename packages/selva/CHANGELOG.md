@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.21.0-beta.24
+
+### Patch Changes
+
+- d7502c0: A solve the Compute server stops at its own time limit now reads as a timeout that names `RHINO_COMPUTE_TIMEOUT`, not as "Compute server is unreachable".
+
 ## 4.21.0-beta.23
 
 ### Minor Changes
