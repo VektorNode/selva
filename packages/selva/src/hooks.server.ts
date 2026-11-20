@@ -263,7 +263,11 @@ const routeClassifier = createRouteClassifier({
 	//
 	// `/mcp/files/` serves an MCP solve's output files by an unguessable token
 	// that expires within the hour, so a link works where the model hands it on.
-	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events', MCP_FILES_PREFIX],
+	//
+	// `/api/v1/solves/` reads a detached solve. One a share-link viewer started has
+	// no session behind it, so its unguessable id is the capability; one a user
+	// started is readable by that user only, checked in the route.
+	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events', '/api/v1/solves/', MCP_FILES_PREFIX],
 	// Static-asset paths SvelteKit/adapter-node serves directly.
 	staticPrefixes: ['/_app/', '/favicon/'],
 	staticPaths: ['/favicon.svg', '/robots.txt']

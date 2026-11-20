@@ -91,6 +91,11 @@ describe('isPublicRoute', () => {
 		expect(isSelfGatingApiRoute('/api/v1/solve/abc/cancel')).toBe(false);
 	});
 
+	it('lets a share-link viewer poll a detached solve, which has no session behind it', () => {
+		expect(isSelfGatingApiRoute('/api/v1/solves/9f0c-solve-id')).toBe(true);
+		expect(isSelfGatingApiRoute('/api/v1/solvesX/9f0c')).toBe(false);
+	});
+
 	it('does not treat /loginX as public via prefix match', () => {
 		// /login is exact-match in PUBLIC_PAGE_ROUTES — a sibling like
 		// /login-other-thing must not be admitted by accident.

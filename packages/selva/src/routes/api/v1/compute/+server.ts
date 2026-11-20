@@ -5,7 +5,8 @@ import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
 import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { runSolve, mapSolveError, type SolveAccess } from '#lib/server/compute/solve.server.js';
 import { SolveModeSchema } from '@selvajs/server/api';
-import { respondWithKeepalive, wantsKeepalive } from '@selvajs/solve/server';
+import { respondWithKeepalive, wantsAsync, wantsKeepalive } from '@selvajs/solve/server';
+import { startAsyncSolve } from '#lib/server/compute/asyncSolves.server.js';
 
 interface ComputeRequest {
 	/** Read for a remote `definitionUrl` only: a stored definition's inputs come from its schema. */
@@ -31,16 +32,18 @@ interface ComputeRequest {
 // is the body shape and the share-token branch, which must NOT reach the
 // definition-addressed route.
 //
-// The web app asks for keep-alive, so a solve longer than the reverse proxy's read timeout
-// still lands. Errors then travel inside the 200, which is why they become responses here.
-// The body is read before the 200 goes out, as `respondWithKeepalive` requires.
+// A solve longer than a proxy's timeout still lands two ways. `respond-async` detaches it and the
+// caller polls `/api/v1/solves/{id}`; keep-alive holds the request open with filler bytes. Either
+// way errors travel after the response has started, which is why they become responses here.
+// The body is read first, as `respondWithKeepalive` requires.
 
 export const POST: RequestHandler = async (event) => {
 	const received = await receive(event);
-	if (!wantsKeepalive(event.request)) return solve(event, received);
-	return respondWithKeepalive(
-		solve(event, received).catch((err) => errorResponse(err, event.locals.log))
-	);
+	const settled = (signal?: AbortSignal) =>
+		solve(event, received, signal).catch((err) => errorResponse(err, event.locals.log));
+	if (wantsAsync(event.request)) return startAsyncSolve(event.locals, settled);
+	if (wantsKeepalive(event.request)) return respondWithKeepalive(settled());
+	return solve(event, received);
 };
 
 interface Received {
@@ -65,7 +68,8 @@ async function receive({ request, locals }: RequestEvent): Promise<Received> {
 
 async function solve(
 	{ request, locals, url }: RequestEvent,
-	{ body, loadStart, bodyMs }: Received
+	{ body, loadStart, bodyMs }: Received,
+	signal?: AbortSignal
 ): Promise<Response> {
 	// DEBUG (SELVA_FLAG_COMPUTE_DEBUG): the solve metric's `durationMs` wraps ONLY
 	// scheduler.solve, so everything before it (body read, auth, DB reads, definition fetch,
@@ -141,6 +145,7 @@ async function solve(
 			channel,
 			versionId: explicitVersionId,
 			request,
+			signal,
 			locals,
 			loadStart,
 			prepMarks,

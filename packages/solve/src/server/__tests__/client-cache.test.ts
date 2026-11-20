@@ -184,11 +184,11 @@ describe('createClientCache — limits from the server', () => {
 		const cache = createClientCache(baseConfig());
 		const entry = await cache.getClient(server('a'));
 		expect(createdSchedulerOptions[0]).toMatchObject({
-			timeoutMs: 1_805_000,
+			timeoutMs: 1_860_000,
 			reuseServerDefinitionCache: true
 		});
 		expect(entry.limits).toEqual({
-			solveDeadlineMs: 1_805_000,
+			solveDeadlineMs: 1_860_000,
 			maxRequestBytes: 1024,
 			reuseDefinitionCache: true,
 			deploymentId: null
@@ -235,7 +235,7 @@ describe('createClientCache — limits from the server', () => {
 			await vi.waitFor(async () => {
 				expect(await cache.getClient(server('a'))).not.toBe(first);
 			});
-			expect(createdSchedulerOptions.at(-1)?.timeoutMs).toBe(605_000);
+			expect(createdSchedulerOptions.at(-1)?.timeoutMs).toBe(660_000);
 		} finally {
 			vi.useRealTimers();
 		}

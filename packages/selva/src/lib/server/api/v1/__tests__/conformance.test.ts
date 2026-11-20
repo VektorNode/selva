@@ -491,7 +491,9 @@ describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', (
 		'POST api/v1/definitions/[guid]/solve',
 		'GET api/v1/solve-events', // SSE — the status line is sent before any event
 		'POST api/v1/solve-events/[solveId]', // plugin callback: reads status + `abort`, no provider calls
-		'POST api/v1/solve/[solveId]/cancel' // in-memory flag on the bus, no provider calls
+		'POST api/v1/solve/[solveId]/cancel', // in-memory flag on the bus, no provider calls
+		'GET api/v1/solves/[solveId]', // replays a stored solve response, status and encoding included
+		'DELETE api/v1/solves/[solveId]' // in-memory store, no provider calls
 	]);
 
 	// `apiRoute` wraps a SvelteKit handler; `mount` wraps a transport-free one

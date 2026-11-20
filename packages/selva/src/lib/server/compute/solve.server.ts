@@ -83,6 +83,8 @@ export interface SolveParams {
 	/** Explicit version pick; editor-only, never share-token accessible. */
 	versionId: string | null;
 	request: Request;
+	/** Stops the solve. Default `request.signal`; a detached solve outlives its request, so it passes its own. */
+	signal?: AbortSignal;
 	/** Typed loosely: two route trees with different generated `$types` both call this. */
 	locals: App.Locals;
 	/** `performance.now()` at the very start of the request, before body parse. */
@@ -166,6 +168,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		channel,
 		versionId: explicitVersionId,
 		request,
+		signal = request.signal,
 		locals,
 		loadStart,
 		prepMarks,
@@ -453,7 +456,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			definitionKey: isLocal ? undefined : definitionUrl,
 			inputs: solveInputs,
 			values,
-			signal: request.signal,
+			signal,
 			acceptEncoding: request.headers.get('accept-encoding') ?? '',
 			definitionGuid: guid ?? undefined,
 			loadStartMs: loadStart,

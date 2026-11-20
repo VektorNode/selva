@@ -25,6 +25,16 @@ export {
 
 export type { SolveEngineOutcome } from './solve-pipeline.js';
 export { wantsKeepalive, respondWithKeepalive } from './keepalive.js';
+export {
+	AsyncSolveStore,
+	wantsAsync,
+	acceptedResponse,
+	storedToResponse,
+	type AsyncSolveRead,
+	type AsyncSolveStoreOptions,
+	type StoredResponse
+} from './async-solves.js';
+export { ASYNC_POLL_WAIT_S } from '../shared/async-solve.js';
 export { solveInputsFromSchema, postedServerSourcedIds } from './transform-input.js';
 
 export {

@@ -9,8 +9,11 @@ export const DEFAULT_SOLVE_DEADLINE_MS = 100_000;
  */
 export const MAX_SOLVE_DEADLINE_MS = 60 * 60_000;
 
-/** Selva waits this much past the server's timeout, so Compute's own error arrives first. */
-const DEADLINE_SLACK_MS = 5_000;
+/**
+ * Selva waits this much past the server's timeout, so Compute ends a solve, not Selva. Compute's
+ * timeout is not exact: a 180 s server has returned a finished result at 187 s.
+ */
+const DEADLINE_SLACK_MS = 60_000;
 
 /** What Selva holds a solve to on one compute server. */
 export interface SolveLimits {

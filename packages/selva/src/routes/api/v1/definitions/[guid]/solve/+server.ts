@@ -1,5 +1,7 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode, handleApiError } from '#lib/server/api-errors.js';
+import { apiError, ApiErrorCode, errorResponse, handleApiError } from '#lib/server/api-errors.js';
+import { wantsAsync } from '@selvajs/solve/server';
+import { startAsyncSolve } from '#lib/server/compute/asyncSolves.server.js';
 import { parseBody, requireCaller, requireParams } from '#lib/server/api/http.js';
 import { acceptsGzip } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
@@ -60,7 +62,7 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 		);
 	}
 
-	const solve = () =>
+	const solve = (signal?: AbortSignal) =>
 		runSolve({
 			// The `user` variant is the only one constructible here — this route has
 			// no share-token branch and must never grow one.
@@ -71,6 +73,7 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 			versionId: body.versionId ?? null,
 			solveMode: body.mode,
 			request,
+			signal,
 			locals,
 			loadStart,
 			prepMarks,
@@ -79,6 +82,20 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 			concealAccessFailure: true,
 			tokenCharged: true
 		});
+
+	// Detached, the 202 is the response and the solve's own lands later, so there is nothing for an
+	// idempotency key to replay: a retried POST starts a second solve.
+	if (wantsAsync(request)) {
+		return startAsyncSolve(locals, (signal) =>
+			solve(signal).catch((err) => {
+				try {
+					mapSolveError(err, locals);
+				} catch (mapped) {
+					return errorResponse(mapped, locals.log);
+				}
+			})
+		);
+	}
 
 	try {
 		const clientKey = readIdempotencyKey(request);

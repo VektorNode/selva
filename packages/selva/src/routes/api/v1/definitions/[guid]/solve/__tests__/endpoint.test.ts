@@ -156,3 +156,39 @@ describe('POST /api/v1/definitions/{guid}/solve — body', () => {
 		expect(res.status).toBe(400);
 	});
 });
+
+describe('POST /api/v1/definitions/{guid}/solve — detached (Prefer: respond-async)', () => {
+	it('answers 202 at once, and the poll returns what the request would have', async () => {
+		tp = await freshProviders();
+		const { alice, bob, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const accepted = await call(POST, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid },
+			headers: { Prefer: 'respond-async' },
+			body: { inputs: [], values: {} }
+		});
+		expect(accepted.status).toBe(202);
+		const { solveId } = accepted.json as { solveId: string };
+
+		const solves = await import('../../../../solves/[solveId]/+server.js');
+		// Another user can't tell the solve exists.
+		const stranger = await call(solves.GET, {
+			locals: await actAs(tp, bob.id),
+			params: { solveId },
+			url: `http://test.local/api/v1/solves/${solveId}?wait=0`
+		});
+		expect(stranger.status).toBe(404);
+
+		// No compute server is configured, so the solve ends in the same 503 a synchronous one gets.
+		const polled = await call(solves.GET, {
+			locals: aliceLocals,
+			params: { solveId },
+			url: `http://test.local/api/v1/solves/${solveId}?wait=5`
+		});
+		expect(polled.status).toBe(503);
+		expect((polled.json as { code?: string }).code).toBe('COMPUTE_UNAVAILABLE');
+	});
+});

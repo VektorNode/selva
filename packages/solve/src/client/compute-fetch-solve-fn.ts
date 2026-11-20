@@ -15,6 +15,7 @@ import {
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
 import { KEEPALIVE_REQUEST_HEADERS, unwrapKeepalive } from './keepalive.js';
+import { ASYNC_REQUEST_HEADERS, followAsyncSolve } from './async-solve.js';
 import { describeServerTiming, parseServerTiming } from './server-timing.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
@@ -53,6 +54,12 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	 * which a cross-origin endpoint must allow in CORS. Default `false`.
 	 */
 	keepalive?: boolean;
+	/**
+	 * Ask the server to run the solve detached and poll for the result, so no proxy timeout can
+	 * cut a long one however it counts. Wins over `keepalive` on a server that supports both; a
+	 * server without support ignores the ask. Sends a `Prefer` header. Default `false`.
+	 */
+	respondAsync?: boolean;
 }
 
 /** Applied to a 429 that names no wait. */
@@ -181,14 +188,22 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			...(call.solveMode === 'preview' ? { mode: 'preview' } : {})
 		});
 
+		const auth: Record<string, string> = bearerToken
+			? { Authorization: `Bearer ${bearerToken}` }
+			: {};
+		const prefer = [
+			...(opts.respondAsync ? [ASYNC_REQUEST_HEADERS.Prefer] : []),
+			...(opts.keepalive ? [KEEPALIVE_REQUEST_HEADERS.Prefer] : [])
+		].join(', ');
+
 		let res: Response;
 		try {
 			res = await fetch(opts.endpoint, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					...(bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {}),
-					...(opts.keepalive ? KEEPALIVE_REQUEST_HEADERS : {})
+					...auth,
+					...(prefer ? { Prefer: prefer } : {})
 				},
 				body: payload,
 				signal
@@ -224,6 +239,12 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 				cause: err
 			});
 		}
+		const followed = await followAsyncSolve(res, { headers: auth, signal });
+		if (!followed) {
+			log('[Compute] solve aborted while it ran detached — empty result discarded');
+			return { outputs: {} };
+		}
+		res = followed;
 		if (res.status === 401 || redirectedToLogin) {
 			opts.onSessionExpired?.();
 			const body = redirectedToLogin

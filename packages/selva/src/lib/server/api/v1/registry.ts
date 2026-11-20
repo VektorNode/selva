@@ -633,6 +633,26 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		errors: [400, 401, 410]
 	},
 	{
+		method: 'GET',
+		path: '/solves/{solveId}',
+		scope: 'read',
+		summary:
+			'Long-polls a solve started with `Prefer: respond-async`. 202 while it runs; then the response the solve route would have returned.',
+		internal: true,
+		response: 'object',
+		query: [{ name: 'wait', description: 'Seconds to wait for the result, up to 25.' }],
+		errors: [404]
+	},
+	{
+		method: 'DELETE',
+		path: '/solves/{solveId}',
+		scope: 'solve',
+		summary: 'Cancels a solve started with `Prefer: respond-async`, or drops its held result.',
+		internal: true,
+		response: 'empty',
+		errors: [404]
+	},
+	{
 		method: 'POST',
 		path: '/solve/{solveId}/cancel',
 		scope: 'solve',
