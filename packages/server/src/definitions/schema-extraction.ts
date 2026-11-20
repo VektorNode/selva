@@ -243,8 +243,8 @@ function isInventory(value: unknown): value is DocumentInventory {
 /**
  * How long an upload waits for the saved values, counted from its start. Compute takes tens of
  * seconds to open a large file, and the whole request has to stay under the 60 s many proxies
- * allow. Missing them costs only the first render its defaults: the render path reads them
- * behind that render.
+ * allow. A read still running when the upload answers keeps going, and `savedValuesLater` stores
+ * its values on the version when it lands.
  */
 const SAVED_VALUES_WAIT_MS = 45_000;
 
@@ -283,6 +283,10 @@ function readSavedValues(
 export interface UploadExtraction extends Extraction {
 	/** The saved values were not read, so `schema` carries the embedded defaults instead. */
 	defaultsPending: boolean;
+	/** The values saved in the file, to store on the version. Null while `defaultsPending`. */
+	savedValues: SavedValues | null;
+	/** The read still running when `defaultsPending`, to store its values once it lands. */
+	savedValuesLater: Promise<SavedValues>;
 }
 
 /**
@@ -306,7 +310,9 @@ export async function extractSchemaForUpload(
 	return {
 		schema: saved ? applySavedValues(schema, saved) : schema,
 		inventory,
-		defaultsPending: !saved
+		defaultsPending: !saved,
+		savedValues: saved,
+		savedValuesLater: values
 	};
 }
 

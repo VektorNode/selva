@@ -31,7 +31,9 @@ const load = createDefinitionLoader({
 	definitions: {
 		getVersion: (ctx, versionId) => getDefinitionMeta().getVersion(ctx, versionId),
 		setVersionSchema: (ctx, versionId, schema) =>
-			getDefinitionMeta().setVersionSchema(ctx, versionId, schema)
+			getDefinitionMeta().setVersionSchema(ctx, versionId, schema),
+		setVersionSavedValues: (ctx, versionId, values) =>
+			getDefinitionMeta().setVersionSavedValues(ctx, versionId, values)
 	},
 	projects: { getProject: (ctx, projectId) => getProjectProvider().getProject(ctx, projectId) },
 	resolveServer: (ctx, orgId, opts) =>

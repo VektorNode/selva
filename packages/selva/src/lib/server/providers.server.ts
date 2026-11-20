@@ -112,7 +112,7 @@ let _definitionService: DefinitionService | undefined;
 export function getDefinitionService(): DefinitionService {
 	if (!_definitionService) {
 		const p = resolveProviders();
-		_definitionService = new DefinitionService(p.data, p.storage);
+		_definitionService = new DefinitionService(p.data, p.storage, lazyLogger);
 	}
 	return _definitionService;
 }

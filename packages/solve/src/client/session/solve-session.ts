@@ -137,6 +137,12 @@ export interface SolveSession {
 	 * result settles as `applied` without its deferred files; see {@link SolveSettlement}.
 	 */
 	ensureSolved(): Promise<SolveSettlement>;
+	/**
+	 * While on, nothing is sent: every solve the session would start, edits and `ensureSolved`
+	 * included, waits and runs once when it turns off. For a host still fetching the values the
+	 * form starts from, so no solve runs on values about to change.
+	 */
+	hold(on: boolean): void;
 	/** Fires once per settled solve, the ones input changes start included. Returns the unsubscribe. */
 	onSettled(listener: (settlement: SolveSettlement) => void): () => void;
 	/** Merges incoming values, then solves (auto) or marks dirty (manual). */
@@ -183,6 +189,8 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 
 	const state = createInitialState(currentSchema, args.scopeKey, readExternalValue);
 	let disposed = false;
+	let held = false;
+	let dispatchHeld = false;
 
 	const listeners = new Set<() => void>();
 	const emit = () => notifyAll(listeners, undefined);
@@ -261,6 +269,10 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 
 	function dispatch() {
 		if (disposed) return;
+		if (held) {
+			dispatchHeld = true;
+			return emit();
+		}
 		dropHeld();
 		// Copy: state.values is the live map, and a driver may hold the payload across an
 		// async solve — a later setValue must not mutate what's already in flight.
@@ -363,6 +375,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		solve,
 
 		ensureSolved() {
+			// The values are about to change: settle with the solve the release sends.
+			if (held) {
+				dispatchHeld = true;
+				return nextSettlement();
+			}
 			const busy = args.driver.isSolving || args.driver.hasQueued === true;
 			const step = ensureSolvedStep(state, busy);
 			if (step === 'wait') return nextSettlement();
@@ -375,6 +392,14 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 				});
 			}
 			return Promise.resolve({ status: step, diagnostics: state.diagnostics });
+		},
+
+		hold(on) {
+			if (held === on) return;
+			held = on;
+			if (on || !dispatchHeld) return;
+			dispatchHeld = false;
+			dispatch();
 		},
 
 		onSettled(listener) {
@@ -395,6 +420,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// A caller waiting on the old definition's solve would otherwise get the new one's.
 			abandon();
 			currentSchema = schema;
+			dispatchHeld = false;
 			lastSent = null;
 			lastDispatched = null;
 			// The old definition's running solve and cached results must not reach the new one,

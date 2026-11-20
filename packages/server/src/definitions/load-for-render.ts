@@ -30,7 +30,13 @@ import {
 	fetchSchemaFromCompute,
 	isOlderMinorSchemaVersion
 } from './schema-extraction.js';
-import { applySavedValues, savedValuesFrom, type SavedValues } from './saved-values.js';
+import {
+	applySavedValues,
+	savedValuesFrom,
+	savedValuesFromRecord,
+	savedValuesToRecord,
+	type SavedValues
+} from './saved-values.js';
 import { withTimeout } from './with-timeout.js';
 
 export type DefinitionChannel = 'live' | 'draft';
@@ -69,7 +75,7 @@ export class DefinitionLoadError extends Error {
 
 export interface DefinitionLoaderDeps {
 	storage: Pick<IStorageProvider, 'get'>;
-	definitions: Pick<IDefinitionStore, 'getVersion' | 'setVersionSchema'>;
+	definitions: Pick<IDefinitionStore, 'getVersion' | 'setVersionSchema' | 'setVersionSavedValues'>;
 	projects: Pick<IProjectStore, 'getProject'>;
 	/** Resolution order: definition pin → org default override → global default. */
 	resolveServer: (
@@ -152,8 +158,8 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 	// the UPDATE into a silent 0-row success), and then every load would call Compute. An older
 	// format expires after `OLDER_SCHEMA_RECHECK_MS`.
 	const extracts = new Map<string, { schema: UISchema; extractedAt: string }>();
-	// Read once per version per process. The stored row may already hold them, but nothing on the
-	// row says so, and a context that cannot write the row still needs them.
+	// Read from Compute for a version stored without them, once per process: a context that
+	// cannot write the row still needs them.
 	const savedValues = new Map<string, SavedValues>();
 	// One Compute read per version at a time; loads arriving meanwhile share it.
 	const reads = new Map<string, Promise<UISchema>>();
@@ -209,6 +215,8 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 
 			const values = savedValuesFrom(io.inputs);
 			setBounded(savedValues, version.id, values);
+			// Not an empty read: Compute may be missing a plugin, and a stored `{}` is never re-read.
+			if (!version.savedValues && values.size > 0) persistSavedValues(ctx, version.id, values);
 			const schema = applySavedValues(extracted, values);
 
 			// An older format (compute plugin behind the app) is warned about once per window, so
@@ -244,6 +252,17 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			warn(
 				`[loadForRender] schema cache refresh failed for version ${versionId}: ${messageOf(err)}`,
 				'Schema cache refresh failed',
+				{ versionId, err: err instanceof Error ? (err.stack ?? err.message) : String(err) }
+			);
+		});
+	}
+
+	// Best-effort, like `persist`: the next load reads them from Compute again.
+	function persistSavedValues(ctx: RequestContext, versionId: string, values: SavedValues) {
+		definitions.setVersionSavedValues(ctx, versionId, savedValuesToRecord(values)).catch((err) => {
+			warn(
+				`[loadForRender] saved values write failed for version ${versionId}: ${messageOf(err)}`,
+				'Saved values write failed',
 				{ versionId, err: err instanceof Error ? (err.stack ?? err.message) : String(err) }
 			);
 		});
@@ -389,7 +408,9 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 		if (options?.skipComputeDefaults && fresh)
 			return { ...loaded, schema: fresh, defaultsPending: false };
 
-		const values = savedValues.get(version.id);
+		const values = version.savedValues
+			? savedValuesFromRecord(version.savedValues)
+			: savedValues.get(version.id);
 		if (fresh && values)
 			return { ...loaded, schema: applySavedValues(fresh, values), defaultsPending: false };
 

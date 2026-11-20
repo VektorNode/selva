@@ -220,7 +220,8 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
 	const server = await resolveServerForOrg(ctx, project?.orgId ?? null, req.deps.computeServer, {
 		definitionPin: record.computeServerId ?? null
 	});
-	const { schema, inventory, defaultsPending } = await extractSchemaForUpload(data, server);
+	const { schema, inventory, defaultsPending, savedValues, savedValuesLater } =
+		await extractSchemaForUpload(data, server);
 	return {
 		ctx,
 		record,
@@ -230,6 +231,7 @@ async function readVersionUpload(req: ApiRequest, guid: string) {
 		schema,
 		inventory,
 		defaultsPending,
+		savedValues: savedValues ?? savedValuesLater,
 		changeNote,
 		acceptMissingPlugins
 	};
@@ -275,7 +277,8 @@ export const uploadVersion: ApiHandler = async (req) => {
 		file.name,
 		schema,
 		changeNote,
-		inventory
+		inventory,
+		upload.savedValues
 	);
 	return created({
 		version,

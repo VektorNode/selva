@@ -65,8 +65,8 @@ export interface IDefinitionStore {
 	// Versions (immutable rows)
 	createVersion(ctx: RequestContext, version: DefinitionVersion): Promise<void>;
 	/**
-	 * Newest first by `versionNumber`. `schema` and `inventory` are always `undefined` on
-	 * listed rows regardless of what's stored: large blobs no list caller needs. Use
+	 * Newest first by `versionNumber`. `schema`, `inventory` and `savedValues` are always
+	 * `undefined` on listed rows regardless of what's stored: blobs no list caller needs. Use
 	 * `getVersion` for them.
 	 */
 	listVersions(
@@ -76,14 +76,14 @@ export interface IDefinitionStore {
 	): Promise<Page<DefinitionVersion>>;
 	/**
 	 * Every version of each definition in one read, keyed by definition id, newest first, with
-	 * `schema` and `inventory` left out as in `listVersions`. Every id asked for is a key; one with no versions
+	 * `schema`, `inventory` and `savedValues` left out as in `listVersions`. Every id asked for is a key; one with no versions
 	 * maps to an empty list.
 	 */
 	listVersionsFor(
 		ctx: RequestContext,
 		definitionIds: readonly string[]
 	): Promise<Map<string, DefinitionVersion[]>>;
-	/** The full row, including the cached `schema` and `inventory` when extracted. */
+	/** The full row, including the cached `schema`, `inventory` and `savedValues` when read. */
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 
 	/**
@@ -101,6 +101,15 @@ export interface IDefinitionStore {
 		versionId: string,
 		inventory: DocumentInventory,
 		summary: InventorySummary
+	): Promise<void>;
+	/**
+	 * Sets the values saved in a version's file, once Compute has read them. No-op if the version
+	 * doesn't exist.
+	 */
+	setVersionSavedValues(
+		ctx: RequestContext,
+		versionId: string,
+		values: Record<string, unknown>
 	): Promise<void>;
 	/**
 	 * Throws 409 if the version is referenced by `liveVersionId` or

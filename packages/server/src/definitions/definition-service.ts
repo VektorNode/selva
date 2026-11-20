@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
 	IDataProvider,
+	ILogger,
 	IStorageProvider,
 	RequestContext,
 	DefinitionRecord,
@@ -11,7 +12,9 @@ import type {
 	UISchema
 } from '@selvajs/platform';
 import { summarizeInventory } from '@selvajs/schemas';
+import { savedValuesToRecord, type SavedValues } from './saved-values.js';
 import {
+	NoopLogger,
 	ProviderError,
 	definitionPaths,
 	toSourceDocumentId,
@@ -20,6 +23,17 @@ import {
 
 const inventoryFields = (inventory: DocumentInventory | null | undefined) =>
 	inventory ? { inventory, inventorySummary: summarizeInventory(inventory) } : {};
+
+/**
+ * The values saved in an uploaded file: read already, or a read still running, whose values are
+ * stored on the version once it lands. A failed read leaves none, and the render path reads them.
+ */
+export type UploadSavedValues = SavedValues | Promise<SavedValues> | null | undefined;
+
+// An empty read is not stored: Compute may have opened the file with a plugin missing, and a
+// stored `{}` would stop every later render from asking again.
+const savedValuesField = (values: UploadSavedValues) =>
+	values instanceof Map && values.size > 0 ? { savedValues: savedValuesToRecord(values) } : {};
 
 /**
  * Not the HTTP body — that's `CreateDefinitionInputSchema` in
@@ -52,7 +66,8 @@ export interface CreateDefinitionRecord {
 export class DefinitionService {
 	constructor(
 		private data: IDataProvider,
-		private storage: IStorageProvider
+		private storage: IStorageProvider,
+		private logger: ILogger = new NoopLogger()
 	) {}
 
 	async create(
@@ -60,7 +75,8 @@ export class DefinitionService {
 		input: CreateDefinitionRecord,
 		file: Uint8Array,
 		schema: UISchema,
-		inventory?: DocumentInventory | null
+		inventory?: DocumentInventory | null,
+		savedValues?: UploadSavedValues
 	): Promise<{ record: DefinitionRecord; version: DefinitionVersion }> {
 		const now = new Date().toISOString();
 		const actor = ctx.userId || input.ownerId;
@@ -108,9 +124,11 @@ export class DefinitionService {
 			uploadedAt: now,
 			schema,
 			schemaExtractedAt: now,
-			...inventoryFields(inventory)
+			...inventoryFields(inventory),
+			...savedValuesField(savedValues)
 		};
 		await this.data.definitions.createVersion(ctx, version);
+		this.storeSavedValuesLater(ctx, versionId, savedValues);
 
 		// Points both channels at v1 and flips status='draft' in ONE store
 		// operation. Doing it as three writes leaves a partial state on failure:
@@ -135,7 +153,8 @@ export class DefinitionService {
 		originalName: string,
 		schema: UISchema,
 		changeNote?: string,
-		inventory?: DocumentInventory | null
+		inventory?: DocumentInventory | null,
+		savedValues?: UploadSavedValues
 	): Promise<DefinitionVersion> {
 		const existing = await this.data.definitions.get(ctx, guid);
 		if (!existing) throw new ProviderError(`Definition not found: ${guid}`, 404);
@@ -163,9 +182,11 @@ export class DefinitionService {
 			changeNote: changeNote?.trim() || undefined,
 			schema,
 			schemaExtractedAt: now,
-			...inventoryFields(inventory)
+			...inventoryFields(inventory),
+			...savedValuesField(savedValues)
 		};
 		await this.data.definitions.createVersion(ctx, version);
+		this.storeSavedValuesLater(ctx, versionId, savedValues);
 		await this.data.definitions.setDraftVersion(ctx, guid, versionId);
 		// A schema without a GUID leaves the old one: it says nothing about which file this is.
 		const sourceDocumentId = toSourceDocumentId(schema.documentId);
@@ -174,6 +195,32 @@ export class DefinitionService {
 		}
 
 		return version;
+	}
+
+	// Best-effort and after the response: a failed read or write leaves the version without
+	// stored values, and the render path reads them from Compute instead.
+	private storeSavedValuesLater(
+		ctx: RequestContext,
+		versionId: string,
+		values: UploadSavedValues
+	): void {
+		if (!(values instanceof Promise)) return;
+		values
+			.then((read) => {
+				if (read.size === 0) return;
+				return this.data.definitions.setVersionSavedValues(
+					ctx,
+					versionId,
+					savedValuesToRecord(read)
+				);
+			})
+			.catch((err) => {
+				this.logger.warn('Saved values write failed', {
+					component: 'definitionService',
+					versionId,
+					err: err instanceof Error ? (err.stack ?? err.message) : String(err)
+				});
+			});
 	}
 
 	/**

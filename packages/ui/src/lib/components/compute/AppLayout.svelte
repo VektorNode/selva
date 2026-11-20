@@ -53,6 +53,8 @@
 		solveMessages?: Snippet;
 		hasPendingChanges?: boolean;
 		hasNeverSolved?: boolean;
+		/** See `ComputeApp`'s `solveHold`. */
+		solveHold?: string;
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
 		/**
@@ -89,6 +91,7 @@
 		solveMessages,
 		hasPendingChanges = false,
 		hasNeverSolved = false,
+		solveHold,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
 		ensureSolved,
@@ -372,6 +375,7 @@
 			{hasPendingChanges}
 			{hasNeverSolved}
 			{isSolving}
+			hold={solveHold}
 			{oncalculate}
 			trailing={hasMenu || primaryAction ? footerActions : undefined}
 		/>

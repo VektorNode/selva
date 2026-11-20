@@ -69,6 +69,11 @@
 		 */
 		solveDeadlineMs: number;
 		/**
+		 * While set, the app is not ready to solve: the calculate button is disabled and shows this
+		 * text, and every solve waits until it clears (`SolveSession.hold`).
+		 */
+		solveHold?: string;
+		/**
 		 * Live events for the solves this app runs (`createSolveEventStream`). Pair it with
 		 * `streamId` on the `createComputeFetchSolveFn` that backs `onSolve`, or the server has
 		 * no stream to route to. Without it the app works as before, just with no mid-solve news.
@@ -155,6 +160,7 @@
 		copyrightName,
 		footerText,
 		solveDeadlineMs,
+		solveHold,
 		events,
 		footerComponent,
 		footerComponentProps,
@@ -207,6 +213,10 @@
 		scopeKey: externalScopeKey || definitionKey || schema?.id || '',
 		driver
 	});
+	// Set now, not only in the effect: the first-solve effect below must find it held.
+	// svelte-ignore state_referenced_locally
+	session.hold(!!solveHold);
+	$effect.pre(() => session.hold(!!solveHold));
 
 	setDeferredFilesContext({
 		get files() {
@@ -370,6 +380,7 @@
 					onabort={() => session.abort()}
 					hasPendingChanges={session.hasPendingChanges}
 					hasNeverSolved={session.hasNeverSolved}
+					{solveHold}
 					bind:isViewerFullscreen
 					values={session.values}
 					logoUrl={logo}

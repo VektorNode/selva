@@ -166,7 +166,10 @@ export const createDefinition: ApiHandler = async (req) => {
 	const server = await resolveServerForOrg(ctx, project.orgId, req.deps.computeServer, {
 		definitionPin: parsed.data.computeServerId ?? null
 	});
-	const { schema, inventory } = await extractSchemaForUpload(fileData, server);
+	const { schema, inventory, savedValues, savedValuesLater } = await extractSchemaForUpload(
+		fileData,
+		server
+	);
 	guardPlugins(inventory, formText(form, 'acceptMissingPlugins') === 'true');
 
 	const service = definitionService(req.deps);
@@ -187,7 +190,8 @@ export const createDefinition: ApiHandler = async (req) => {
 		},
 		fileData,
 		schema,
-		inventory
+		inventory,
+		savedValues ?? savedValuesLater
 	);
 
 	let coverImage = record.coverImage;

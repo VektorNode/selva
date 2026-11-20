@@ -69,7 +69,8 @@ function makeDeps(overrides: Record<string, unknown> = {}) {
 		storage: { get: vi.fn(async () => new Uint8Array([1, 2, 3])) },
 		definitions: {
 			getVersion: vi.fn(async () => version()),
-			setVersionSchema: vi.fn(async () => {})
+			setVersionSchema: vi.fn(async () => {}),
+			setVersionSavedValues: vi.fn(async () => {})
 		},
 		projects: { getProject: vi.fn(async () => ({ id: 'proj-1', orgId: 'org-1' })) },
 		resolveServer: vi.fn(async () => computeServer),
@@ -112,6 +113,32 @@ describe('schema cache staleness (ADR 0005)', () => {
 			'v-live',
 			expect.objectContaining({ inputs: [{ id: 'a', default: 42 }] })
 		);
+	});
+
+	it('renders the saved values stored on the version without asking Compute', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]), savedValues: { a: 7 } })
+		);
+
+		const result = await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(result.schema.inputs[0]).toMatchObject({ default: 7 });
+		expect(result.defaultsPending).toBe(false);
+		expect(getIO).not.toHaveBeenCalled();
+	});
+
+	it('stores the saved values it read for a version uploaded without them', async () => {
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]) })
+		);
+
+		await createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+
+		expect(mocks.definitions.setVersionSavedValues).toHaveBeenCalledWith(ctx, 'v-live', { a: 42 });
 	});
 
 	it('does not rewrite a row that already holds the saved values', async () => {

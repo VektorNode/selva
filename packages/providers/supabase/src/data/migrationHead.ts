@@ -3,7 +3,7 @@
  * whenever a migration is added — `migration-head.test.ts` asserts it
  * matches the migrations directory, so CI catches drift.
  */
-export const EXPECTED_MIGRATION_HEAD = '20261117200000';
+export const EXPECTED_MIGRATION_HEAD = '20261120150000';
 
 /**
  * The oldest head this build runs on; the handshake fails below it. Behind

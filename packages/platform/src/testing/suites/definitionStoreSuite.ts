@@ -538,6 +538,23 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(byDefinition.get(guid)?.[0]?.inventory).toBeUndefined();
 		});
 
+		it('setVersionSavedValues persists them, and lists leave them out', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const v1 = version(guid, 1, scope.ownerId);
+			await store.createVersion(ctx(scope.ownerId), v1);
+
+			const values = { width: 120, label: 'Front', color: '#ff0000' };
+			await store.setVersionSavedValues(ctx(scope.ownerId), v1.id, values);
+
+			expect((await store.getVersion(ctx(scope.ownerId), v1.id))?.savedValues).toEqual(values);
+			const listed = (await store.listVersions(ctx(scope.ownerId), guid)).items[0];
+			expect(listed?.savedValues).toBeUndefined();
+			await store.setVersionSavedValues(ctx(scope.ownerId), makeUuid(), values);
+		});
+
 		it('setVersionSchema is a no-op for a missing version', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

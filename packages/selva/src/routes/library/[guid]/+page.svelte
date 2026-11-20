@@ -78,6 +78,10 @@
 		app = api;
 	}
 	const SAVED_VALUES_TOAST = 'saved-values';
+	// A solve started now would run on the stored defaults, and the saved values would then
+	// replace them under a result that no longer matches the form.
+	// Set from the load, not only by the effect below, so the app's first render already holds.
+	let readingSavedValues = $state(untrack(() => data.defaultsPending));
 
 	// Per definition and version, not per mount: navigating between two definitions keeps this
 	// component.
@@ -93,12 +97,7 @@
 		let attempt = 0;
 		let timer: ReturnType<typeof setTimeout>;
 		let stopped = false;
-
-		toast.loading('Reading the values saved in the file', {
-			id: SAVED_VALUES_TOAST,
-			description: 'The form shows stored defaults until they arrive.',
-			duration: Infinity
-		});
+		readingSavedValues = true;
 
 		async function recheck() {
 			// `keepState`: an open dialog held in `page.state` must survive the recheck. A failed
@@ -107,6 +106,7 @@
 			if (stopped) return;
 
 			if (!data.defaultsPending) {
+				readingSavedValues = false;
 				const late = app ? lateSavedValues(before, data.schema, app.getSession().values) : {};
 				if (Object.keys(late).length === 0) {
 					toast.dismiss(SAVED_VALUES_TOAST);
@@ -123,6 +123,7 @@
 
 			attempt += 1;
 			if (attempt >= SAVED_VALUES_RECHECK_MS.length) {
+				readingSavedValues = false;
 				toast.warning('Saved values not loaded', {
 					id: SAVED_VALUES_TOAST,
 					description:
@@ -137,6 +138,7 @@
 
 		return () => {
 			stopped = true;
+			readingSavedValues = false;
 			clearTimeout(timer);
 			toast.dismiss(SAVED_VALUES_TOAST);
 		};
@@ -154,6 +156,7 @@
 	brandName={pageData.branding?.name}
 	homeUrl="/"
 	solveDeadlineMs={data.solveDeadlineMs}
+	solveHold={readingSavedValues ? 'Reading saved values…' : undefined}
 	events={liveEvents ?? undefined}
 	{loadRhino}
 	footerComponent={ServerFooter}

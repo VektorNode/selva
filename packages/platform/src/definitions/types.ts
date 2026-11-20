@@ -88,6 +88,12 @@ export interface DefinitionVersion {
 	inventory?: DocumentInventory;
 	/** The part of `inventory` the version list shows; kept in list projections. */
 	inventorySummary?: InventorySummary;
+	/**
+	 * The values saved in the file, by input id, as Compute read them. A page renders them as the
+	 * form's defaults without asking Compute. Absent until read: on versions uploaded before this
+	 * existed, and while an upload's read is still running. Left out of list projections.
+	 */
+	savedValues?: Record<string, unknown>;
 }
 
 export interface DefinitionRecord {

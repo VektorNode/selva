@@ -92,6 +92,7 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		setValue: (id, value, forceSolve) => session.setValue(id, value, forceSolve),
 		solve: () => session.solve(),
 		ensureSolved: () => session.ensureSolved(),
+		hold: (on) => session.hold(on),
 		onSettled: (listener) => session.onSettled(listener),
 		loadValues: (incoming) => session.loadValues(incoming),
 		rebuild: (schema, scopeKey) => session.rebuild(schema, scopeKey),

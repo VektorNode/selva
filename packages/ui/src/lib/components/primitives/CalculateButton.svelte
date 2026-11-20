@@ -11,6 +11,8 @@
 		hasPendingChanges: boolean;
 		hasNeverSolved?: boolean;
 		isSolving: boolean;
+		/** While set, the button is disabled and shows this instead: the app is not ready to solve. */
+		hold?: string;
 		oncalculate: () => void;
 		/** Beside the button, sharing its row: the panel footer's actions menu. */
 		trailing?: Snippet;
@@ -20,6 +22,7 @@
 		hasPendingChanges,
 		hasNeverSolved = false,
 		isSolving,
+		hold,
 		oncalculate,
 		trailing
 	}: Props = $props();
@@ -44,14 +47,17 @@
 		<Button
 			variant={hasPendingChanges ? 'default' : 'ghost'}
 			size="lg"
-			onclick={() => !isSolving && oncalculate()}
-			disabled={!hasPendingChanges && !isSolving}
+			onclick={() => !isSolving && !hold && oncalculate()}
+			disabled={!!hold || (!hasPendingChanges && !isSolving)}
 			aria-busy={isSolving}
 			class="gap-2 font-medium min-w-0 flex-1 transition-all duration-200
 			{hasPendingChanges && !isSolving ? 'shadow-md' : ''}
 			{!hasPendingChanges && !isSolving ? 'text-muted-foreground' : ''}"
 		>
-			{#if isSolving}
+			{#if hold && !isSolving}
+				<LoaderCircle class="h-4 w-4 animate-spin" />
+				{hold}
+			{:else if isSolving}
 				<LoaderCircle class="h-4 w-4 animate-spin" />
 				{t.solvingEllipsis}
 				<kbd

@@ -18,6 +18,15 @@ export function savedValuesFrom(
 	return values;
 }
 
+/** As stored on the version (`DefinitionVersion.savedValues`). */
+export function savedValuesToRecord(values: SavedValues): Record<string, unknown> {
+	return Object.fromEntries(values);
+}
+
+export function savedValuesFromRecord(record: Record<string, unknown>): SavedValues {
+	return new Map(Object.entries(record));
+}
+
 /** `schema` with each input's `default` replaced by its saved value, where it has one. */
 export function applySavedValues(schema: UISchema, values: SavedValues): UISchema {
 	return {

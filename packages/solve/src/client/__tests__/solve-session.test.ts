@@ -662,6 +662,33 @@ describe('createSolveSession.ensureSolved', () => {
 	});
 });
 
+describe('createSolveSession.hold', () => {
+	it('sends nothing while held, then one solve of the latest values on release', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		session.hold(true);
+		const solved = session.solve();
+		session.setValue('a', 'edited');
+		const ensured = session.ensureSolved();
+		session.loadValues({ a: 'saved' });
+		expect(driver.solves).toHaveLength(0);
+
+		session.hold(false);
+		expect(driver.solves).toEqual([expect.objectContaining({ a: 'saved' })]);
+		session.report({ outputs: { out: 1 } });
+		await expect(solved).resolves.toMatchObject({ status: 'applied' });
+		await expect(ensured).resolves.toMatchObject({ status: 'applied' });
+	});
+
+	it('sends nothing on release when nothing asked to solve', () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		session.hold(true);
+		session.hold(false);
+		expect(driver.solves).toHaveLength(0);
+	});
+});
+
 describe('createRequestResponseDriver — ending a solve', () => {
 	function collectingReporter() {
 		const log: string[] = [];
