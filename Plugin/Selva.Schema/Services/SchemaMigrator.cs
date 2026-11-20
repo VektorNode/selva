@@ -39,7 +39,8 @@ public static class SchemaMigrator
             { new Version(2, 19, 0), MigrateTo_2_19_0 },
             { new Version(2, 20, 0), MigrateTo_2_20_0 },
             { new Version(2, 21, 0), MigrateTo_2_21_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_22_0 }
+            { new Version(2, 22, 0), MigrateTo_2_22_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_23_0 }
         };
 
     /// <summary>
@@ -441,11 +442,21 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_22_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.22.0";
 
         // A geometry input gains 'geometryTypes' and 'atMost', read from its param. This migrator
         // has no document to read them from: they stay absent until the plugin next validates the
         // schema against the canvas, and a host treats absent as "takes anything, any number".
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_23_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // The schema gains an optional 'viewerOptions.camera'. Absent means the viewer's iso view;
+        // nothing is rewritten.
 
         return schema;
     }

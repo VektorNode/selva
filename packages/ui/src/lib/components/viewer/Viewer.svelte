@@ -10,6 +10,7 @@
 		type ThreeInitializerOptions,
 		type CameraController,
 		type CameraProjection,
+		type CameraView,
 		type MeasureTool,
 		type ViewPreset,
 		type Grid,
@@ -41,6 +42,8 @@
 		look?: Look;
 		/** Initial state of the edge overlay and its display-menu checkmark. Default false. */
 		showEdges?: boolean;
+		/** The view the first solve opens in. Default: the iso view, framed to the model. */
+		camera?: CameraView;
 	}
 
 	interface Props {
@@ -69,7 +72,7 @@
 		lang?: Locale;
 	}
 
-	const defaultViewerConfig: Required<ViewerConfig> = {
+	const defaultViewerConfig: Required<Omit<ViewerConfig, 'camera'>> = {
 		showScreenshotButton: true,
 		showFullscreenButton: true,
 		showSceneManager: true,
@@ -392,6 +395,8 @@
 
 			if (!viewerInitialized && meshes.length > 0) {
 				viewerInitialized = true;
+				const saved = untrack(() => config.camera);
+				if (saved) cameraController?.setCameraView(saved);
 			}
 		}
 	});

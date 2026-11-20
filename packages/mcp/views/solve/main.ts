@@ -74,7 +74,8 @@ async function show(view: App, result: ViewToolResult) {
 		if (!pickedLook) lookPicker.value = toLook(data.look);
 		viewer ??= mountSolveViewer(byId('stage'), {
 			look: lookPicker.value,
-			background: data.background
+			background: data.background,
+			camera: data.camera
 		});
 		const drawn = await viewer.show(response);
 		if (!current()) return;

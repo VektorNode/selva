@@ -255,6 +255,7 @@ async function readCover(api: UntypedApi, guid: string, signal: AbortSignal) {
 }
 
 const CAPTURE_VIEWS = [
+	'default',
 	'iso',
 	'top',
 	'front',
@@ -661,6 +662,7 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 							title: schema.name,
 							look: schema.viewerOptions?.look,
 							background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
+							camera: schema.viewerOptions?.camera,
 							load: { tool: 'selva_solve_geometry', arguments: { token: solveId } },
 							form: {
 								tool: 'selva_solve',
@@ -717,8 +719,10 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 				.array(z.enum(CAPTURE_VIEWS))
 				.min(1)
 				.max(4)
-				.default(['iso'])
-				.describe('Camera directions, a picture each.'),
+				.default(['default'])
+				.describe(
+					'Camera directions, a picture each. `default` is the view the definition opens in, or iso when it saves none.'
+				),
 			look: z
 				.enum(PREVIEW_LOOKS)
 				.optional()
@@ -754,6 +758,7 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 					grid,
 					look: look ?? schema.viewerOptions?.look,
 					background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
+					camera: schema.viewerOptions?.camera,
 					hdr: captureHdr,
 					html: captureHtml,
 					executablePath: options.previewBrowser || undefined,

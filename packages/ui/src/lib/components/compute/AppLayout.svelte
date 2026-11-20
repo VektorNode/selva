@@ -443,6 +443,7 @@
 						...viewerConfig,
 						backgroundColor: schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
 						look: schema?.viewerOptions?.look ?? viewerConfig.look,
+						camera: schema?.viewerOptions?.camera ?? viewerConfig.camera,
 						showSceneManager: false
 					}}
 				/>
@@ -612,7 +613,8 @@
 								...viewerConfig,
 								backgroundColor:
 									schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
-								look: schema?.viewerOptions?.look ?? viewerConfig.look
+								look: schema?.viewerOptions?.look ?? viewerConfig.look,
+								camera: schema?.viewerOptions?.camera ?? viewerConfig.camera
 							}}
 						/>
 					</Resizable.Pane>

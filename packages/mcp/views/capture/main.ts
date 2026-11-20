@@ -9,14 +9,16 @@ import {
 	initThree,
 	LOOKS,
 	updateScene,
+	type CameraView,
 	type Look,
 	type ViewPreset
 } from '@selvajs/visualization/render';
 
 export interface CaptureRequest {
 	response: unknown;
-	/** Rendered in order, from one scene. */
-	views: ViewPreset[];
+	/** Rendered in order, from one scene. `default` is `camera`, or iso without one. */
+	views: (ViewPreset | 'default')[];
+	camera?: CameraView;
 	grid: boolean;
 	look?: string;
 	background?: string;
@@ -41,7 +43,7 @@ const ENVIRONMENT_WAIT_MS = 10_000;
 const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
 
 // One capture per page: the look and environment are fixed when the viewer is made.
-window.selvaCapture = async ({ response, views, grid, look, background, hdr }) => {
+window.selvaCapture = async ({ response, views, camera, grid, look, background, hdr }) => {
 	const canvas = document.createElement('canvas');
 	canvas.style.cssText = 'display:block;width:100%;height:100%';
 	document.getElementById('stage')!.append(canvas);
@@ -68,7 +70,11 @@ window.selvaCapture = async ({ response, views, grid, look, background, hdr }) =
 	viewer.syncEmissiveLights();
 	const pngs: string[] = [];
 	for (const view of views) {
-		viewer.cameraController.setView(view, false);
+		if (view !== 'default') viewer.cameraController.setView(view, false);
+		// Direction only: the canvas's aspect differs from the viewer the view was saved in, and
+		// an exact position replayed at another aspect can crop the model.
+		else if (camera) viewer.cameraController.setCameraView({ direction: camera.direction }, false);
+		else viewer.cameraController.setView('iso', false);
 		// Edges attach off-thread for large meshes; two frames let them land.
 		await frame();
 		await frame();

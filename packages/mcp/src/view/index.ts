@@ -10,7 +10,13 @@ import {
 	getThreeObjectsFromComputeResponse,
 	setTextureAnisotropy
 } from '@selvajs/visualization/parse';
-import { initThree, LOOKS, updateScene, type Look } from '@selvajs/visualization/render';
+import {
+	initThree,
+	LOOKS,
+	updateScene,
+	type CameraView,
+	type Look
+} from '@selvajs/visualization/render';
 import { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm } from '../app.js';
 
 export { SOLVE_VIEW_KEY, type SolveViewData, type SolveViewForm, type ViewInput } from '../app.js';
@@ -92,6 +98,8 @@ export interface SolveViewerOptions {
 	look?: string;
 	/** Hex colour; fixed once the viewer is made. */
 	background?: string;
+	/** The view the first geometry opens in. Default: iso, framed to the model. */
+	camera?: CameraView;
 }
 
 /** A 3D viewer filling `container`, drawing Rhino.Compute responses. */
@@ -125,6 +133,9 @@ export function mountSolveViewer(
 				parsing: { material: viewer.getMaterialAppearance() }
 			});
 			updateScene(viewer.scene, objects, viewer.camera, viewer.controls, framed);
+			if (!framed && objects.length > 0 && options.camera) {
+				viewer.cameraController.setCameraView(options.camera);
+			}
 			framed ||= objects.length > 0;
 			// The parser built plain materials; a look that overrides them has to be applied again.
 			viewer.setLook(look, { deferEmissiveLights: true });

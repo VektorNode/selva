@@ -669,6 +669,26 @@ describe('selva MCP tools for editors', () => {
 		expect(result.content[0].text).toMatch(/iso view: preview id .*\n.*front view: preview id/s);
 	});
 
+	it('opens a preview in the view the definition saves, and hands it to the 3D view', async () => {
+		const camera = { direction: [0, -1, 0.5] };
+		const saved = { ...SCHEMA, viewerOptions: { camera } };
+		const { server } = serve([saved, SOLVED]);
+		await call(server, 'selva_capture_preview', { definition: GUID });
+		expect(capture.run).toHaveBeenLastCalledWith(
+			SOLVED,
+			expect.objectContaining({ views: ['default'], camera })
+		);
+
+		const view = serve([saved, SOLVED]);
+		const result = await call(
+			view.server,
+			'selva_solve',
+			{ definition: GUID },
+			{ extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } }
+		);
+		expect(result._meta?.[SOLVE_VIEW_KEY]).toMatchObject({ camera });
+	});
+
 	it('refuses an unknown solve id', async () => {
 		const { server } = serve([SCHEMA]);
 		const result = await call(server, 'selva_capture_preview', {

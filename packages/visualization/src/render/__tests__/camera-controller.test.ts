@@ -413,3 +413,53 @@ describe('camera tween lifecycle (issue 24)', () => {
 		expect(pending.size).toBe(0);
 	});
 });
+
+describe('camera views', () => {
+	const Z_UP = new THREE.Vector3(0, 0, 1);
+
+	it('round-trips an exact view', () => {
+		const { camera, controls, controller } = makeController(Z_UP);
+		controller.setCameraView({ direction: [0, -1, 0], position: [3, -4, 2], target: [0.5, 0, 0] });
+		expect(camera.position.toArray()).toEqual([3, -4, 2]);
+		expect(controls.target.toArray()).toEqual([0.5, 0, 0]);
+
+		const saved = controller.getCameraView();
+		expect(saved.position).toEqual([3, -4, 2]);
+		expect(saved.target).toEqual([0.5, 0, 0]);
+		const length = Math.hypot(...saved.direction);
+		expect(length).toBeCloseTo(1, 5);
+	});
+
+	it('frames the content along a direction when position or target is missing or empty', () => {
+		const { camera, controls, controller } = makeController(Z_UP);
+		controller.setCameraView({ direction: [1, 0, 0], position: [], target: [] });
+		const dir = camera.position.clone().sub(controls.target).normalize();
+		expect(dir.x).toBeGreaterThan(0.99);
+		expect(camera.position.distanceTo(controls.target)).toBeCloseTo(fitDistance(20, 1), 5);
+	});
+
+	it('saves an orthographic zoom as distance, so restoring keeps the scale', () => {
+		const { controller } = makeController(Z_UP);
+		controller.setCameraView({ direction: [0, -1, 0], position: [0, -10, 0], target: [0, 0, 0] });
+		controller.setProjection('orthographic');
+		const ortho = controller.getActiveCamera() as THREE.OrthographicCamera;
+		ortho.zoom = 4;
+		ortho.updateProjectionMatrix();
+		const shownHalfHeight = (ortho.top - ortho.bottom) / (2 * ortho.zoom);
+
+		const saved = controller.getCameraView();
+		expect(saved.position).toEqual([0, -2.5, 0]);
+
+		controller.setCameraView(saved);
+		expect(ortho.zoom).toBe(1);
+		expect((ortho.top - ortho.bottom) / 2).toBeCloseTo(shownHalfHeight, 5);
+	});
+
+	it('falls back to iso for a view without a usable direction', () => {
+		const a = makeController(Z_UP);
+		a.controller.setCameraView({ direction: [0, 0, 0] });
+		const b = makeController(Z_UP);
+		b.controller.setView('iso', false);
+		expect(a.camera.position.toArray()).toEqual(b.camera.position.toArray());
+	});
+});

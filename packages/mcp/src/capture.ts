@@ -1,10 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
-/** A camera direction, as Selva's viewer names them. */
-export type CaptureView = 'iso' | 'top' | 'front' | 'back' | 'left' | 'right' | 'bottom';
+/** A camera direction, as Selva's viewer names them; `default` is `camera`, or iso without one. */
+export type CaptureView =
+	'default' | 'iso' | 'top' | 'front' | 'back' | 'left' | 'right' | 'bottom';
 
 export interface CaptureOptions {
-	/** One view; ignored when `views` is given. Default `iso`. */
+	/** One view; ignored when `views` is given. Default `default`. */
 	view?: CaptureView;
 	/** Several views of the one scene, a PNG each, in order. Costs a render each, not a solve. */
 	views?: CaptureView[];
@@ -17,6 +18,11 @@ export interface CaptureOptions {
 	look?: string;
 	/** Hex, e.g. `#e6e6e6`. */
 	background?: string;
+	/**
+	 * What the `default` view shows: a saved view, as `CameraView` in `@selvajs/visualization/render`.
+	 * Only its direction counts: the capture frames the model to fit its own canvas.
+	 */
+	camera?: { direction: number[]; position?: number[]; target?: number[] };
 	/**
 	 * The HDR environment the viewer lights with, as a URL (`data:` works: the page loads no
 	 * origin). Without it the viewer generates its lighting, which reads flatter.
@@ -151,10 +157,11 @@ async function capture(response: unknown, options: CaptureOptions): Promise<Capt
 				).selvaCapture(req),
 			{
 				response,
-				views: options.views?.length ? options.views : [options.view ?? 'iso'],
+				views: options.views?.length ? options.views : [options.view ?? 'default'],
 				grid: options.grid ?? true,
 				look: options.look,
 				background: options.background,
+				camera: options.camera,
 				hdr
 			}
 		);

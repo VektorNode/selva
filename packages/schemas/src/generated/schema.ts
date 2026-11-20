@@ -492,6 +492,21 @@ export interface ViewerOptions {
 	 */
 	look?:
 		'technical' | 'studio' | 'showcase' | 'arctic' | 'xray' | 'lineart' | 'wireframe' | 'night';
+	camera?: ViewerCamera;
+}
+export interface ViewerCamera {
+	/**
+	 * From the target towards the camera, as x, y, z. Without position and target, the viewer looks along it and zooms to fit the model, so the view keeps its angle when the model changes size.
+	 */
+	direction: number[];
+	/**
+	 * The exact camera position, as x, y, z. Only used together with target. The plugin writes an absent one as an empty list, which means the same.
+	 */
+	position?: number[];
+	/**
+	 * The exact point the camera looks at, as x, y, z. Only used together with position. Empty means absent, like position.
+	 */
+	target?: number[];
 }
 export interface LocalOptions {
 	/**
@@ -588,6 +603,7 @@ export interface ViewerOptions1 {
 	 */
 	look?:
 		'technical' | 'studio' | 'showcase' | 'arctic' | 'xray' | 'lineart' | 'wireframe' | 'night';
+	camera?: ViewerCamera;
 }
 
 // ============================================================================
@@ -607,7 +623,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.22.0';
+export const UI_SCHEMA_VERSION = '2.23.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)
