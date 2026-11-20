@@ -187,7 +187,7 @@ export function acceptedResponse(solveId: string, pollUrl: string): Response {
 
 /** Sends a held result. A gzip body keeps its `Content-Encoding`, so it goes out as stored. */
 export function storedToResponse(stored: StoredResponse): Response {
-	return new Response(stored.body as BodyInit | null, {
+	return new Response(stored.body as ConstructorParameters<typeof Response>[0], {
 		status: stored.status,
 		headers: stored.headers
 	});
