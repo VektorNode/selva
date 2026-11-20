@@ -26,6 +26,8 @@ function loadDotenvIntoProcess(): Plugin {
 export default createViteConfig({
 	kit,
 	plugins: [loadDotenvIntoProcess()],
+	// Lets the MCP preview inline the environment map with `?inline`.
+	assetsInclude: ['**/*.hdr'],
 	server: {
 		port: 5199,
 		strictPort: true

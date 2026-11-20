@@ -412,7 +412,9 @@ public static class LayoutSpec
             }
 
             var merged = _schema.ViewerOptions == null ? new JObject() : JObject.FromObject(_schema.ViewerOptions, Serializer);
-            merged.Merge(change);
+            // Rejected keys stay out: one the model knows but the spec doesn't take (camera) would
+            // otherwise be deserialized from whatever the spec wrote there.
+            merged.Merge(new JObject(change.Properties().Where(p => ViewerKeys.Contains(p.Name))));
             _schema.ViewerOptions = merged.ToObject<ViewerOptions>(Serializer);
         }
 

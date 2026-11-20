@@ -135,10 +135,11 @@ that call. `renderViewForm` from `@selvajs/mcp/view` draws the same form in a vi
 
 ## Rendering on the server
 
-`captureSolve(response, { view, width, height, grid, look, background, hdr })` from
+`captureSolve(response, { views, width, height, grid, look, background, hdr })` from
 `@selvajs/mcp/capture` draws a Rhino.Compute response in the same viewer as the 3D view, in a
-headless Chromium, and resolves to base64 PNGs for a tool's `images`. `cameras` takes several
-views of one scene (a preset `view`, or `azimuth`, `elevation`, `zoom` and `target`); `sheet`
+headless Chromium, and resolves to base64 PNGs for a tool's `images`. `views` takes several
+preset views of one scene, `default` being the saved `camera`; `cameras` takes free ones
+(`azimuth`, `elevation`, `zoom`, `target`). Each extra view costs a render, not a solve. `sheet`
 joins them into one labelled grid. The camera fits what is drawn unless `frame: false`. `hide`
 leaves out layers or object names, and `cutaway` leaves out, per camera, the tall thin walls
 between it and the middle of the scene; the result lists the layers drawn. `hdr` is the environment

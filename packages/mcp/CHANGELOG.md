@@ -1,5 +1,40 @@
 # @selvajs/mcp
 
+## 0.2.0-beta.5
+
+### Minor Changes
+
+- 6ef880e: A definition can save the view it opens in. Schema format 2.23.0 adds `viewerOptions.camera`: a direction the viewer looks along and zooms to fit, so the angle holds when the model changes size, plus an optional exact position and target.
+
+  - The builder's viewer settings gain "Default view": "Use view from Preview" saves the view Preview last showed, "Keep exact position" stores its position too, and "Clear" drops it.
+  - Selva's viewer, the plugin's preview and the MCP 3D view open the first solve in that view.
+  - `selva_capture_preview` gains a `default` view, now its default: the saved view, or iso without one. `captureSolve` takes the saved view as `camera`.
+  - `CameraController` gains `getCameraView` and `setCameraView`, and `CameraView` is exported from `@selvajs/visualization/render`. `ViewerConfig` takes `camera`.
+
+## 0.2.0-beta.4
+
+### Minor Changes
+
+- 1bff6e0: Previews cost less compute and show more:
+
+  - `selva_capture_preview` takes `views` (up to four) and returns a picture and preview id per view, all from one solve. It replaces `view`.
+  - `selva_solve` returns a solve id, held for an hour. `selva_capture_preview` with `solve` draws that result without solving again.
+  - `selva_capture_preview` takes a `look`, e.g. `night` to see a model's lamps, instead of always the definition's own.
+  - `captureSolve` takes `views` and resolves `pngs`, a PNG per view; `view` and `png` still work for one.
+
+## 0.2.0-beta.3
+
+### Minor Changes
+
+- 31874ec: The MCP solve view lights and reads like Selva's own viewer, and `selva_solve` reads the outputs it used to report as a type count:
+
+  - The 3D view opens in the definition's look and background (`SolveViewData.look`, `background`). After each solve it fits the sun's shadows to the new geometry and lights glowing parts, so `night` shows a model's lamps. A look picker in the header switches look, and "Hide inputs" leaves only the model.
+  - `mountSolveViewer` takes `{ look, background }`; `SolveViewer` gains `setLook` and `redraw`; `toLook` and `LOOKS` are exported from `@selvajs/mcp/view`.
+  - A Dynamic Value List output is listed as the options it computed, under the label of the input they fill, and an Options Table as its valid combinations. The view's form offers those options instead of the author's defaults.
+  - A Plotly chart output is listed as its title and each trace's labels and values.
+  - `selva_capture_preview` no longer fails in a production build with `read_asset_missing` for the viewer's environment map.
+  - `selva_describe_definition` says a dynamic list's options come from the solve, and gives its defaults.
+
 ## 0.2.0-beta.2
 
 ### Minor Changes

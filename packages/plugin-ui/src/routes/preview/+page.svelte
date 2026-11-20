@@ -26,6 +26,7 @@
 	import { isInRhinoPanel, rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
 	import { usePreviewState } from '#lib/composables/usePreviewState.svelte.js';
 	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
+	import { trackPreviewCamera } from '#lib/features/preview/preview-camera.svelte.js';
 	import ModeHeader from '#lib/components/ModeHeader.svelte';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
@@ -180,6 +181,7 @@
 					onValueChange={preview.handleValueChange}
 					oncalculate={preview.handleCalculate}
 					onLoadValues={preview.handleLoadValues}
+					onViewerReady={trackPreviewCamera(sessionId)}
 				/>
 			{/key}
 		{/if}

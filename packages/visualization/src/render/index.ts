@@ -19,7 +19,12 @@ export type { SetLookOptions } from './scene-setup/appearance.js';
 // Viewer toolkit — handle types (instances come from `initThree`)
 // ============================================================================
 
-export type { CameraController, CameraProjection, ViewPreset } from './camera-controller.js';
+export type {
+	CameraController,
+	CameraProjection,
+	CameraView,
+	ViewPreset
+} from './camera-controller.js';
 export type { Grid } from './grid.js';
 export type { ViewGizmo } from './view-gizmo.js';
 export type { MeasureTool } from './measure.js';

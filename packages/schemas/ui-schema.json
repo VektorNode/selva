@@ -824,8 +824,32 @@
 					],
 					"default": "technical",
 					"description": "The viewer look a definition opens in. A viewer can still switch look from its display menu."
+				},
+				"camera": { "$ref": "#/definitions/ViewerCamera" }
+			},
+			"additionalProperties": false
+		},
+		"ViewerCamera": {
+			"type": "object",
+			"description": "The view a definition opens in, in the viewer's world frame: Z up, in meters. A rendered preview uses only its direction and frames the model to fit. Absent: the viewer's iso view.",
+			"properties": {
+				"direction": {
+					"type": "array",
+					"items": { "type": "number" },
+					"description": "From the target towards the camera, as x, y, z. Without position and target, the viewer looks along it and zooms to fit the model, so the view keeps its angle when the model changes size."
+				},
+				"position": {
+					"type": "array",
+					"items": { "type": "number" },
+					"description": "The exact camera position, as x, y, z. Only used together with target. The plugin writes an absent one as an empty list, which means the same."
+				},
+				"target": {
+					"type": "array",
+					"items": { "type": "number" },
+					"description": "The exact point the camera looks at, as x, y, z. Only used together with position. Empty means absent, like position."
 				}
 			},
+			"required": ["direction"],
 			"additionalProperties": false
 		},
 		"LocalOptions": {
@@ -879,7 +903,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.22.0",
+					"default": "2.23.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

@@ -19,6 +19,18 @@ export type ViewPreset = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right' 
 
 export type CameraProjection = 'perspective' | 'orthographic';
 
+/**
+ * A view a host saves and restores, as plain arrays so it serializes as is. Without `position`
+ * and `target` (or with either not three numbers) only `direction` counts: the camera looks along
+ * it and frames the content, so the view keeps its angle when the model changes size.
+ */
+export interface CameraView {
+	/** From the target towards the camera. */
+	direction: number[];
+	position?: number[];
+	target?: number[];
+}
+
 export interface CameraController {
 	/** Swaps identity on {@link setProjection}. */
 	getActiveCamera(): THREE.Camera;
@@ -31,6 +43,10 @@ export interface CameraController {
 	 * named preset — used by the nav-cube, whose clicked axis is a world axis.
 	 */
 	setViewDirection(direction: THREE.Vector3, animate?: boolean): void;
+	/** The current view: direction, exact position and target. */
+	getCameraView(): CameraView;
+	/** Restores a {@link CameraView}; one without a usable direction falls back to `iso`. */
+	setCameraView(view: CameraView, animate?: boolean): void;
 	/** Frame a world-space box from the current view direction. No-op on an empty box. */
 	frameBounds(box: THREE.Box3, animate?: boolean): void;
 	setRotateEnabled(enabled: boolean): void;
@@ -202,6 +218,44 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		setViewDirection(VIEW_DIRECTIONS[preset], animate);
 	};
 
+	const getCameraView = (): CameraView => {
+		const target = controls.target;
+		const offset = active().position.clone().sub(target);
+		if (offset.lengthSq() < 1e-12) offset.copy(VIEW_DIRECTIONS.iso);
+		// Ortho dollies by `zoom`, not distance: save the distance that frames the same scale at
+		// zoom 1, which is what `setCameraView` restores ortho to.
+		if (projection === 'orthographic') offset.divideScalar(ortho.zoom);
+		return {
+			direction: rounded(offset.clone().normalize()),
+			position: rounded(target.clone().add(offset)),
+			target: rounded(target)
+		};
+	};
+
+	const setCameraView = (view: CameraView, animate = false) => {
+		const position = toVector(view.position);
+		const target = toVector(view.target);
+		if (position && target && position.distanceToSquared(target) > 1e-12) {
+			cancelTween();
+			const cam = active();
+			if (projection === 'orthographic') ortho.zoom = 1;
+			if (animate) {
+				activeTween = animateMove(cam, controls, position, target, () => {
+					if (projection === 'orthographic') syncOrthoFrustum();
+				});
+				return;
+			}
+			cam.position.copy(position);
+			controls.target.copy(target);
+			if (projection === 'orthographic') syncOrthoFrustum();
+			controls.update();
+			return;
+		}
+		const direction = toVector(view.direction);
+		if (direction && direction.lengthSq() > 1e-12) setViewDirection(direction.normalize(), animate);
+		else setView('iso', animate);
+	};
+
 	const setRotateEnabled = (enabled: boolean) => {
 		controls.enableRotate = enabled;
 	};
@@ -221,6 +275,8 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		},
 		setView,
 		setViewDirection,
+		getCameraView,
+		setCameraView,
 		frameBounds,
 		setRotateEnabled,
 		isRotateEnabled: () => controls.enableRotate,
@@ -228,6 +284,14 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		dispose: cancelTween
 	};
 }
+
+// Saved into a schema: six digits keep it readable and are far below what a view can show.
+const rounded = (v: THREE.Vector3) => [v.x, v.y, v.z].map((n) => Math.round(n * 1e6) / 1e6);
+
+const toVector = (values: number[] | undefined) =>
+	values?.length === 3 && values.every(Number.isFinite)
+		? new THREE.Vector3(values[0], values[1], values[2])
+		: undefined;
 
 /**
  * Nudges a top/bottom view direction a ~0.5° tilt off the up axis; other presets pass through

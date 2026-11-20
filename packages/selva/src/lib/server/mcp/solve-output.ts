@@ -4,6 +4,7 @@ import type { RhinoModule } from 'rhino3dm';
 import { MCP_FILES_PREFIX } from './path.js';
 import type { Stash } from './stash.js';
 import { describeInputs } from './form.js';
+import { isChartType, isValueListType, readCharts, readValueLists } from './readable-outputs.js';
 
 /** One output of a solve: a Grasshopper data tree, every item a JSON-encoded string. */
 export interface DataTree {
@@ -357,6 +358,16 @@ export async function summarizeSolve(
 			const value = scalars.length === 1 ? scalars[0] : scalars;
 			structured[tree.ParamName] = value;
 			lines.push(`${tree.ParamName}: ${JSON.stringify(value)}`);
+			continue;
+		}
+		const read = items.every((i) => isValueListType(i.type))
+			? readValueLists(schema, tree.ParamName, items)
+			: items.every((i) => isChartType(i.type))
+				? readCharts(items)
+				: undefined;
+		if (items.length && read) {
+			structured[tree.ParamName] = read.structured;
+			lines.push(`${tree.ParamName}: ${read.text}`);
 			continue;
 		}
 		const counts = new Map<string, number>();

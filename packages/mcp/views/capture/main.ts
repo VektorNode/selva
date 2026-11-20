@@ -10,13 +10,15 @@ import {
 	initThree,
 	LOOKS,
 	updateScene,
+	type CameraView,
 	type Look,
 	type ThreeViewer,
 	type ViewPreset
 } from '@selvajs/visualization/render';
 
 export interface CaptureCameraRequest {
-	view?: ViewPreset;
+	/** `default` is the request's `camera`, or iso without one. */
+	view?: ViewPreset | 'default';
 	/** Degrees around the up axis: 0 looks from the front, 90 from the right. Overrides `view`. */
 	azimuth?: number;
 	/** Degrees above the horizon. Default 30 when `azimuth` is set. */
@@ -30,7 +32,10 @@ export interface CaptureCameraRequest {
 
 export interface CaptureRequest {
 	response: unknown;
+	/** Rendered in order, from one scene. */
 	cameras: CaptureCameraRequest[];
+	/** The view the definition saves, which `default` shows. */
+	camera?: CameraView;
 	grid: boolean;
 	look?: string;
 	background?: string;
@@ -255,9 +260,19 @@ function basisOf(viewer: ThreeViewer): Basis {
 	};
 }
 
-function directionOf(camera: CaptureCameraRequest, basis: Basis, viewer: ThreeViewer) {
+function directionOf(
+	camera: CaptureCameraRequest,
+	basis: Basis,
+	viewer: ThreeViewer,
+	saved: CameraView | undefined
+) {
 	if (camera.azimuth === undefined && camera.elevation === undefined) {
-		viewer.cameraController.setView(camera.view ?? 'iso', false);
+		const view = camera.view ?? 'iso';
+		// Direction only: the canvas's aspect differs from the viewer the view was saved in, and
+		// an exact position replayed at another aspect can crop the model.
+		if (view === 'default' && saved) {
+			viewer.cameraController.setCameraView({ direction: saved.direction }, false);
+		} else viewer.cameraController.setView(view === 'default' ? 'iso' : view, false);
 		return viewer.camera.position.clone().sub(viewer.controls.target).normalize();
 	}
 	const rad = Math.PI / 180;
@@ -474,11 +489,11 @@ window.selvaCapture = async (request) => {
 	const hide = request.hide ?? [];
 	const kept = parts.filter((p) => !matchesHide(p, hide));
 	const basis = basisOf(viewer);
-	const cameras = request.cameras.length ? request.cameras : [{ view: 'iso' as const }];
+	const cameras = request.cameras.length ? request.cameras : [{ view: 'default' as const }];
 
 	const shots: { blob: Blob; label: string; cut: string[] }[] = [];
 	for (const camera of cameras) {
-		const direction = directionOf(camera, basis, viewer);
+		const direction = directionOf(camera, basis, viewer, request.camera);
 		const cut = request.cutaway ? wallsFacing(kept, direction, basis.up) : [];
 		const shown = kept.filter((p) => !cut.includes(p));
 		const restore = hideParts(

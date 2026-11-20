@@ -666,6 +666,31 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("look", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string Look { get; set; } = "technical";
+
+        [JsonProperty("camera", NullValueHandling = NullValueHandling.Ignore)]
+        public ViewerCamera Camera { get; set; }
+    }
+
+    public class ViewerCamera
+    {
+
+/// <summary>
+/// From the target towards the camera, as x, y, z. Without position and target, the viewer looks along it and zooms to fit the model, so the view keeps its angle when the model changes size.
+/// </summary>
+        [JsonProperty("direction")]
+        public List<double> Direction { get; set; } = new List<double>();
+
+/// <summary>
+/// The exact camera position, as x, y, z. Only used together with target. The plugin writes an absent one as an empty list, which means the same.
+/// </summary>
+        [JsonProperty("position")]
+        public List<double> Position { get; set; } = new List<double>();
+
+/// <summary>
+/// The exact point the camera looks at, as x, y, z. Only used together with position. Empty means absent, like position.
+/// </summary>
+        [JsonProperty("target")]
+        public List<double> Target { get; set; } = new List<double>();
     }
 
     public class LocalOptions

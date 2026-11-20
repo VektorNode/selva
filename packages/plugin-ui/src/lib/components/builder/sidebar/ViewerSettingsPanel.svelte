@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
-	import { ColorInput, Select, Switch } from '@selvajs/ui';
+	import { page } from '$app/state';
+	import { Button, ColorInput, Select, Switch } from '@selvajs/ui';
+	import { previewCamera } from '#lib/features/preview/preview-camera.svelte.js';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
@@ -25,6 +27,22 @@
 
 	function updateViewerOptions(updates: Partial<ViewerOptions>) {
 		onSchemaChange({ ...schema, viewerOptions: { ...schema.viewerOptions, ...updates } });
+	}
+
+	const camera = $derived(schema.viewerOptions?.camera);
+	// The plugin writes an absent position as an empty list.
+	const exact = $derived(camera?.position?.length === 3 && camera.target?.length === 3);
+	const seen = $derived(previewCamera(page.url.searchParams.get('session') || ''));
+
+	function useCurrentView(keepExact: boolean) {
+		if (!seen) return;
+		const { direction, position, target } = seen;
+		updateViewerOptions({ camera: keepExact ? { direction, position, target } : { direction } });
+	}
+
+	function clearView() {
+		const { camera: _dropped, ...rest } = schema.viewerOptions ?? {};
+		onSchemaChange({ ...schema, viewerOptions: rest });
 	}
 </script>
 
@@ -72,4 +90,45 @@
 	{#if look === 'night'}
 		<p class="text-muted-foreground -mt-2 text-xs">Night lights Emissive Material parts.</p>
 	{/if}
+</SettingsSection>
+
+<SettingsSection id="viewer.camera" title="Default view" collapsible={false}>
+	<p class="text-muted-foreground text-xs">
+		{#if !camera}
+			Opens in the iso view.
+		{:else if exact}
+			Opens in the saved view, at its exact position.
+		{:else}
+			Opens looking from the saved angle, zoomed to fit the model.
+		{/if}
+	</p>
+	<div class="flex flex-wrap gap-2">
+		<Button size="sm" variant="outline" disabled={!seen} onclick={() => useCurrentView(exact)}>
+			Use view from Preview
+		</Button>
+		{#if camera}
+			<Button size="sm" variant="ghost" onclick={clearView}>Clear</Button>
+		{/if}
+	</div>
+	{#if !seen}
+		<p class="text-muted-foreground -mt-1 text-xs">
+			Frame the model in Preview, then come back here.
+		</p>
+	{/if}
+	<SettingRow
+		label="Keep exact position"
+		for="viewer-camera-exact"
+		layout="inline"
+		hint="Off: the view keeps its angle and zooms to fit, for a model that changes size."
+	>
+		<Switch
+			id="viewer-camera-exact"
+			checked={exact}
+			disabled={!camera || (!exact && !seen)}
+			onCheckedChange={(checked) =>
+				checked
+					? useCurrentView(true)
+					: updateViewerOptions({ camera: { direction: camera!.direction } })}
+		/>
+	</SettingRow>
 </SettingsSection>

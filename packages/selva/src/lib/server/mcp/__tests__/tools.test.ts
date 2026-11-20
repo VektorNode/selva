@@ -475,13 +475,14 @@ describe('selva MCP tools', () => {
 		expect(geometry._meta?.[SOLVE_VIEW_KEY]).toEqual({ response: SOLVED });
 	});
 
-	it('leaves out the 3D view, and stashes nothing for it, for a client without MCP Apps', async () => {
+	it('leaves out the 3D view for a client without MCP Apps, and hands out a solve id', async () => {
 		const { server } = serve([SCHEMA, SOLVED]);
-		const put = vi.spyOn(stash, 'put');
 		const result = await call(server, 'selva_solve', { definition: GUID }, {});
 		expect(result.isError).toBeFalsy();
 		expect(result._meta?.[SOLVE_VIEW_KEY]).toBeUndefined();
-		expect(put).not.toHaveBeenCalled();
+		const solveId = (result.structuredContent as { solveId: string }).solveId;
+		expect(result.content[0].text).toContain(`Solve id ${solveId}`);
+		expect(await stash.get(solveId, 'solve')).toBeDefined();
 	});
 
 	it('hands the view to a client that declares MCP Apps', async () => {
@@ -765,14 +766,14 @@ describe('selva MCP tools for editors', () => {
 		const result = await call(server, 'selva_capture_preview', {
 			definition: GUID,
 			values: { Width: 20 },
-			view: 'top'
+			views: ['top']
 		});
 		expect(capture.run).toHaveBeenLastCalledWith(
 			SOLVED,
-			expect.objectContaining({ view: 'top', width: 1200, height: 800, grid: false })
+			expect.objectContaining({ views: ['top'], width: 1200, height: 800, grid: false })
 		);
 		expect(result.content[1]).toEqual({ type: 'image', data: 'iVBO', mimeType: 'image/png' });
-		const previewId = /Preview id ([\w-]+)\./.exec(result.content[0].text)![1];
+		const previewId = /preview id ([\w-]+)\./.exec(result.content[0].text)![1];
 		expect((await stash.get(previewId, 'preview'))?.contentType).toBe('image/png');
 	});
 
@@ -802,8 +803,68 @@ describe('selva MCP tools for editors', () => {
 			'AAA',
 			'BBB'
 		]);
-		expect(result.content[0].text).toContain('1. corner, cut away: Walls');
+		expect(result.content[0].text).toMatch(/1\. corner: preview id \S+, cut away: Walls\./);
 		expect(result.content[0].text).toContain('Layers drawn: Kitchen/Fronts, Room/Walls.');
+	});
+
+	it('draws a held solve in several views and another look, without solving again', async () => {
+		const solved = serve([SCHEMA, SOLVED]);
+		const { structuredContent } = await call(solved.server, 'selva_solve', { definition: GUID });
+		const solveId = (structuredContent as { solveId: string }).solveId;
+
+		capture.run.mockResolvedValueOnce({
+			png: 'AAAA',
+			images: [
+				{ png: 'AAAA', label: 'iso', cut: [] },
+				{ png: 'BBBB', label: 'front', cut: [] }
+			],
+			drawn: 3,
+			layers: []
+		});
+		const { server, sent } = serve([SCHEMA]);
+		const result = await call(server, 'selva_capture_preview', {
+			definition: GUID,
+			solve: solveId,
+			views: ['iso', 'front'],
+			look: 'night'
+		});
+		expect(sent.some((r) => r.url.includes('/solve'))).toBe(false);
+		expect(capture.run).toHaveBeenLastCalledWith(
+			SOLVED,
+			expect.objectContaining({ views: ['iso', 'front'], look: 'night' })
+		);
+		expect(result.content.slice(1).map((c) => c.data)).toEqual(['AAAA', 'BBBB']);
+		expect(result.content[0].text).toMatch(/1\. iso: preview id .*\n2\. front: preview id/);
+	});
+
+	it('opens a preview in the view the definition saves, and hands it to the 3D view', async () => {
+		const camera = { direction: [0, -1, 0.5] };
+		const saved = { ...SCHEMA, viewerOptions: { camera } };
+		const { server } = serve([saved, SOLVED]);
+		await call(server, 'selva_capture_preview', { definition: GUID });
+		expect(capture.run).toHaveBeenLastCalledWith(
+			SOLVED,
+			expect.objectContaining({ views: ['default'], camera })
+		);
+
+		const view = serve([saved, SOLVED]);
+		const result = await call(
+			view.server,
+			'selva_solve',
+			{ definition: GUID },
+			{ extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } }
+		);
+		expect(result._meta?.[SOLVE_VIEW_KEY]).toMatchObject({ camera });
+	});
+
+	it('refuses an unknown solve id', async () => {
+		const { server } = serve([SCHEMA]);
+		const result = await call(server, 'selva_capture_preview', {
+			definition: GUID,
+			solve: '1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+		});
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain('expired or is unknown');
 	});
 
 	it('says when the solve drew nothing, and when the server has no browser', async () => {

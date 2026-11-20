@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-/** A camera direction, as Selva's viewer names them. */
-export type CaptureView = 'iso' | 'top' | 'front' | 'back' | 'left' | 'right' | 'bottom';
+/** A camera direction, as Selva's viewer names them; `default` is `camera`, or iso without one. */
+export type CaptureView =
+	'default' | 'iso' | 'top' | 'front' | 'back' | 'left' | 'right' | 'bottom';
 
 export interface CaptureCamera {
 	view?: CaptureView;
@@ -19,9 +20,11 @@ export interface CaptureCamera {
 }
 
 export interface CaptureOptions {
-	/** One camera. Ignored when `cameras` is given. */
+	/** One view; ignored when `views` or `cameras` is given. Default `default`. */
 	view?: CaptureView;
-	/** One picture per camera, drawn from the same scene. */
+	/** Several preset views, a picture each; ignored when `cameras` is given. */
+	views?: CaptureView[];
+	/** One picture per camera, drawn from the same scene. Costs a render each, not a solve. */
 	cameras?: CaptureCamera[];
 	/** Layers or object names to leave out. A layer hides its sublayers: `Room` hides `Room/Walls`. */
 	hide?: string[];
@@ -40,6 +43,11 @@ export interface CaptureOptions {
 	look?: string;
 	/** Hex, e.g. `#e6e6e6`. */
 	background?: string;
+	/**
+	 * What the `default` view shows: a saved view, as `CameraView` in `@selvajs/visualization/render`.
+	 * Only its direction counts: the capture frames the model to fit its own canvas.
+	 */
+	camera?: { direction: number[]; position?: number[]; target?: number[] };
 	/**
 	 * The HDR environment the viewer lights with, as a URL (`data:` works: the page loads no
 	 * origin). Without it the viewer generates its lighting, which reads flatter.
@@ -75,7 +83,7 @@ export interface CaptureImage {
 export interface Capture {
 	/** The first picture, or the sheet. Empty when nothing was drawn. */
 	png: string;
-	/** One per camera, or the one sheet. */
+	/** One per camera in the order asked, or the one sheet. */
 	images: CaptureImage[];
 	/** Objects drawn. Zero means the response had no display geometry and there are no pictures. */
 	drawn: number;
@@ -205,6 +213,7 @@ async function capture(response: unknown, options: CaptureOptions): Promise<Capt
 		await page.setViewportSize({ width: options.width ?? 1200, height: options.height ?? 800 });
 		await page.setContent(html, { waitUntil: 'load' });
 		const hdr = options.hdr ? await options.hdr() : undefined;
+		const presets = options.views?.length ? options.views : [options.view ?? 'default'];
 		const result = await page.evaluate(
 			(req) =>
 				(
@@ -214,10 +223,11 @@ async function capture(response: unknown, options: CaptureOptions): Promise<Capt
 				).selvaCapture(req),
 			{
 				response,
-				cameras: options.cameras?.length ? options.cameras : [{ view: options.view ?? 'iso' }],
+				cameras: options.cameras?.length ? options.cameras : presets.map((view) => ({ view })),
 				grid: options.grid ?? true,
 				look: options.look,
 				background: options.background,
+				camera: options.camera,
 				hdr,
 				hide: options.hide,
 				cutaway: options.cutaway,
