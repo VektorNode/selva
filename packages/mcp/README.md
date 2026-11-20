@@ -137,10 +137,14 @@ that call. `renderViewForm` from `@selvajs/mcp/view` draws the same form in a vi
 
 `captureSolve(response, { view, width, height, grid, look, background, hdr })` from
 `@selvajs/mcp/capture` draws a Rhino.Compute response in the same viewer as the 3D view, in a
-headless Chromium, and resolves to a base64 PNG for a tool's `images`. `hdr` is the environment
+headless Chromium, and resolves to base64 PNGs for a tool's `images`. `cameras` takes several
+views of one scene (a preset `view`, or `azimuth`, `elevation`, `zoom` and `target`); `sheet`
+joins them into one labelled grid. The camera fits what is drawn unless `frame: false`. `hide`
+leaves out layers or object names, and `cutaway` leaves out, per camera, the tall thin walls
+between it and the middle of the scene; the result lists the layers drawn. `hdr` is the environment
 map as a URL; the page loads nothing from an origin, so a `data:` URL is the reliable form. Captures run one at a time on one browser, which closes after
 two idle minutes. It needs the optional peer `playwright-core` and a browser
-(`npx playwright install --with-deps chromium`, or `executablePath`); without them it throws
+(`npx playwright install --with-deps chromium`, an installed Chrome, Edge or distro Chromium, or `executablePath`); without them it throws
 `CaptureUnavailableError`, whose message says so. A bundled host passes the page as `html`,
 since bundling moves `dist/views/capture.html` away from the module that reads it: with Vite,
 `() => import('@selvajs/mcp/views/capture.html?raw').then((m) => m.default)`.

@@ -1,8 +1,9 @@
 import type { ToolOutput } from '@selvajs/mcp';
-import type { UISchema } from '@selvajs/schemas';
+import { buildFormModel, type UISchema } from '@selvajs/schemas';
 import type { RhinoModule } from 'rhino3dm';
 import { MCP_FILES_PREFIX } from './path.js';
 import type { Stash } from './stash.js';
+import { describeInputs } from './form.js';
 
 /** One output of a solve: a Grasshopper data tree, every item a JSON-encoded string. */
 export interface DataTree {
@@ -107,6 +108,165 @@ async function fileLinks(items: TreeItem[], origin: string, stash: Stash): Promi
 	return links;
 }
 
+// ============================================================================
+// Charts and computed lists, as text
+// ============================================================================
+
+/** Parses an item, unwrapping the JSON strings Compute may wrap it in. */
+function parseDeep(data: string): unknown {
+	let value: unknown = data;
+	for (let i = 0; i < 3 && typeof value === 'string'; i++) {
+		try {
+			value = JSON.parse(value);
+		} catch {
+			break;
+		}
+	}
+	return value;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+	typeof v === 'object' && v !== null && !Array.isArray(v);
+
+interface ChartTrace {
+	type: string;
+	name?: string;
+	labels?: unknown[];
+	values?: unknown[];
+	x?: unknown[];
+	y?: unknown[];
+}
+
+interface ChartSummary {
+	title?: string;
+	traces: ChartTrace[];
+}
+
+/** A Plotly figure's title and data, or null when `value` is not one. */
+function readFigure(value: unknown): ChartSummary | null {
+	if (!isRecord(value) || !Array.isArray(value.data)) return null;
+	const layout = isRecord(value.layout) ? value.layout : {};
+	const title = isRecord(layout.title) ? layout.title.text : layout.title;
+	const array = (v: unknown) => (Array.isArray(v) ? v.slice(0, MAX_SCALARS) : undefined);
+	const traces = value.data.filter(isRecord).map((t) => {
+		const trace: ChartTrace = { type: typeof t.type === 'string' ? t.type : 'scatter' };
+		if (typeof t.name === 'string' && t.name) trace.name = t.name;
+		for (const key of ['labels', 'values', 'x', 'y'] as const) {
+			const data = array(t[key]);
+			if (data) trace[key] = data;
+		}
+		return trace;
+	});
+	return { ...(typeof title === 'string' && title && { title }), traces };
+}
+
+const numberText = (v: unknown) =>
+	typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(v);
+
+function chartText(chart: ChartSummary): string {
+	const parts = chart.traces.map((t) => {
+		const keys = t.labels ?? t.x;
+		const values = t.values ?? t.y;
+		const head = `${t.type}${t.name ? ` "${t.name}"` : ''}`;
+		if (!keys || !values) return head;
+		const pairs = keys.map((k, i) => `${String(k)} ${numberText(values[i])}`);
+		const numbers = values.filter((v): v is number => typeof v === 'number');
+		const sum =
+			t.type === 'pie' && numbers.length === values.length
+				? ` (sum ${numberText(numbers.reduce((a, b) => a + b, 0))})`
+				: '';
+		return `${head}: ${pairs.join('; ')}${sum}`;
+	});
+	return `chart${chart.title ? ` "${chart.title}"` : ''}, ${parts.join(' | ')}`;
+}
+
+interface ListPayload {
+	targetInputId?: string | null;
+	options?: Record<string, string>;
+	rows?: { key: string; label?: string | null; section?: string | null }[] | null;
+	members?: string[] | null;
+	pickTable?: { by?: string[] | null; inputs: string[] } | null;
+}
+
+function readListPayload(value: unknown): ListPayload | null {
+	return isRecord(value) && ('targetInputId' in value || 'options' in value)
+		? (value as ListPayload)
+		: null;
+}
+
+/** Option names for values, in the form's words. */
+const namesOf = (options: Record<string, string>) => Object.keys(options);
+const nameOf = (options: Record<string, string> | undefined, value: unknown) =>
+	(options && Object.keys(options).find((n) => options[n] === value)) ?? value;
+
+/** What one computed list output does, in the form's labels. */
+function listOutputText(payload: ListPayload, labelOf: (id: string) => string): string {
+	const quoted = (ids: string[]) => ids.map((id) => `"${labelOf(id)}"`).join(', ');
+	if (payload.rows && payload.members) {
+		const rows = payload.rows.map(
+			(r) => `${r.label || r.key}${r.section ? ` (${r.section})` : ''}`
+		);
+		return `${rows.length} rows, each with ${quoted(payload.members)}: ${rows.join(', ')}`;
+	}
+	if (payload.pickTable) {
+		const by = payload.pickTable.by?.length ? `, narrowed by ${quoted(payload.pickTable.by)}` : '';
+		return `fills ${quoted(payload.pickTable.inputs)}${by}`;
+	}
+	const options = payload.options ?? {};
+	const target = payload.targetInputId
+		? `options for "${labelOf(payload.targetInputId)}"`
+		: 'options';
+	return `${target}: ${namesOf(options).join(', ') || 'none'}`;
+}
+
+/** Each computed list's options and the pick the solve used, as the form would show them. */
+function listsText(
+	schema: UISchema,
+	values: Record<string, unknown>,
+	labelOf: (id: string) => string
+): { lines: string[]; structured: Record<string, unknown> } {
+	const model = buildFormModel(schema, values);
+	const lines: string[] = [];
+	const structured: Record<string, unknown> = {};
+	for (const [id, options] of Object.entries(model.options)) {
+		const pick = nameOf(options, model.shown[id] ?? values[id]);
+		const label = labelOf(id);
+		structured[label] = { options: namesOf(options), ...(pick !== undefined && { pick }) };
+		lines.push(
+			`- "${label}": one of ${namesOf(options)
+				.map((n) => `"${n}"`)
+				.join(
+					', '
+				)}${pick !== undefined && pick !== '' ? `; the solve used "${String(pick)}"` : ''}`
+		);
+	}
+	for (const repeat of model.repeats) {
+		for (const member of repeat.members) {
+			const label = labelOf(member);
+			const shown = model.shown[member] as unknown[] | undefined;
+			const rows = repeat.rows.map((row, i) => {
+				const options = model.rowOptions[member]?.[i] ?? {};
+				return {
+					row: row.key,
+					label: row.label ?? row.key,
+					options: namesOf(options),
+					pick: nameOf(options, shown?.[i])
+				};
+			});
+			structured[label] = { rows };
+			lines.push(
+				`- "${label}", per row as a JSON object of row key to option name:`,
+				...rows.map(
+					(r) =>
+						`  - ${r.row} (${r.label}): ${r.options.map((n) => `"${n}"`).join(', ')}; ` +
+						`the solve used "${String(r.pick)}"`
+				)
+			);
+		}
+	}
+	return { lines, structured };
+}
+
 function sizeText(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -116,16 +276,64 @@ function sizeText(bytes: number): string {
 export async function summarizeSolve(
 	res: SolveResponse,
 	schema: UISchema,
-	options: { origin: string; link: string; stash: Stash }
+	options: {
+		origin: string;
+		link: string;
+		stash: Stash;
+		/** The values solved with, by input id. Inputs left out read as their defaults. */
+		values?: Record<string, unknown>;
+	}
 ): Promise<ToolOutput> {
 	const lines: string[] = [];
 	const structured: Record<string, unknown> = {};
 	const declared = new Map(schema.outputs.map((o) => [o.nickname, o.type]));
+	const outputId = new Map(schema.outputs.map((o) => [o.nickname, o.id]));
+	const described = describeInputs(schema);
+	const labelOf = (id: string) => described.find((d) => d.input.id === id)?.label ?? id;
+	// Input values and list payloads by id, as the form model reads them.
+	const formValues: Record<string, unknown> = Object.fromEntries(
+		schema.inputs.filter((i) => i.default !== undefined).map((i) => [i.id, i.default])
+	);
+	Object.assign(formValues, options.values);
+	let anyLists = false;
 	let anyFiles = false;
 
 	for (const tree of res.values ?? []) {
 		if (isPlumbing(tree)) continue;
 		const items = Object.values(tree.InnerTree ?? {}).flat();
+		const kind = declared.get(tree.ParamName);
+
+		const lists =
+			kind === 'dynamicValueList' || items.some((i) => /DynamicValueList/.test(i.type))
+				? items.map((i) => readListPayload(parseDeep(i.data)))
+				: [];
+		if (lists.length && lists.every(Boolean)) {
+			const payload = lists[0]!;
+			const id = outputId.get(tree.ParamName);
+			if (id) formValues[id] = payload;
+			anyLists = true;
+			structured[tree.ParamName] = payload.pickTable
+				? {
+						fills: payload.pickTable.inputs.map(labelOf),
+						by: (payload.pickTable.by ?? []).map(labelOf)
+					}
+				: payload.rows
+					? { rows: payload.rows, members: (payload.members ?? []).map(labelOf) }
+					: { options: namesOf(payload.options ?? {}) };
+			lines.push(`${tree.ParamName}: ${listOutputText(payload, labelOf)}`);
+			continue;
+		}
+
+		const charts =
+			kind === 'chart' || items.some((i) => /Plotly/i.test(i.type))
+				? items.map((i) => readFigure(parseDeep(i.data)))
+				: [];
+		if (charts.length && charts.every(Boolean)) {
+			const read = charts as ChartSummary[];
+			structured[tree.ParamName] = read.length === 1 ? read[0] : read;
+			lines.push(`${tree.ParamName}: ${read.map(chartText).join(' || ')}`);
+			continue;
+		}
 		// Context Print sends numbers as System.String; the schema says what they are.
 		const asNumber = declared.get(tree.ParamName) === 'number';
 		const scalars = items
@@ -175,6 +383,14 @@ export async function summarizeSolve(
 	}
 
 	if (!lines.length) lines.push('The solve returned no outputs.');
+	let lists: Record<string, unknown> | undefined;
+	if (anyLists) {
+		const text = listsText(schema, formValues, labelOf);
+		if (text.lines.length) {
+			lines.push('', 'Lists computed in this solve, and what they offer now:', ...text.lines, '');
+			lists = text.structured;
+		}
+	}
 	if (anyFiles) lines.push('File links download the file and expire within the hour.');
 	if (res.selva?.outcome) lines.push(`Outcome: ${JSON.stringify(res.selva.outcome)}`);
 	for (const e of res.errors ?? []) lines.push(`Error: ${e}`);
@@ -190,6 +406,7 @@ export async function summarizeSolve(
 		text: lines.join('\n'),
 		structured: {
 			outputs: structured,
+			...(lists && { lists }),
 			errors: res.errors ?? [],
 			warnings: res.warnings ?? [],
 			link: options.link

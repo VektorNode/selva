@@ -13,18 +13,29 @@ public class Script_Instance : GH_ScriptInstance
     // and Handles arrive in row order, the picks already resolved, so row i of each list is cabinet i.
     // The back wall runs along +X from the origin with its fronts to -Y, the side wall turns along -Y
     // at its right-hand end, and the island stands in front of the back run. The room's two walls are
-    // behind and to the right, so the default camera, which looks in from -X, -Y, sees every front.
+    // behind and to the right; its left and front stay open, so a camera from the front-left sees
+    // every front. Prices are kept in EUR and converted once per line, so the lines add up exactly.
     private void RunScript(List<object> Keys, List<object> Labels, List<object> Sections, List<object> Fronts, List<object> Handles,
-        object WorktopName, object WallUnits, object LightsOn, object UnitHeight, object Ceiling,
+        object Layout, object Style, object Colour, object WorktopName, object MetalName, object WallUnits, object LightsOn,
+        object UnitHeight, object Ceiling, object BackWall, object SideWall, object RoomDepth, object ShowWalls,
+        object Currency, object Vat, object ChfPerEur, object Delivery, object Installation,
         ref object Carcass, ref object Panels, ref object Glass, ref object Metal, ref object Steel, ref object Dark, ref object Top,
         ref object Splash, ref object Glow, ref object Walls, ref object Floor, ref object GlowStrength, ref object Lumens,
-        ref object Lines, ref object Csv, ref object PartNames, ref object PartEur, ref object Total, ref object TopMetres)
+        ref object Lines, ref object Csv, ref object PartNames, ref object PartPrice, ref object Total, ref object TopMetres,
+        ref object PriceLines, ref object Summary, ref object Fit, ref object Camera)
     {
         var parts = new Parts();
         bool wallUnits = Truthy(WallUnits), lightsOn = Truthy(LightsOn);
-        string worktop = Txt(WorktopName);
+        string layout = Txt(Layout), worktop = Txt(WorktopName), metal = Txt(MetalName), showWalls = Txt(ShowWalls);
+        double unitHeight = Num(UnitHeight, 700);
         // Wall units and tall cabinets end at the same height.
-        double TallZ = WallZ0 + Num(UnitHeight, 700), Room = Num(Ceiling, 2500);
+        double TallZ = WallZ0 + unitHeight, Room = Num(Ceiling, 2500);
+        double backWall = Num(BackWall, 3600), sideWall = Num(SideWall, 3000), roomDepth = Num(RoomDepth, 4000);
+        string currency = Txt(Currency) == "CHF" ? "CHF" : "EUR";
+        double rate = currency == "CHF" ? Num(ChfPerEur, 0.94) : 1, vatPct = Num(Vat, 0);
+        Func<double, double> Money = eur => Math.Round(eur * rate);
+        Func<double, string> Show = amount => string.Format(CultureInfo.InvariantCulture, "{0} {1:#,0}", currency, amount);
+        Func<double, string> Mm = mm => string.Format(CultureInfo.InvariantCulture, "{0:#,0} mm", mm);
 
         var length = new Dictionary<string, double>();
         for (int i = 0; i < Keys.Count; i++)
@@ -32,16 +43,68 @@ public class Script_Instance : GH_ScriptInstance
             string section = Txt(At(Sections, i));
             length[section] = (length.TryGetValue(section, out var l) ? l : 0) + WidthOf(Txt(Keys[i]));
         }
-        double backLength = length.TryGetValue("Back wall", out var back) ? back : 0;
+        double backCabinets = length.TryGetValue("Back wall", out var back) ? back : 0;
         bool hasSide = length.ContainsKey("Side wall");
+        double sideCabinets = length.TryGetValue("Side wall", out var sideRun) ? sideRun : 0;
         double islandLength = length.TryGetValue("Island", out var island) ? island : 0;
+
+        // ---- Fit the runs to the room
+        var fit = new List<string>();
+        // An L's back run reaches the corner cabinet, which takes the side run's depth of the back wall.
+        double backRoom = backWall - (hasSide ? Depth : 0);
+        double spare = backRoom - backCabinets;
+        double backLength = backCabinets;
+        var fill = new List<double>();
+        if (spare < 0)
+        {
+            fit.Add($"Back wall: the cabinets need {Mm(-spare)} more than the {Mm(backWall)} wall has. Lengthen the wall or pick a shorter layout.");
+        }
+        else if (hasSide)
+        {
+            // The run must reach the corner: open units up to 600 mm wide, or a filler panel for a sliver.
+            if (spare > MinOpenUnit)
+            {
+                int n = (int)Math.Ceiling(spare / 600);
+                for (int k = 0; k < n; k++) fill.Add(spare / n);
+            }
+            else if (spare >= 3) fill.Add(spare);
+            backLength = backRoom;
+            fit.Add(spare < 3
+                ? "Back wall: the cabinets fill it to the corner."
+                : $"Back wall: {Mm(spare)} to the corner, filled with {(spare > MinOpenUnit ? $"{fill.Count} open unit(s) of {Mm(fill[0])}" : "a filler panel")}.");
+        }
+        else
+        {
+            fit.Add(spare < 3 ? "Back wall: the cabinets fill it." : $"Back wall: {Mm(spare)} free beside the run.");
+        }
+        if (hasSide)
+        {
+            double sideRoom = sideWall - Depth;
+            fit.Add(sideCabinets > sideRoom
+                ? $"Side wall: the cabinets need {Mm(sideCabinets - sideRoom)} more than the {Mm(sideWall)} wall has."
+                : $"Side wall: {Mm(sideRoom - sideCabinets)} free past the last cabinet.");
+            if (sideWall > roomDepth) fit.Add($"Side wall: longer than the room is deep ({Mm(roomDepth)}).");
+        }
+        // The island's fronts face away from the back run and need an aisle in front of them.
+        double roomFront = Depth - roomDepth;
+        double islandFront = -IslandAisle - Depth;
+        if (islandLength > 0)
+        {
+            double aisle = islandFront - roomFront;
+            fit.Add(aisle < MinAisle
+                ? $"Island: {Mm(Math.Max(0, aisle))} in front of it, under the {Mm(MinAisle)} it needs. Make the room deeper."
+                : $"Island: {Mm(aisle)} in front of it.");
+        }
+        if (unitHeight + WallZ0 + 150 > Room) fit.Add("Wall units: closer than 150 mm to the ceiling.");
 
         var run = new Dictionary<string, double>();
         var low = new Dictionary<string, double>();
         double sinkAt = -1;
+        bool hasSink = false;
         var lines = new List<string>();
-        var csv = new List<string> { "Cabinet,Wall,Width (mm),Front,Handle,EUR" };
-        double carcassEur = 0, frontEur = 0, handleEur = 0, wallEur = 0, applianceEur = 0;
+        var csvRows = new List<string>();
+        double baseEur = 0, wallEur = 0, applianceEur = 0;
+        int units = 0;
 
         for (int i = 0; i < Keys.Count; i++)
         {
@@ -58,10 +121,10 @@ public class Script_Instance : GH_ScriptInstance
             cabinet.Carcass(parts, shelves, top: !sink);
             int pulls = cabinet.Fronts(front, handle, parts);
 
-            double rowCarcass = tall ? 420 : open ? 150 : 190 * w / 600;
-            double rowFront = FrontEur(front) * w / 600 * (tall ? 2 : 1);
-            double rowHandle = HandleEur(handle) * pulls;
+            double rowBase = (tall ? 420 : open ? 150 : 190 * w / 600) + FrontEur(front) * w / 600 * (tall ? 2 : 1) + HandleEur(handle) * pulls;
             double rowWall = 0;
+            string above = null;
+            units++;
 
             if (!tall)
             {
@@ -70,7 +133,8 @@ public class Script_Instance : GH_ScriptInstance
                 {
                     SinkAndTap(cabinet, w, parts);
                     sinkAt = u0;
-                    applianceEur += 380;
+                    hasSink = true;
+                    applianceEur += 260;
                 }
 
                 if (hob)
@@ -93,46 +157,88 @@ public class Script_Instance : GH_ScriptInstance
                         parts.Steel.Add(cabinet.Box(w / 2 - 140, w / 2 + 140, Depth - 300, Depth, WallZ0 + 60, TallZ));
                         parts.Glow.Add(cabinet.Box(w / 2 - 160, w / 2 + 160, Depth - 300, Depth - 260, WallZ0 - 6, WallZ0));
                         applianceEur += 340;
+                        above = "cooker hood above";
                     }
                     else if (wallUnits)
                     {
                         var unit = new Cabinet(wall, u0, w, WallZ0, TallZ, Depth - WallDepth, plinth: false);
                         unit.Carcass(parts, shelves, top: true);
-                        int unitPulls = unit.Fronts(WallFront(front), handle == "Cup pull" ? "Knob" : handle, parts);
+                        string unitFront = WallFront(front), unitHandle = handle == "Cup pull" ? "Knob" : handle;
+                        int unitPulls = unit.Fronts(unitFront, unitHandle, parts);
                         parts.Glow.Add(unit.Box(20, w - 20, 40, 60, WallZ0 - 6, WallZ0));
-                        rowWall = 150 * w / 600 + FrontEur(WallFront(front)) * w / 600 * 0.8 + HandleEur(handle) * unitPulls;
+                        rowWall = 150 * w / 600 + FrontEur(unitFront) * w / 600 * 0.8 + HandleEur(unitHandle) * unitPulls;
+                        above = $"wall unit above, {Mm(unitHeight)} high: {unitFront} / {unitHandle}";
+                        units++;
                     }
                     else
                     {
                         parts.Top.Add(cabinet.Box(0, w, Depth - 250, Depth, WallZ0, WallZ0 + 30));
                         parts.Glow.Add(cabinet.Box(20, w - 20, Depth - 70, Depth - 50, WallZ0 - 6, WallZ0));
+                        above = "open shelf above";
                     }
                 }
             }
 
-            carcassEur += rowCarcass;
-            frontEur += rowFront;
-            handleEur += rowHandle;
+            baseEur += rowBase;
             wallEur += rowWall;
-            double rowEur = Math.Round(rowCarcass + rowFront + rowHandle + rowWall);
-            lines.Add(string.Format(CultureInfo.InvariantCulture, "{0} · {1}: {2} / {3} · EUR {4:0}", label, section, front, handle, rowEur));
-            csv.Add(string.Format(CultureInfo.InvariantCulture, "{0},{1},{2:0},{3},{4},{5:0}", label, section, w, front, handle, rowEur));
+            lines.Add($"{label} · {section}, {Mm(w)}: {front} / {handle} · {Show(Money(rowBase))}");
+            if (above != null) lines.Add(rowWall > 0 ? $"  {above} · {Show(Money(rowWall))}" : $"  {above}");
+            csvRows.Add(string.Format(CultureInfo.InvariantCulture, "{0},{1},{2:0},{3},{4},{5:0}", label, section, w, front, handle, Money(rowBase)));
+            if (rowWall > 0)
+            {
+                csvRows.Add(string.Format(CultureInfo.InvariantCulture, "{0} wall unit,{1},{2:0},{3},{4},{5:0}", label, section, w, WallFront(front),
+                    handle == "Cup pull" ? "Knob" : handle, Money(rowWall)));
+            }
         }
 
-        var backWall = Wall("Back wall", backLength, islandLength);
-        double backLow = low.TryGetValue("Back wall", out var bl) ? bl : 0;
+        var backWallFrame = Wall("Back wall", backLength, islandLength);
+
+        // What the back run leaves before the corner: open units, or one filler panel.
+        double fillU = backCabinets;
+        foreach (double w in fill)
+        {
+            var piece = new Cabinet(backWallFrame, fillU, w, 0, CarcassZ, 0, plinth: true);
+            if (w > MinOpenUnit)
+            {
+                piece.Carcass(parts, shelves: true, top: true);
+                double eur = 150 * w / 600;
+                baseEur += eur;
+                units++;
+                lines.Add($"Open unit · Back wall, {Mm(w)}: open shelves · {Show(Money(eur))}");
+                csvRows.Add(string.Format(CultureInfo.InvariantCulture, "Open unit,Back wall,{0:0},Open shelves,None,{1:0}", w, Money(eur)));
+            }
+            else
+            {
+                parts.Panels.Add(piece.Box(0, w, -Board, 0, Plinth, CarcassZ));
+                parts.Dark.Add(piece.Box(0, w, 50, Depth, 0, Plinth));
+                double eur = 40 + w * 0.1;
+                baseEur += eur;
+                lines.Add($"Filler panel · Back wall, {Mm(w)} · {Show(Money(eur))}");
+                csvRows.Add(string.Format(CultureInfo.InvariantCulture, "Filler panel,Back wall,{0:0},,,{1:0}", w, Money(eur)));
+            }
+            fillU += w;
+        }
+        double backLow = (low.TryGetValue("Back wall", out var bl) ? bl : 0) + (hasSide ? backLength - backCabinets : 0);
         double topMetres = backLow / 1000;
 
         // The side wall leaves the corner between the two runs: a blind cabinet under the worktop.
         if (hasSide)
         {
-            var corner = new Cabinet(backWall, backLength, Depth, 0, CarcassZ, 0, plinth: true);
+            var corner = new Cabinet(backWallFrame, backLength, Depth, 0, CarcassZ, 0, plinth: true);
             corner.Carcass(parts, shelves: false, top: true);
+            baseEur += 160;
+            units++;
+            lines.Add($"Corner · Back wall, {Mm(Depth)}: blind cabinet · {Show(Money(160))}");
+            csvRows.Add(string.Format(CultureInfo.InvariantCulture, "Corner,Back wall,{0:0},Blind,,{1:0}", Depth, Money(160)));
             if (wallUnits)
             {
-                var filler = new Cabinet(backWall, backLength, Depth, WallZ0, TallZ, Depth - WallDepth, plinth: false);
+                var filler = new Cabinet(backWallFrame, backLength, Depth, WallZ0, TallZ, Depth - WallDepth, plinth: false);
                 filler.Carcass(parts, shelves: false, top: true);
                 parts.Panels.Add(filler.Box(Gap / 2, Depth - WallDepth - Gap / 2, -Board, 0, WallZ0 + Gap, TallZ - Gap));
+                wallEur += 90;
+                units++;
+                lines.Add($"  corner wall unit above, {Mm(unitHeight)} high · {Show(Money(90))}");
+                csvRows.Add(string.Format(CultureInfo.InvariantCulture, "Corner wall unit,Back wall,{0:0},,,{1:0}", Depth, Money(90)));
             }
             else
             {
@@ -144,15 +250,15 @@ public class Script_Instance : GH_ScriptInstance
             parts.Splash.Add(side.Box(-Depth, sideLow, Depth - 10, Depth, TopZ, WallZ0));
             parts.Top.Add(side.Slab(0, sideLow, -20, Depth, CarcassZ, TopZ, null));
             topMetres += (Depth + sideLow) / 1000;
-            carcassEur += 160;
         }
 
-        var backRun = new Cabinet(backWall, 0, backLow, 0, CarcassZ, 0, plinth: false);
+        var backRun = new Cabinet(backWallFrame, 0, backLow, 0, CarcassZ, 0, plinth: false);
         parts.Splash.Add(backRun.Box(0, backLow + (hasSide ? Depth : 0), Depth - 10, Depth, TopZ, WallZ0));
         // One slab per run, so its grain runs the length of the run: Selva lays wood along each part.
         parts.Top.Add(backRun.Slab(0, backLow + (hasSide ? Depth : 0), -20, Depth, CarcassZ, TopZ,
             sinkAt < 0 ? ((double, double, double, double)?)null : (sinkAt + SinkInset, sinkAt + WidthOf("back/sink") - SinkInset, SinkFront, SinkBack)));
 
+        double tapEur = hasSink ? TapEur(metal) : 0, pendantEur = 0;
         if (islandLength > 0)
         {
             // One slab over the island, 300 mm past its back for the stools.
@@ -169,23 +275,87 @@ public class Script_Instance : GH_ScriptInstance
                 parts.Glow.Add(Cyl(slab.At(u, 440, 1640), Vector3d.ZAxis, 100, 10));
                 parts.Dark.Add(Cyl(slab.At(u, 440, 1800), Vector3d.ZAxis, 4, Room - 1800));
             }
+            pendantEur = 3 * PendantEur(metal);
         }
 
-        // The room is only as big as the kitchen needs: the viewer frames everything it is given.
-        double wallX = backLength + (hasSide ? Depth : 0);
-        double sideLength = length.TryGetValue("Side wall", out var sideRun) ? sideRun : 0;
-        double roomFront = -Math.Max(1700, Math.Max(sideLength + 500, islandLength > 0 ? 3100 : 0));
-        var walls = new List<Mesh>
+        // ---- The room: two walls the size the inputs give, cut low or left out on request
+        double wallX = Math.Max(backWall, hasSide ? backLength + Depth : backLength);
+        double wallH = showWalls == "Off" ? 0 : showWalls == "Partial" ? PartialWall : Room;
+        var walls = new List<Mesh>();
+        if (wallH > 0)
         {
-            Mesh.CreateFromBox(new BoundingBox(-500, Depth, 0, wallX + 100, Depth + 100, Room), 1, 1, 1),
-            Mesh.CreateFromBox(new BoundingBox(wallX, roomFront, 0, wallX + 100, Depth, Room), 1, 1, 1)
-        };
+            walls.Add(Mesh.CreateFromBox(new BoundingBox(-100, Depth, 0, wallX + 100, Depth + 100, wallH), 1, 1, 1));
+            walls.Add(Mesh.CreateFromBox(new BoundingBox(wallX, roomFront, 0, wallX + 100, Depth, wallH), 1, 1, 1));
+        }
 
-        double worktopEur = Math.Round(topMetres * WorktopEur(worktop));
-        csv.Add(string.Format(CultureInfo.InvariantCulture, "Worktop,{0},{1:0},,,{2:0}", worktop, topMetres * 1000, worktopEur));
-        csv.Add(string.Format(CultureInfo.InvariantCulture, "Sink hob and hood,,,,,{0:0}", applianceEur));
-        double total = Math.Round(carcassEur + frontEur + handleEur + wallEur) + worktopEur + applianceEur;
+        // ---- Price: every line rounded once in the chosen currency, so the lines sum to the total
+        double worktopEur = topMetres * WorktopEur(worktop);
+        var items = new List<(string Name, double Amount)>
+        {
+            ("Base cabinets", Money(baseEur)),
+            ("Wall units", Money(wallEur)),
+            ("Worktop", Money(worktopEur)),
+            ("Tap and pendants", Money(tapEur + pendantEur)),
+            ("Appliances", Money(applianceEur))
+        };
+        if (Truthy(Delivery)) items.Add(("Delivery", Money(290)));
+        if (Truthy(Installation)) items.Add(("Installation", Money(85 * units + 120 * topMetres)));
+        double net = 0;
+        foreach (var item in items) net += item.Amount;
+        double vat = Math.Round(net * vatPct / 100);
+        double total = net + vat;
+
+        var priceLines = new List<string>();
+        foreach (var item in items) priceLines.Add($"{item.Name}: {Show(item.Amount)}");
+        if (!Truthy(Delivery)) priceLines.Add("Delivery: not included");
+        if (!Truthy(Installation)) priceLines.Add("Installation: not included");
+        priceLines.Add($"Subtotal excl. VAT: {Show(net)}");
+        priceLines.Add(string.Format(CultureInfo.InvariantCulture, "VAT {0:0.##} %: {1}", vatPct, Show(vat)));
+        priceLines.Add($"Total incl. VAT: {Show(total)}");
+        if (currency == "CHF") priceLines.Add(string.Format(CultureInfo.InvariantCulture, "Converted from EUR at {0:0.####} CHF per EUR.", rate));
+
+        var csv = new List<string> { $"Item,Wall,Width (mm),Front,Handle,{currency}" };
+        csv.AddRange(csvRows);
+        csv.Add(string.Format(CultureInfo.InvariantCulture, "Worktop,{0},{1:0},,,{2:0}", worktop, topMetres * 1000, Money(worktopEur)));
+        foreach (var item in items) csv.Add(string.Format(CultureInfo.InvariantCulture, "{0},,,,,{1:0}", item.Name, item.Amount));
+        csv.Add(string.Format(CultureInfo.InvariantCulture, "VAT {0:0.##} %,,,,,{1:0}", vatPct, vat));
         csv.Add(string.Format(CultureInfo.InvariantCulture, "Total,,,,,{0:0}", total));
+
+        var names = new List<string>();
+        var amounts = new List<double>();
+        foreach (var item in items)
+        {
+            if (item.Amount <= 0) continue;
+            names.Add(item.Name);
+            amounts.Add(item.Amount);
+        }
+        if (vat > 0)
+        {
+            names.Add("VAT");
+            amounts.Add(vat);
+        }
+
+        // ---- Summary: the whole design in one block a person or an agent can read back
+        var summary = new List<string>
+        {
+            string.Format(CultureInfo.InvariantCulture, "Layout: {0}. Style: {1}. Colour: {2}. Worktop: {3}, {4:0.0} m. Metal: {5}.",
+                layout, Txt(Style), Txt(Colour), worktop, topMetres, metal),
+            $"Room: back wall {Mm(backWall)}" + (hasSide ? $", side wall {Mm(sideWall)}" : "") + $", room depth {Mm(roomDepth)}, ceiling {Mm(Room)}.",
+            $"Runs: back {Mm(backLength)}" + (hasSide ? $" plus a {Mm(Depth)} corner, side {Mm(sideCabinets)}" : "") +
+                (islandLength > 0 ? $", island {Mm(islandLength)}" : "") + $". Cabinets {Mm(Depth)} deep, worktop at {Mm(TopZ)}.",
+            wallUnits ? $"Wall units: {Mm(unitHeight)} high, from {Mm(WallZ0)} to {Mm(TallZ)}." : "Wall units: none, open shelves instead.",
+            "Cabinets:"
+        };
+        summary.AddRange(lines);
+        summary.Add("Fit:");
+        summary.AddRange(fit);
+        summary.Add($"Total incl. VAT: {Show(total)}");
+
+        // For selva_capture_preview. Azimuth 0 looks from the front, negative from the left: the
+        // room's open sides, so every front faces the camera.
+        string camera = layout == "L-shaped" ? "{\"azimuth\":-35,\"elevation\":30,\"cutaway\":true}"
+            : layout == "Island" ? "{\"azimuth\":-25,\"elevation\":40,\"cutaway\":true}"
+            : "{\"azimuth\":-15,\"elevation\":20,\"cutaway\":true}";
 
         Carcass = parts.Carcass;
         Panels = parts.Panels;
@@ -197,19 +367,26 @@ public class Script_Instance : GH_ScriptInstance
         Splash = parts.Splash;
         Glow = parts.Glow;
         Walls = walls;
-        Floor = new List<Mesh> { Mesh.CreateFromBox(new BoundingBox(-500, roomFront, -20, wallX + 100, Depth + 100, 0), 1, 1, 1) };
+        Floor = new List<Mesh> { Mesh.CreateFromBox(new BoundingBox(-100, roomFront, -20, wallX + 100, Depth + 100, 0), 1, 1, 1) };
         GlowStrength = lightsOn ? 3.0 : 0.0;
         Lumens = lightsOn ? 500.0 : 0.0;
         Lines = string.Join("\n", lines);
         Csv = csv;
-        PartNames = new List<string> { "Cabinets", "Fronts", "Handles", "Wall units", "Worktop", "Sink, hob and hood" };
-        PartEur = new List<double> { Math.Round(carcassEur), Math.Round(frontEur), Math.Round(handleEur), Math.Round(wallEur), worktopEur, applianceEur };
-        Total = string.Format(CultureInfo.InvariantCulture, "EUR {0:#,0}", total);
+        PartNames = names;
+        PartPrice = amounts;
+        Total = Show(total);
         TopMetres = string.Format(CultureInfo.InvariantCulture, "{0:0.0} m of {1}", topMetres, worktop.ToLowerInvariant());
+        PriceLines = string.Join("\n", priceLines);
+        Summary = string.Join("\n", summary);
+        Fit = string.Join("\n", fit);
+        Camera = camera;
     }
 
     const double Relief = 12, Depth = 600, Plinth = 120, Gap = 3, Board = 18, CarcassZ = 870, TopZ = 910, WallZ0 = 1450;
     const double WallDepth = 350, IslandTop = 900, SinkInset = 160, SinkFront = 90, SinkBack = 470;
+    // The back run's front to the island's back; the clear floor in front of the island; the widest
+    // gap a filler panel closes before it takes an open unit; a "Partial" wall's height.
+    const double IslandAisle = 1500, MinAisle = 900, MinOpenUnit = 150, PartialWall = 1200;
 
     sealed class Parts
     {
@@ -275,6 +452,10 @@ public class Script_Instance : GH_ScriptInstance
         }
     }
 
+    static double TapEur(string metal) => metal == "Brass" ? 210 : metal == "Black" ? 180 : 150;
+
+    static double PendantEur(string metal) => metal == "Brass" ? 120 : metal == "Black" ? 105 : 95;
+
     // A wall unit takes a door in the style of the cabinet under it.
     static string WallFront(string front)
     {
@@ -288,7 +469,7 @@ public class Script_Instance : GH_ScriptInstance
         switch (section)
         {
             case "Side wall": return (new Point3d(backLength, 0, 0), -Vector3d.YAxis, -Vector3d.XAxis);
-            case "Island": return (new Point3d(Math.Max(0, (backLength - islandLength) / 2), -1500 - Depth, 0), Vector3d.XAxis, -Vector3d.YAxis);
+            case "Island": return (new Point3d(Math.Max(0, (backLength - islandLength) / 2), -IslandAisle - Depth, 0), Vector3d.XAxis, -Vector3d.YAxis);
             default: return (Point3d.Origin, Vector3d.XAxis, -Vector3d.YAxis);
         }
     }

@@ -1170,7 +1170,7 @@ var APP_SETTINGS = composeManifest([
 		onInvalid: 'default',
 		class: 'setting',
 		description:
-			'Chromium or Chrome executable that selva_capture_preview renders with. Empty: the one `npx playwright install chromium` installs.'
+			"Chromium or Chrome executable that selva_capture_preview renders with. Empty: Playwright's own Chromium, else an installed Chrome, Edge or distro Chromium."
 	}),
 	defineSetting({
 		key: 'LOG_LEVEL',

@@ -6,9 +6,15 @@ import { grantedActions } from '../server.js';
 import { createStash, type Stash } from '../stash.js';
 import { SolveOutput, selvaTools } from '../tools.js';
 import { selvaViews } from '../views.js';
+import type { Capture } from '@selvajs/mcp/capture';
 
 const capture = vi.hoisted(() => ({
-	run: vi.fn(async (): Promise<{ png: string; drawn: number }> => ({ png: 'iVBO', drawn: 3 }))
+	run: vi.fn(async (): Promise<Capture> => ({
+		png: 'iVBO',
+		images: [{ png: 'iVBO', label: 'iso', cut: [] }],
+		drawn: 3,
+		layers: ['Room/Walls']
+	}))
 }));
 vi.mock('@selvajs/mcp/capture', async (original) => ({
 	...(await original<typeof import('@selvajs/mcp/capture')>()),
@@ -224,6 +230,134 @@ describe('selva MCP tools', () => {
 		expect(text).toContain('Shape: 2 Mesh');
 		expect(text).toContain('Warning: 1. Slow component');
 		expect(text).toContain(`https://selva.test/library/${GUID}`);
+	});
+
+	it('reads computed lists and charts back as text and data', async () => {
+		const schema = {
+			...SCHEMA,
+			inputs: [
+				{ id: 'in-style', nickname: 'Style', paramType: 'valueList', default: 'Slab' },
+				{ id: 'in-colour', nickname: 'Colour', paramType: 'valueList', default: 'Sage' }
+			],
+			outputs: [
+				{ id: 'out-palette', nickname: 'Palette', type: 'dynamicValueList' },
+				{ id: 'out-price', nickname: 'Price', type: 'chart' }
+			],
+			layout: {
+				type: 'flat',
+				groups: [
+					{
+						id: 'g',
+						items: [
+							{
+								id: 'l1',
+								type: 'input',
+								widgetType: 'dropdown',
+								paramId: 'in-style',
+								config: { options: { Shaker: 'Shaker', Slab: 'Slab' } }
+							},
+							{ id: 'l2', type: 'input', widgetType: 'dynamicValueList', paramId: 'in-colour' }
+						]
+					}
+				]
+			}
+		};
+		const palette = {
+			targetInputId: null,
+			options: {},
+			pickTable: {
+				by: ['in-style'],
+				inputs: ['in-colour'],
+				rows: [
+					['Shaker', 'Sage'],
+					['Shaker', 'Navy'],
+					['Slab', 'White']
+				]
+			}
+		};
+		const figure = {
+			data: [{ type: 'pie', labels: ['Cabinets', 'Fronts'], values: [100, 50] }],
+			layout: { title: { text: 'Cost' } }
+		};
+		const solved = {
+			values: [
+				{
+					ParamName: 'Palette',
+					InnerTree: {
+						'{0}': [
+							{
+								type: 'Selva.GH.Features.ComputeIO.Goos.DynamicValueListGoo',
+								data: JSON.stringify(JSON.stringify(palette))
+							}
+						]
+					}
+				},
+				{
+					ParamName: 'Price',
+					InnerTree: {
+						'{0}': [{ type: 'Selva.Charts.PlotlyFigure', data: JSON.stringify(figure) }]
+					}
+				}
+			]
+		};
+		const { server } = serve([schema, solved]);
+		const { content, structuredContent } = await call(server, 'selva_solve', {
+			definition: GUID,
+			values: { Style: 'Shaker' }
+		});
+		const text = content[0].text;
+		expect(text).toContain('Palette: fills "Colour", narrowed by "Style"');
+		expect(text).toContain('"Colour": one of "Sage", "Navy"; the solve used "Sage"');
+		expect(text).toContain('Price: chart "Cost", pie: Cabinets 100; Fronts 50 (sum 150)');
+		expect(structuredContent?.lists).toEqual({
+			Colour: { options: ['Sage', 'Navy'], pick: 'Sage' }
+		});
+		expect(structuredContent?.outputs).toMatchObject({
+			Price: { title: 'Cost', traces: [{ type: 'pie', values: [100, 50] }] }
+		});
+	});
+
+	it('describes a computed list by the output that fills it', async () => {
+		const schema = {
+			...SCHEMA,
+			inputs: [{ id: 'in-h', nickname: 'Height', paramType: 'valueList', default: '700' }],
+			outputs: [
+				{ id: 'out-h', nickname: 'Height options', type: 'dynamicValueList', targetInputId: 'in-h' }
+			],
+			layout: {
+				type: 'flat',
+				groups: [
+					{
+						id: 'g',
+						items: [
+							{
+								id: 'l1',
+								type: 'input',
+								widgetType: 'dynamicValueList',
+								paramId: 'in-h',
+								config: { defaultOptions: { '700 mm': '700' } }
+							}
+						]
+					}
+				]
+			}
+		};
+		const { server } = serve([RECORD, schema]);
+		const { content } = await call(server, 'selva_describe_definition', { definition: GUID });
+		expect(content[0].text).toContain(
+			'its options are computed in the solve by "Height options" and can change with other inputs; selva_solve lists them; before a solve: "700 mm"'
+		);
+	});
+
+	it('takes a repeated input as an object of row key to pick', async () => {
+		const { server, sent } = serve([SCHEMA, SOLVED]);
+		await call(server, 'selva_solve', {
+			definition: GUID,
+			values: { Material: { 'row/a': 'Oak', 'row/b': 'Pine' } }
+		});
+		expect((sent[1].body as { values: Record<string, unknown> }).values['in-m']).toBe(
+			JSON.stringify({ 'row/a': 'oak_v2', 'row/b': 'pine_v1' })
+		);
 	});
 
 	it('counts vertices across the mesh items it can decode', async () => {
@@ -642,8 +776,38 @@ describe('selva MCP tools for editors', () => {
 		expect((await stash.get(previewId, 'preview'))?.contentType).toBe('image/png');
 	});
 
+	it('renders several cameras from one solve and says what it cut away', async () => {
+		capture.run.mockResolvedValueOnce({
+			png: 'AAA',
+			images: [
+				{ png: 'AAA', label: 'corner', cut: ['Walls'] },
+				{ png: 'BBB', label: 'top', cut: [] }
+			],
+			drawn: 9,
+			layers: ['Kitchen/Fronts', 'Room/Walls']
+		});
+		const { server } = serve([SCHEMA, SOLVED]);
+		const cameras = [{ azimuth: 45, elevation: 25, zoom: 1.2, label: 'corner' }, { view: 'top' }];
+		const result = await call(server, 'selva_capture_preview', {
+			definition: GUID,
+			cameras,
+			cutaway: true,
+			hide: ['Room/Floor']
+		});
+		expect(capture.run).toHaveBeenLastCalledWith(
+			SOLVED,
+			expect.objectContaining({ cameras, cutaway: true, hide: ['Room/Floor'], frame: true })
+		);
+		expect(result.content.filter((c) => c.type === 'image').map((c) => c.data)).toEqual([
+			'AAA',
+			'BBB'
+		]);
+		expect(result.content[0].text).toContain('1. corner, cut away: Walls');
+		expect(result.content[0].text).toContain('Layers drawn: Kitchen/Fronts, Room/Walls.');
+	});
+
 	it('says when the solve drew nothing, and when the server has no browser', async () => {
-		capture.run.mockResolvedValueOnce({ png: '', drawn: 0 });
+		capture.run.mockResolvedValueOnce({ png: '', images: [], drawn: 0, layers: [] });
 		const empty = serve([SCHEMA, SOLVED]);
 		const nothing = await call(empty.server, 'selva_capture_preview', { definition: GUID });
 		expect(nothing.content[0].text).toContain('drew nothing');

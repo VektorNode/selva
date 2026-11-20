@@ -111,6 +111,24 @@ public static partial class Definitions
         var lights = b.Switch("Lights on", true);
         b.Section("Kitchen", nKitchen);
 
+        var nRoom = b.Note("ROOM\nThe walls the kitchen stands against, in mm. The back run starts at the left end of the back wall; an L's " +
+                           "back run is filled to the corner with open units or a filler panel. Fit says what is left, or what does not fit. " +
+                           "Show walls cuts them to 1.2 m or leaves them out, for a clear view.", w: 400);
+        var backWall = b.Number("Back wall", 2000, 3600, 7000, 0);
+        var sideWall = b.Number("Side wall", 1500, 3000, 6000, 0);
+        var roomDepth = b.Number("Room depth", 2500, 4000, 8000, 0);
+        var showWalls = b.Choice("Show walls", 2, "Off", "Partial", "Full");
+        b.Section("Room", nRoom);
+
+        var nPricing = b.Note("PRICING\nPrices are set in EUR. CHF converts every line at the rate given and rounds it once, so the lines " +
+                              "add up to the total. VAT applies to the whole order, delivery and installation included.", w: 400);
+        var currency = b.Choice("Currency", 0, "EUR", "CHF");
+        var vat = b.Number("VAT", 0, 0, 25, 1);
+        var chfPerEur = b.Number("CHF per EUR", 0.5, 0.94, 1.5, 3);
+        var delivery = b.Switch("Delivery", true);
+        var installation = b.Switch("Installation", false);
+        b.Section("Pricing", nPricing);
+
         // ---- Unit height: options computed in the solve
         var nHeight = b.Note("UNIT HEIGHT\nSet Dynamic Value List sends options computed in the solve: the wall unit heights that fit under " +
                              "the ceiling, 150 mm clear. Its output goes into Unit height and into a Context Bake. Lower the ceiling and " +
@@ -174,16 +192,19 @@ public static partial class Definitions
         b.Section("Colour and worktop", nPalette);
 
         var nScript = b.Note("KITCHEN SCRIPT\nBuilds the room and one cabinet per row from the resolved picks: carcass, fronts, pulls, sink, hob, " +
-                             "hood, wall units or a shelf, the island's stools and pendants. It also prices every row. Source: " +
-                             "Kitchen.script.cs beside the generator.", w: 460);
+                             "hood, wall units or a shelf, the island's stools and pendants. It fits the runs to the room, prices every " +
+                             "row and writes the summary. Source: Kitchen.script.cs beside the generator.", w: 460);
         var kitchen = Script(b, "Kitchen", "Kitchen.script.cs",
             new (string, object)[]
             {
                 ("*Keys", keys), ("*Labels", labels), ("*Sections", sections), ("*Fronts", fronts), ("*Handles", handles),
-                ("WorktopName", worktop), ("WallUnits", wallUnits), ("LightsOn", lights), ("UnitHeight", unitHeight), ("Ceiling", ceiling)
+                ("Layout", layout), ("Style", style), ("Colour", colour), ("WorktopName", worktop), ("MetalName", metal),
+                ("WallUnits", wallUnits), ("LightsOn", lights), ("UnitHeight", unitHeight), ("Ceiling", ceiling), ("BackWall", backWall),
+                ("SideWall", sideWall), ("RoomDepth", roomDepth), ("ShowWalls", showWalls), ("Currency", currency), ("Vat", vat),
+                ("ChfPerEur", chfPerEur), ("Delivery", delivery), ("Installation", installation)
             },
             "Carcass", "Panels", "Glass", "Metal", "Steel", "Dark", "Top", "Splash", "Glow", "Walls", "Floor", "GlowStrength", "Lumens",
-            "Lines", "Csv", "PartNames", "PartEur", "Total", "TopMetres");
+            "Lines", "Csv", "PartNames", "PartPrice", "Total", "TopMetres", "PriceLines", "Summary", "Fit", "Camera");
         GhOut K(string output) => H.Out(kitchen, output);
         b.Section("Kitchen script", nScript, kitchen);
 
@@ -196,7 +217,7 @@ public static partial class Definitions
         return new List<(IGH_DocumentObject, object)>
         {
             (repeat, 0), (options, 0), (palette, 0), (fronts, null), (handles, null), (colour, null), (worktop, null), (setHeight.Obj, null), (unitHeight, null),
-            (kitchen, "Lines"), (kitchen, "Total"), (model, null), (figure, null), (csv, null), (file, null)
+            (kitchen, "Lines"), (kitchen, "Total"), (kitchen, "PriceLines"), (kitchen, "Fit"), (model, null), (figure, null), (csv, null), (file, null)
         };
     }
 
@@ -288,14 +309,19 @@ public static partial class Definitions
     static (IGH_DocumentObject Figure, IGH_DocumentObject Csv, IGH_DocumentObject Model) KitchenOrder(B b, IGH_Component kitchen,
         Func<string, GhOut> K, IGH_DocumentObject model)
     {
-        var nOrder = b.Note("ORDER\nThe script prices each cabinet from its picks, the worktop by the metre, and the sink, hob and hood. " +
-                            "One Context Print per value; the labels are what the page shows.", w: 400);
-        var pie = b.PieChart(Values: K("PartEur"), Labels: K("PartNames"), Hole: true, nick: "Price slices");
-        var figure = b.Figure(Traces: pie, Layout: b.Layout(Title: "Where the money goes (EUR)"), nick: "Price chart");
+        var nOrder = b.Note("ORDER\nThe script prices each cabinet from its picks, the worktop by the metre, the tap and pendants by metal, " +
+                            "and the sink, hob and hood. Price lists each line, which add up exactly to Total. Summary is the whole " +
+                            "design as text; Suggested camera is the view selva_capture_preview should take for this layout.", w: 400);
+        var pie = b.PieChart(Values: K("PartPrice"), Labels: K("PartNames"), Hole: true, nick: "Price slices");
+        var figure = b.Figure(Traces: pie, Layout: b.Layout(Title: "Where the money goes"), nick: "Price chart");
         b.Output("Price breakdown", figure.Obj);
-        b.Print("Total (EUR)", kitchen, "Total");
+        b.Print("Total", kitchen, "Total");
+        b.Print("Price", kitchen, "PriceLines");
         b.Print("Worktop (m)", kitchen, "TopMetres");
         b.Print("Cabinet list", kitchen, "Lines");
+        b.Print("Summary", kitchen, "Summary");
+        b.Print("Fit", kitchen, "Fit");
+        b.Print("Suggested camera", kitchen, "Camera");
         b.Section("Order", nOrder);
 
         var nFiles = b.Note("DOWNLOADS\nThe order as a CSV, and the model as a 3DM with the 3D view's layers and colours.", w: 400);
@@ -379,6 +405,13 @@ public static partial class Definitions
         { 'param': 'Style', 'widget': 'dropdown', 'config': { 'displayAs': 'tiles', 'optionMedia': {
             'Shaker': { 'image': 'th-shaker' }, 'Slab': { 'image': 'th-slab' }, 'Handleless': { 'image': 'th-handleless' } } } }
       ] },
+      { 'label': 'Room', 'items': [
+        { 'param': 'Back wall', 'label': 'Back wall (mm)', 'description': 'The wall the main run stands against.' },
+        { 'param': 'Side wall', 'label': 'Side wall (mm)', 'description': 'The second leg of the L, from the back wall.' },
+        { 'param': 'Room depth', 'label': 'Room depth (mm)', 'description': 'From the back wall to the opposite wall.' },
+        { 'param': 'Ceiling height', 'label': 'Ceiling height (mm)', " + SliderConfig + @" },
+        { 'param': 'Show walls', 'widget': 'dropdown', 'description': 'Partial cuts the walls to 1.2 m.', 'config': { 'displayAs': 'segmented' } }
+      ] },
       { 'label': 'Colour and worktop', 'items': [
         { 'param': 'Colour', 'description': 'The colours this style comes in.', 'config': { 'displayAs': 'tiles', " + colourThumbs + @" } },
         { 'param': 'Worktop', 'description': 'Only the worktops that suit the colour.', 'config': { 'displayAs': 'tiles', " + worktopThumbs + @" } }
@@ -387,7 +420,6 @@ public static partial class Definitions
         { 'param': 'Metal', 'label': 'Handles, tap and pendants', 'widget': 'dropdown', 'config': { 'displayAs': 'segmented', 'optionMedia': {
             'Brass': { 'image': 'th-brass' }, 'Steel': { 'image': 'th-steel' }, 'Black': { 'image': 'th-black' } } } },
         { 'param': 'Wall units', 'description': 'Off leaves an open shelf.' },
-        { 'param': 'Ceiling height', 'label': 'Ceiling height (mm)', " + SliderConfig + @" },
         { 'param': 'Unit height', 'label': 'Wall unit height', 'description': 'Only the heights that fit under the ceiling.', 'config': { 'displayAs': 'segmented' } },
         { 'param': 'Lights on', 'description': 'Switch the viewer to Night to see them.' }
       ] }
@@ -399,8 +431,16 @@ public static partial class Definitions
       ] }
     ] },
     { 'label': 'Order', 'groups': [
-      { 'label': 'Price', 'items': [ 'Total (EUR)', 'Worktop (m)', 'Price breakdown' ] },
-      { 'label': 'Cabinets', 'items': [ 'Cabinet list' ] },
+      { 'label': 'Pricing', 'items': [
+        { 'param': 'Currency', 'widget': 'dropdown', 'config': { 'displayAs': 'segmented' } },
+        { 'param': 'VAT', 'label': 'VAT (%)', 'description': 'On the whole order: 8.1 in Switzerland, 19 in Germany.' },
+        { 'param': 'CHF per EUR', 'description': 'The exchange rate CHF prices use.' },
+        { 'param': 'Delivery' },
+        { 'param': 'Installation' }
+      ] },
+      { 'label': 'Price', 'items': [ 'Total', 'Price', 'Worktop (m)', 'Price breakdown' ] },
+      { 'label': 'Cabinets', 'items': [ 'Cabinet list', 'Fit' ] },
+      { 'label': 'Summary', 'items': [ 'Summary', 'Suggested camera' ] },
       { 'label': 'Downloads', 'items': [ 'Order list (CSV)', 'Model (3DM)' ] }
     ] }
   ]

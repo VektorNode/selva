@@ -84,7 +84,8 @@ const valuesArg = z
 	.record(z.string(), z.unknown())
 	.default({})
 	.describe(
-		'Input values keyed by the names selva_describe_definition lists. Dropdowns take an option name.'
+		'Input values keyed by the names selva_describe_definition lists. Dropdowns take an option ' +
+			'name; an input repeated per row takes an object of row key to option name.'
 	);
 
 async function schemaFor(
@@ -118,17 +119,18 @@ async function runSolve(
 ) {
 	const guid = await resolveDefinition(api, definition, signal);
 	const { schema, versionId } = await schemaFor(api, guid, version, signal);
+	const resolved = resolveValues(describeInputs(schema), values);
 	const res = (await api.call('postDefinitionsByGuidSolve', {
 		params: { guid },
 		body: {
 			// `inputs` is required: without it the server ignores `values` and solves the file's own.
 			inputs: schema.inputs,
-			values: resolveValues(describeInputs(schema), values),
+			values: resolved,
 			...(versionId && { versionId })
 		},
 		signal
 	})) as SolveResponse;
-	return { guid, schema, res };
+	return { guid, schema, res, resolved };
 }
 
 const SOLVE_CALLS = [
@@ -266,6 +268,39 @@ const CAPTURE_VIEWS = [
 // The app's own background when a definition sets none.
 const DEFAULT_BACKGROUND = '#E6E6E6';
 
+// Each picture is a full-size PNG in the reply: past this many, a sheet says the same for less.
+const MAX_CAPTURE_CAMERAS = 6;
+
+const CaptureCameraArg = z.object({
+	view: z
+		.enum(CAPTURE_VIEWS)
+		.optional()
+		.describe('A preset direction. Ignored when azimuth is set.'),
+	azimuth: z
+		.number()
+		.optional()
+		.describe(
+			'Degrees around the up axis: 0 from the front, 90 from the right, 180 from the back.'
+		),
+	elevation: z
+		.number()
+		.min(-89)
+		.max(89)
+		.optional()
+		.describe('Degrees above the horizon. Default 30 when azimuth is set; 90 is nearly top-down.'),
+	zoom: z
+		.number()
+		.min(0.1)
+		.max(20)
+		.optional()
+		.describe('1 fits the geometry, 2 is twice as close, 0.5 shows more around it.'),
+	target: z
+		.tuple([z.number(), z.number(), z.number()])
+		.optional()
+		.describe("World point to look at, in the model's units. Default the middle of what is drawn."),
+	label: z.string().max(80).optional()
+});
+
 // ============================================================================
 // Tools
 // ============================================================================
@@ -278,6 +313,8 @@ const ListOutput = z.object({
 /** `outputs` is keyed by the definition's own output names, so it can't be closed. */
 export const SolveOutput = z.object({
 	outputs: z.record(z.string(), z.unknown()),
+	/** Each computed list by input label: its options now and the pick the solve used. */
+	lists: z.record(z.string(), z.unknown()).optional(),
 	errors: z.array(z.string()),
 	warnings: z.array(z.string()),
 	link: z.string(),
@@ -294,7 +331,7 @@ export const PublishOutput = z.object({
 export interface SelvaToolOptions {
 	/** Where file links, geometry and previews are held. */
 	stash: Stash;
-	/** Chromium for `selva_capture_preview`; unset uses Playwright's own. */
+	/** Chromium for `selva_capture_preview`; unset uses Playwright's own or an installed browser. */
 	previewBrowser?: string;
 }
 
@@ -630,8 +667,19 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 		calls: SOLVE_CALLS,
 		ui: { resourceUri: SOLVE_VIEW_URI },
 		async run(api, { definition, values, version, detail }, { signal, apps }) {
-			const { guid, schema, res } = await runSolve(api, definition, values, version, signal);
-			const summary = await summarizeSolve(res, schema, { origin, link: pageOf(guid), stash });
+			const { guid, schema, res, resolved } = await runSolve(
+				api,
+				definition,
+				values,
+				version,
+				signal
+			);
+			const summary = await summarizeSolve(res, schema, {
+				origin,
+				link: pageOf(guid),
+				stash,
+				values: resolved
+			});
 			// The stashed response carries every display mesh: only worth writing for a client
 			// that will show the view.
 			const meta = apps
@@ -688,30 +736,95 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 		description:
 			"Solves a definition and draws the result in Selva's own 3D viewer, with the look and " +
 			'background the definition opens in, then returns the picture. Spends compute like ' +
-			'selva_solve. The picture is kept for an hour under a preview id: pass it to ' +
-			'selva_set_cover_image to make it the cover.',
+			'selva_solve. Aim the camera with a preset `view`, or with `cameras` (azimuth, elevation, ' +
+			'zoom, target), several at once from one solve: a picture each, or one labelled grid ' +
+			'with `sheet`. The camera fits what is drawn. `hide` leaves out layers or objects by name ' +
+			"(the solve's geometry outputs name them); `cutaway` leaves out the walls between each " +
+			'camera and the middle of the scene. The first picture is kept for an hour under a ' +
+			'preview id: pass it to selva_set_cover_image to make it the cover.',
 		input: z.object({
 			definition: definitionArg,
 			values: valuesArg,
 			version: versionArg,
-			view: z.enum(CAPTURE_VIEWS).default('iso').describe('Camera direction.'),
+			view: z
+				.enum(CAPTURE_VIEWS)
+				.default('iso')
+				.describe('Camera direction when `cameras` is not given.'),
+			cameras: z
+				.array(CaptureCameraArg)
+				.max(MAX_CAPTURE_CAMERAS)
+				.optional()
+				.describe('One picture per camera, all from the same solve.'),
+			sheet: z
+				.boolean()
+				.default(false)
+				.describe('Return the cameras as one labelled grid instead of a picture each.'),
+			hide: z
+				.array(z.string())
+				.max(50)
+				.optional()
+				.describe(
+					'Layers or object names to leave out. A layer hides its sublayers: "Room" hides "Room/Walls".'
+				),
+			cutaway: z
+				.boolean()
+				.default(false)
+				.describe(
+					'Leave out tall thin walls standing between each camera and the middle of the scene.'
+				),
+			fit: z
+				.boolean()
+				.default(true)
+				.describe(
+					"Fit the camera tightly to what is drawn. False keeps the viewer's looser framing."
+				),
 			width: z.number().int().min(256).max(2048).default(1200),
 			height: z.number().int().min(256).max(2048).default(800),
 			grid: z.boolean().default(false).describe("Draw the viewer's ground grid.")
 		}),
 		calls: SOLVE_CALLS,
-		async run(api, { definition, values, version, view, width, height, grid }, { signal }) {
+		async run(
+			api,
+			{
+				definition,
+				values,
+				version,
+				view,
+				cameras,
+				sheet,
+				hide,
+				cutaway,
+				fit,
+				width,
+				height,
+				grid
+			},
+			{ signal }
+		) {
 			const { schema, res } = await runSolve(api, definition, values, version, signal);
+			// Lit by the viewer's own generated environment when the HDR can't be read: a flatter
+			// picture beats no picture.
+			let hdrMissing: string | undefined;
+			const hdr = () =>
+				captureHdr().catch((err: unknown) => {
+					hdrMissing = err instanceof Error ? err.message : String(err);
+					return undefined;
+				});
 			let capture;
 			try {
 				capture = await captureSolve(res, {
 					view,
+					cameras,
+					sheet,
+					hide,
+					cutaway,
+					frame: fit,
 					width,
 					height,
 					grid,
 					look: schema.viewerOptions?.look,
 					background: schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND,
-					hdr: captureHdr,
+					hdr,
 					html: captureHtml,
 					executablePath: options.previewBrowser || undefined,
 					signal
@@ -724,7 +837,7 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 				}
 				throw err;
 			}
-			if (!capture.drawn) {
+			if (!capture.drawn || !capture.images.length) {
 				return `${schema.name} solved, but drew nothing: it has no Display output with geometry for these values.`;
 			}
 			const previewId = await stash.put({
@@ -733,9 +846,22 @@ export function selvaTools(origin: string, options: SelvaToolOptions): AnyTool[]
 				contentType: 'image/png',
 				data: new Uint8Array(Buffer.from(capture.png, 'base64'))
 			});
+			const lines = [
+				`${schema.name}, ${width}×${height}. Preview id ${previewId}.`,
+				capture.images.length > 1 ? 'The preview id holds the first picture.' : '',
+				...capture.images.map(
+					(image, i) =>
+						`${i + 1}. ${image.label}` +
+						(image.cut.length ? `, cut away: ${image.cut.join(', ')}` : '')
+				)
+			];
+			if (hide?.length) lines.push(`Hidden: ${hide.join(', ')}.`);
+			if (capture.layers.length) lines.push(`Layers drawn: ${capture.layers.join(', ')}.`);
+			if (hdrMissing)
+				lines.push(`Lit without the HDR environment, which could not be read: ${hdrMissing}`);
 			return {
-				text: `${schema.name}, ${view} view, ${width}×${height}. Preview id ${previewId}.`,
-				images: [{ data: capture.png, mimeType: 'image/png' }]
+				text: lines.filter(Boolean).join('\n'),
+				images: capture.images.map((image) => ({ data: image.png, mimeType: 'image/png' }))
 			};
 		}
 	});

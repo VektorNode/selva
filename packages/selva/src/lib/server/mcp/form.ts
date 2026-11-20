@@ -77,7 +77,8 @@ function conditionText(
 
 function inputLine(
 	{ input, item, label }: DescribedInput,
-	labelOf: (id: string) => string
+	labelOf: (id: string) => string,
+	filledBy: (id: string) => string[]
 ): string {
 	const parts = [`- "${label}" (id ${input.id}): ${input.paramType}`];
 	if (input.inputStructure && input.inputStructure !== 'item')
@@ -97,7 +98,20 @@ function inputLine(
 		parts.push(', a button: true runs it once');
 	}
 	const options = optionsOf(item);
-	if (options)
+	if (item?.widgetType === 'dynamicValueList') {
+		const sources = filledBy(input.id);
+		parts.push(
+			', its options are computed in the solve' +
+				(sources.length ? ` by ${sources.map((s) => `"${s}"`).join(', ')}` : '') +
+				' and can change with other inputs; selva_solve lists them'
+		);
+		if (options && Object.keys(options).length)
+			parts.push(
+				`; before a solve: ${Object.keys(options)
+					.map((k) => `"${k}"`)
+					.join(', ')}`
+			);
+	} else if (options)
 		parts.push(
 			`, one of: ${Object.keys(options)
 				.map((k) => `"${k}"`)
@@ -131,6 +145,11 @@ function outputLine(schema: UISchema, item: LayoutItem | undefined, id: string):
 export function formText(schema: UISchema): string[] {
 	const described = describeInputs(schema);
 	const labelOf = (id: string) => described.find((d) => d.input.id === id)?.label ?? id;
+	const filledBy = (id: string) =>
+		schema.outputs
+			.filter((o) => o.type === 'dynamicValueList' && o.targetInputId === id)
+			.map((o) => o.nickname);
+	const line = (d: DescribedInput) => inputLine(d, labelOf, filledBy);
 	const lines: string[] = [];
 	const placedInputs = new Set<string>();
 	const placedOutputs = new Set<string>();
@@ -143,7 +162,7 @@ export function formText(schema: UISchema): string[] {
 				const d = described.find((x) => x.input.id === item.paramId);
 				if (!d) continue;
 				placedInputs.add(d.input.id);
-				inputs.push(inputLine(d, labelOf));
+				inputs.push(line(d));
 			} else if (item.type === 'output' && item.paramId) {
 				const line = outputLine(schema, item, item.paramId);
 				if (!line) continue;
@@ -162,17 +181,21 @@ export function formText(schema: UISchema): string[] {
 
 	const looseInputs = described.filter((d) => !placedInputs.has(d.input.id));
 	if (looseInputs.length) {
-		lines.push(
-			'',
-			'## Not on the form',
-			'Inputs:',
-			...looseInputs.map((d) => inputLine(d, labelOf))
-		);
+		lines.push('', '## Not on the form', 'Inputs:', ...looseInputs.map(line));
 	}
 	const looseOutputs = schema.outputs
 		.filter((o) => !placedOutputs.has(o.id))
 		.map((o) => outputLine(schema, undefined, o.id)!);
 	if (looseOutputs.length) lines.push('', 'Other outputs:', ...looseOutputs);
+	if (schema.outputs.some((o) => o.type === 'dynamicValueList')) {
+		lines.push(
+			'',
+			'Some lists are computed in the solve: what they offer depends on other inputs, and an ' +
+				'output can repeat an input once per row (a cabinet, a bay). selva_solve returns each ' +
+				"list's options and the pick it used; an input repeated per row takes an object of row " +
+				'key to option name.'
+		);
+	}
 	return lines;
 }
 
@@ -204,7 +227,14 @@ export function resolveValues(
 			typeof v === 'string' && options && Object.hasOwn(options, v) && options[v] !== undefined
 				? options[v]
 				: v;
-		values[match.input.id] = Array.isArray(value) ? value.map(pick) : pick(value);
+		// A repeated input takes one pick per row, sent as a JSON string of row key to pick.
+		values[match.input.id] = Array.isArray(value)
+			? value.map(pick)
+			: typeof value === 'object' && value !== null
+				? JSON.stringify(
+						Object.fromEntries(Object.entries(value).map(([row, v]) => [row, pick(v)]))
+					)
+				: pick(value);
 	}
 	if (unknown.length) {
 		const known = described.map((d) => `"${d.label}"`).join(', ');
