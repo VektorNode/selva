@@ -1,5 +1,12 @@
 # @selvajs/selva
 
+## 4.21.0-beta.29
+
+### Patch Changes
+
+- c644acf: The solve status no longer blinks when a solve turns slow: the step, count and Abort appear inside the row already showing "Solving" and the elapsed time, instead of replacing it.
+- c644acf: The self-update waits, with the app still running, until npm serves the new release's files. npm lists a fresh version a few minutes before its tarball downloads, so an update started in that window stopped the app, failed the install with a 404 and rolled back. If the files are still missing after five minutes, it cancels without stopping the app.
+
 ## 4.21.0-beta.28
 
 ### Patch Changes

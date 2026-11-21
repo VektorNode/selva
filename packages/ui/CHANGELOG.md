@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 7.1.0-beta.17
+
+### Patch Changes
+
+- c644acf: The solve status no longer blinks when a solve turns slow: the step, count and Abort appear inside the row already showing "Solving" and the elapsed time, instead of replacing it.
+
 ## 7.1.0-beta.16
 
 ### Patch Changes
