@@ -9,8 +9,6 @@ import { respondWithKeepalive, wantsKeepalive } from '../server/keepalive.js';
 import { unwrapKeepalive } from '../client/keepalive.js';
 import { KEEPALIVE_PREFERENCE } from '../shared/keepalive.js';
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 describe('keep-alive solve response', () => {
 	it('carries the real status, headers and body through a 200', async () => {
 		const outer = respondWithKeepalive(
@@ -34,12 +32,26 @@ describe('keep-alive solve response', () => {
 		let finish: (res: Response) => void = () => {};
 		const outer = respondWithKeepalive(new Promise<Response>((r) => (finish = r)), 5);
 
-		await sleep(40);
-		finish(new Response('{"values":[]}', { status: 200 }));
-		const text = await outer.text();
+		// Waits for the spaces rather than sleeping a fixed time: a loaded machine fires the
+		// interval less often, and a wall-clock count then fails for no fault of the code.
+		const reader = outer.body!.getReader();
+		const decoder = new TextDecoder();
+		let text = '';
+		while ((/^ */.exec(text)?.[0].length ?? 0) < 3) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			text += decoder.decode(value, { stream: true });
+		}
+		expect(text.trim()).toBe('');
 
-		const [spaces] = /^ +/.exec(text) ?? [''];
-		expect(spaces.length).toBeGreaterThan(2);
+		finish(new Response('{"values":[]}', { status: 200 }));
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			text += decoder.decode(value, { stream: true });
+		}
+
+		expect(/^ +/.exec(text)?.[0].length).toBeGreaterThan(2);
 		expect(text.endsWith('{"values":[]}')).toBe(true);
 	});
 
