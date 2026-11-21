@@ -35,13 +35,13 @@
 		meshes?: any[];
 		isSolving: boolean;
 		/**
-		 * `createSolvingIndicator(...).show`, not `isSolving`: grows the action row's solve status,
+		 * `createSolvingIndicator(...).show`, not `isSolving`: shows the action row's solve status,
 		 * which would otherwise flash on every sub-second solve.
 		 */
 		showSolvingIndicator?: boolean;
-		/** `createSolvingIndicator(...).slow`: the solve status grows into a card with progress. */
+		/** `createSolvingIndicator(...).slow`: the solve status adds the step and Abort. */
 		solveIsSlow?: boolean;
-		/** The session's live channel: step, count and bar for that card. */
+		/** The session's live channel: step and count for the slow state. */
 		live?: LiveSolveState;
 		/** Abort in that card. The host's `SolveMessages` should then take `progressShownByHost`. */
 		onabort?: () => void;

@@ -221,57 +221,76 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			...(opts.keepalive ? [KEEPALIVE_REQUEST_HEADERS.Prefer] : [])
 		].join(', ');
 
-		let res: Response;
-		try {
-			res = await fetch(opts.endpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					// Only a viewer reads the mesh blobs, and only it is handed them as bytes.
-					...(opts.meshes && BINARY_ACCEPT_HEADER ? { Accept: BINARY_ACCEPT_HEADER } : {}),
-					...auth,
-					...(prefer ? { Prefer: prefer } : {})
-				},
-				body: payload,
-				signal
-			});
-		} catch (err) {
-			if (signal.aborted) {
-				log('[Compute] solve aborted during fetch — empty result discarded');
-				return { outputs: {} };
+		type Sent = { res: Response; redirectedToLogin: boolean; lost: boolean };
+		// Null when the caller aborted. `lost`: the solve ran detached and the server no longer
+		// knows its id, as after a restart or an update. Its own result is gone with it.
+		const send = async (): Promise<Sent | null> => {
+			let res: Response;
+			try {
+				res = await fetch(opts.endpoint, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						// Only a viewer reads the mesh blobs, and only it is handed them as bytes.
+						...(opts.meshes && BINARY_ACCEPT_HEADER ? { Accept: BINARY_ACCEPT_HEADER } : {}),
+						...auth,
+						...(prefer ? { Prefer: prefer } : {})
+					},
+					body: payload,
+					signal
+				});
+			} catch (err) {
+				if (signal.aborted) {
+					log('[Compute] solve aborted during fetch — empty result discarded');
+					return null;
+				}
+				// Also how a redirect to a cross-origin sign-in looks from here, so an expired session
+				// stays a possibility.
+				throw new Error(
+					'Could not reach the server. Check your connection, or reload the page if your session expired.',
+					{ cause: err }
+				);
 			}
-			// Also how a redirect to a cross-origin sign-in looks from here, so an expired session
-			// stays a possibility.
-			throw new Error(
-				'Could not reach the server. Check your connection, or reload the page if your session expired.',
-				{ cause: err }
-			);
-		}
 
-		if (signal.aborted) {
-			log('[Compute] solve aborted after headers — empty result discarded');
-			return { outputs: {} };
-		}
-
-		const redirectedToLogin =
-			res.redirected && new URL(res.url).pathname === (opts.loginPath ?? '/login');
-		try {
-			res = await unwrapKeepalive(res);
-		} catch (err) {
 			if (signal.aborted) {
-				log('[Compute] solve aborted while the server held it — empty result discarded');
-				return { outputs: {} };
+				log('[Compute] solve aborted after headers — empty result discarded');
+				return null;
 			}
-			throw new Error('The connection dropped while waiting for the result. Please try again.', {
-				cause: err
-			});
+
+			const redirectedToLogin =
+				res.redirected && new URL(res.url).pathname === (opts.loginPath ?? '/login');
+			try {
+				res = await unwrapKeepalive(res);
+			} catch (err) {
+				if (signal.aborted) {
+					log('[Compute] solve aborted while the server held it — empty result discarded');
+					return null;
+				}
+				throw new Error('The connection dropped while waiting for the result. Please try again.', {
+					cause: err
+				});
+			}
+			const followed = await followAsyncSolve(res, { headers: auth, signal });
+			if (!followed) {
+				log('[Compute] solve aborted while it ran detached — empty result discarded');
+				return null;
+			}
+			return {
+				res: followed,
+				redirectedToLogin,
+				lost: followed !== res && followed.status === 404
+			};
+		};
+
+		let sent = await send();
+		if (sent?.lost) {
+			// Once: a solve the server forgot twice in a row is a real fault, not a restart.
+			log('[Compute] the server lost the running solve (restart or update?) — sending it again');
+			sent = await send();
 		}
-		const followed = await followAsyncSolve(res, { headers: auth, signal });
-		if (!followed) {
-			log('[Compute] solve aborted while it ran detached — empty result discarded');
-			return { outputs: {} };
-		}
-		res = followed;
+		if (!sent) return { outputs: {} };
+		const res = sent.res;
+		const { redirectedToLogin } = sent;
 		if (res.status === 401 || redirectedToLogin) {
 			opts.onSessionExpired?.();
 			const body = redirectedToLogin

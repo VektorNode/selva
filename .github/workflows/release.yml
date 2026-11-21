@@ -31,8 +31,10 @@ jobs:
   # trigger of its own. Main keeps the inline gate in `release`.
   test:
     if: github.ref == 'refs/heads/beta'
+    # actions: read lets test.yml's `changes` job find the last green beta run.
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/test.yml
 
   release:

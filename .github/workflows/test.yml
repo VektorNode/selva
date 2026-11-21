@@ -22,34 +22,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Skips the .NET and Supabase jobs when nothing they read changed. On a push the
-  # diff is against `before`, so a Plugin change in a cancelled beta push is
-  # first tested by the promotion PR, which diffs all of beta.
+  # Skips the .NET and Supabase jobs when nothing they read changed.
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       dotnet: ${{ github.event_name == 'schedule' || steps.filter.outputs.dotnet == 'true' }}
       supabase: ${{ github.event_name == 'schedule' || steps.filter.outputs.supabase == 'true' }}
     steps:
       - uses: actions/checkout@v7
+
+      # Without a base, paths-filter diffs a beta push against main: all of beta, so
+      # every filter matched on every push. Diffing against `before` instead would
+      # drop the changes of pushes that concurrency cancelled. The last green
+      # Release run on beta is the last commit these jobs passed on. No green run
+      # leaves the base empty, which falls back to main: everything runs.
+      - name: Find beta's last tested commit
+        id: base
+        if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/runs?branch=beta&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          echo "Last green beta run: ${sha:-<none>}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # `every`: a file counts only if it matches the brace list and is not
+      # Markdown, so release commits' CHANGELOG and README edits trigger nothing.
+      # Dependency changes reach the Supabase job through pnpm-lock.yaml, so a
+      # version bump in a package.json alone does not.
       - id: filter
         if: github.event_name != 'schedule'
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ steps.base.outputs.sha }}
+          predicate-quantifier: every
           filters: |
             dotnet:
-              - 'Plugin/**'
-              # Golden wire and codec fixtures the .NET tests read.
-              - 'packages/schemas/**'
-              - 'global.json'
-              - '.github/actions/dotnet-test/**'
-              - '.github/workflows/test.yml'
+              # The .NET tests also read the golden wire and codec fixtures.
+              - '{Plugin/**,packages/schemas/fixtures/**,packages/schemas/*-schema.json,global.json,.github/actions/dotnet-test/**,.github/workflows/test.yml}'
+              - '!**/*.md'
             supabase:
-              - 'packages/providers/supabase/**'
-              - 'packages/platform/**'
-              - 'packages/schemas/**'
-              - 'pnpm-lock.yaml'
-              - '.github/workflows/test.yml'
+              - '{packages/providers/supabase/{src,supabase}/**,packages/providers/supabase/vitest.config.ts,packages/platform/src/**,packages/schemas/src/**,packages/schemas/*-schema.json,pnpm-lock.yaml,.github/workflows/test.yml}'
+              - '!**/*.md'
 
   test:
     runs-on: ubuntu-latest

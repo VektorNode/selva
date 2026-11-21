@@ -203,6 +203,58 @@ describe('createComputeFetchSolveFn — binary responses', () => {
 	});
 });
 
+describe('createComputeFetchSolveFn — a detached solve the server lost', () => {
+	const accepted = () =>
+		new Response('{"solveId":"abc"}', {
+			status: 202,
+			headers: {
+				'Preference-Applied': 'respond-async',
+				Location: 'http://test.local/api/v1/solves/abc'
+			}
+		});
+	const forgotten = () => new Response('{"message":"Solve not found"}', { status: 404 });
+	const solved = () =>
+		jsonResponse({ values: [{ ParamName: 'Out', InnerTree: { '{0}': [{ data: '5' }] } }] });
+	const posts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').length;
+
+	it('sends the solve again once when a poll finds the server no longer knows it', async () => {
+		fetchMock
+			.mockResolvedValueOnce(accepted())
+			.mockResolvedValueOnce(forgotten())
+			.mockResolvedValueOnce(solved());
+
+		const result = await createComputeFetchSolveFn(baseOpts({ respondAsync: true }))(
+			{ a: 1 },
+			new AbortController().signal
+		);
+
+		expect(posts()).toBe(2);
+		expect(result.outputs).toEqual({ 'out-1': '5' });
+	});
+
+	it('gives up when the server loses the second attempt too', async () => {
+		fetchMock
+			.mockResolvedValueOnce(accepted())
+			.mockResolvedValueOnce(forgotten())
+			.mockResolvedValueOnce(accepted())
+			.mockResolvedValueOnce(forgotten());
+
+		await expect(
+			createComputeFetchSolveFn(baseOpts({ respondAsync: true }))({}, new AbortController().signal)
+		).rejects.toThrow();
+		expect(posts()).toBe(2);
+	});
+
+	it('does not resend a solve whose first answer was a plain 404', async () => {
+		fetchMock.mockResolvedValueOnce(forgotten());
+
+		await expect(
+			createComputeFetchSolveFn(baseOpts({ respondAsync: true }))({}, new AbortController().signal)
+		).rejects.toThrow();
+		expect(posts()).toBe(1);
+	});
+});
+
 describe('createComputeFetchSolveFn — session expiry', () => {
 	it('401 response calls onSessionExpired', async () => {
 		fetchMock.mockResolvedValue(new Response('', { status: 401 }));
