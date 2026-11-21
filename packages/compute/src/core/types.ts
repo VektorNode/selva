@@ -107,6 +107,8 @@ export interface ServerTiming {
 	encode?: number;
 	/** The part of `solve` spent inside Grasshopper; the rest collects the outputs. */
 	gh?: number;
+	/** The VektorNode proxy's wait for a free child, a spawn included when none was running. */
+	wait?: number;
 	/** Objects the solve ran out of all it holds. Few ran when only a downstream input changed. */
 	recomputed?: { ran: number; total: number };
 	/** The server answered from its result cache and solved nothing. */

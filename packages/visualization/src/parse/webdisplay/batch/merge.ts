@@ -134,7 +134,7 @@ export function createMergedMesh(
 export function geometryFrom(finished: FinishedGeometry): THREE.BufferGeometry {
 	const geometry = new THREE.BufferGeometry();
 	geometry.setAttribute('position', new THREE.BufferAttribute(finished.positions, 3));
-	geometry.setAttribute('normal', new THREE.BufferAttribute(finished.normals, 3));
+	geometry.setAttribute('normal', new THREE.BufferAttribute(finished.normals, 3, true));
 	geometry.setIndex(new THREE.BufferAttribute(finished.indices, 1));
 	if (finished.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(finished.uvs, 2));
 	if (finished.tangents) {

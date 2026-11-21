@@ -1,4 +1,4 @@
-import type { ServerTiming } from '@selvajs/compute/core';
+import type { ComputeProfileEntry, ServerTiming } from '@selvajs/compute/core';
 
 /** A pre-solve prep sub-phase: `[label, ms]`, surfaced as a `p_*` Server-Timing entry. */
 export type PrepMark = [string, number];
@@ -70,6 +70,7 @@ export function buildServerTiming(parts: ServerTimingParts): string {
 			`, compute_link;dur=${computeLinkMs.toFixed(1)}` +
 			`, rhino_cache;dur=${rhino.cacheHit ? 1 : 0}`;
 		if (rhino.gh !== undefined) header += `, rhino_gh;dur=${rhino.gh.toFixed(1)}`;
+		if (rhino.wait !== undefined) header += `, rhino_wait;dur=${rhino.wait.toFixed(1)}`;
 		if (rhino.recomputed) {
 			header += `, rhino_recomputed;desc="${rhino.recomputed.ran}/${rhino.recomputed.total}"`;
 		}
@@ -89,4 +90,15 @@ export function buildServerTiming(parts: ServerTimingParts): string {
 	if (parts.defBytes) header += `, def_bytes;desc=${parts.defBytes}`;
 
 	return header;
+}
+
+/**
+ * The fork's slowest-objects profile as an `X-Compute-Profile` value. Names come from the
+ * definition and can be any script; a header value must be ASCII.
+ */
+export function computeProfileHeader(profile: ComputeProfileEntry[]): string {
+	return JSON.stringify(profile).replace(
+		/[\u007f-\uffff]/g,
+		(c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`
+	);
 }

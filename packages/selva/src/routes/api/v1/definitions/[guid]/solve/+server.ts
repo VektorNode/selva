@@ -3,7 +3,7 @@ import { apiError, ApiErrorCode, errorResponse, handleApiError } from '#lib/serv
 import { wantsAsync } from '@selvajs/solve/server';
 import { startAsyncSolve } from '#lib/server/compute/asyncSolves.server.js';
 import { parseBody, requireCaller, requireParams } from '#lib/server/api/http.js';
-import { acceptsGzip } from '@selvajs/solve/server';
+import { responseVariant } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
 import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
 import { runSolve, mapSolveError } from '#lib/server/compute/solve.server.js';
@@ -101,11 +101,12 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 		const clientKey = readIdempotencyKey(request);
 		if (!clientKey) return await solve();
 
-		// The stored body is already encoded, so a gzip reply must never replay to
-		// a client that can't read it.
-		const encoding = acceptsGzip(request.headers.get('accept-encoding') ?? '')
-			? 'gzip'
-			: 'identity';
+		// The stored body is already encoded, so a gzip or binary reply must never
+		// replay to a client that can't read it.
+		const encoding = responseVariant({
+			accept: request.headers.get('accept') ?? '',
+			acceptEncoding: request.headers.get('accept-encoding') ?? ''
+		});
 		// The body is already consumed, so the fingerprint hashes the parsed value.
 		return await runIdempotent(
 			{

@@ -7,6 +7,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createComputeFetchSolveFn, SolveRequestError } from '../compute-fetch-solve-fn.js';
+import { createResponseEncoder } from '../../server/response-encoding.js';
+import { BINARY_SOLVE_MEDIA_TYPE } from '../../shared/binary-response.js';
 
 function jsonResponse(body: unknown, init?: ResponseInit & { url?: string; redirected?: boolean }) {
 	const res = new Response(JSON.stringify(body), {
@@ -118,6 +120,71 @@ describe('createComputeFetchSolveFn — happy path', () => {
 		expect(extract).toHaveBeenCalledTimes(1);
 		expect(extract.mock.calls[0][1]).toEqual({ debug: false, signal });
 		expect(result.meshes).toEqual([{ mesh: 1 }]);
+	});
+});
+
+describe('createComputeFetchSolveFn — binary responses', () => {
+	const DISPLAY = 'Selva.GH.Features.Display.Services.DisplayBatch';
+
+	it('asks for binary only when it extracts meshes', async () => {
+		fetchMock.mockImplementation(async () => jsonResponse({ values: [] }));
+		await createComputeFetchSolveFn(baseOpts())({}, new AbortController().signal);
+		await createComputeFetchSolveFn(baseOpts({ meshes: { extract: () => [] } }))(
+			{},
+			new AbortController().signal
+		);
+		const accept = (call: number) =>
+			new Headers(fetchMock.mock.calls[call][1].headers).get('accept');
+		expect(accept(0)).toBeNull();
+		expect(accept(1)).toContain(BINARY_SOLVE_MEDIA_TYPE);
+	});
+
+	it('hands the extractor each blob as bytes and still reads the other outputs', async () => {
+		const blob = new Uint8Array([1, 2, 3, 4, 5]);
+		const response = {
+			values: [
+				{
+					ParamName: 'Out',
+					InnerTree: { '{0}': [{ type: 'System.String', data: '"five"' }] }
+				},
+				{
+					ParamName: 'Display',
+					InnerTree: {
+						'{0}': [
+							{
+								type: DISPLAY,
+								data: JSON.stringify({
+									materials: [],
+									groups: [],
+									compressedData: Buffer.from(blob).toString('base64')
+								})
+							}
+						]
+					}
+				}
+			]
+		};
+		const encoded = await createResponseEncoder(response, 1e6).encode('binary');
+		if (encoded === 'too_large') throw new Error('expected a body');
+		fetchMock.mockResolvedValue(
+			new Response(encoded.body as Uint8Array<ArrayBuffer>, {
+				headers: { 'Content-Type': BINARY_SOLVE_MEDIA_TYPE }
+			})
+		);
+
+		let received: unknown;
+		const extract = vi.fn((res: { values: unknown[] }) => {
+			received = (res.values[1] as { InnerTree: Record<string, { data: unknown }[]> }).InnerTree[
+				'{0}'
+			]![0]!.data;
+			return [];
+		});
+		const result = await createComputeFetchSolveFn(baseOpts({ meshes: { extract } }))(
+			{},
+			new AbortController().signal
+		);
+		expect((received as { compressedData: Uint8Array }).compressedData).toEqual(blob);
+		expect(result.outputs).toEqual({ 'out-1': 'five' });
 	});
 });
 

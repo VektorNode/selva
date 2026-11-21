@@ -52,6 +52,7 @@ describe('parseServerTiming', () => {
 			solve: 900,
 			gh: 870,
 			encode: 5,
+			wait: 0,
 			recomputed: { ran: 4, total: 97 }
 		});
 	});

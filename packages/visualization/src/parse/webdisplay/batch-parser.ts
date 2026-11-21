@@ -126,7 +126,11 @@ export async function parseMeshBatchObject(
 	const parsed = decodeRawMeshBatch(opened.raw);
 	const decodeTime = performance.now() - decodeStart;
 
-	const blobBytes = debug ? approximateBase64DecodedBytes(batch.compressedData) : 0;
+	const blobBytes = !debug
+		? 0
+		: typeof batch.compressedData === 'string'
+			? approximateBase64DecodedBytes(batch.compressedData)
+			: batch.compressedData.byteLength;
 
 	return buildMeshesFromParsed(parsed, {
 		mergeByMaterial,

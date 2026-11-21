@@ -15,3 +15,4 @@ export type {
 export type { SolveInput } from './solve-input.js';
 export { decodeOutcome, finalizeResult } from './outcome.js';
 export type { SolveOutcome } from './outcome.js';
+export { BINARY_SOLVE_MEDIA_TYPE } from './binary-response.js';

@@ -49,6 +49,9 @@ const DISPLAY_COMPONENT_TYPE = 'Display';
 const DISPLAY_BATCH_TYPE = 'DisplayBatch';
 
 /**
+ * Must match `isDisplayItemType` in `@selvajs/solve/shared`, which picks the batches a binary
+ * response carries as raw bytes.
+ *
  * True when a wire `type` denotes a Display payload: one of its dot-separated tokens is exactly
  * `Display` or `DisplayBatch`. Matches the bare `Display` used by older servers and the namespaced
  * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText` — matching
@@ -102,7 +105,7 @@ export async function getThreeObjectsFromComputeResponse(
 		throw error;
 	} finally {
 		if (debug) {
-			logProcessingTime(startTime);
+			logProcessingTime(startTime, objects);
 		}
 	}
 }
@@ -197,7 +200,7 @@ async function processDataBranch(
 }
 
 /** Resolves `item.data` to a parsed DisplayBatch, tolerating either an already-parsed object or a JSON string. */
-function extractBatch(data: unknown): DisplayBatch | undefined {
+function extractBatch(data: string | DisplayBatch): DisplayBatch | undefined {
 	return typeof data === 'string' ? safeParse(data) : (data as DisplayBatch | undefined);
 }
 
@@ -230,7 +233,32 @@ function disposeMeshes(meshes: THREE.Object3D[]): void {
 	for (const mesh of meshes) disposeObjectTree(mesh);
 }
 
-function logProcessingTime(startTime: number): void {
+/** Time plus what the result costs to hold: the same bytes again on the GPU once uploaded. */
+function logProcessingTime(startTime: number, objects: THREE.Object3D[]): void {
 	const elapsed = performance.now() - startTime;
-	getLogger().info('Time to process meshes:', `${elapsed.toFixed(2)}ms`);
+	let triangles = 0;
+	let vertices = 0;
+	let bytes = 0;
+	const seen = new Set<THREE.BufferGeometry>();
+	for (const root of objects) {
+		root.traverse((object) => {
+			const geometry = (object as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+			if (!geometry?.isBufferGeometry || seen.has(geometry)) return;
+			seen.add(geometry);
+			const position = geometry.getAttribute('position');
+			if (!position) return;
+			vertices += position.count;
+			if ((object as THREE.Mesh).isMesh) {
+				triangles += (geometry.index ? geometry.index.count : position.count) / 3;
+			}
+			for (const attribute of Object.values(geometry.attributes))
+				bytes += attribute.array.byteLength;
+			if (geometry.index) bytes += geometry.index.array.byteLength;
+		});
+	}
+	const mb = (bytes / (1024 * 1024)).toFixed(1);
+	getLogger().info(
+		`Time to process meshes: ${elapsed.toFixed(2)}ms | ${triangles.toLocaleString('en')} triangles, ` +
+			`${vertices.toLocaleString('en')} vertices, ${mb} MB of geometry`
+	);
 }

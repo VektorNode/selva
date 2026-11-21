@@ -8,7 +8,7 @@
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
 
 	// The solve status in a panel's action row. It grows only as far as the solve needs: a quiet
-	// "up to date" row, a pill once a solve is visible, a card with progress and Abort once it is
+	// "up to date" row, a pill once a solve is visible, a card with the step, elapsed time and Abort once it is
 	// slow. It grows upward over the fields, so the footer never changes height.
 	interface Props {
 		/** The raw flag: times the solve, and acknowledges one too short to show. */
@@ -17,7 +17,7 @@
 		show: boolean;
 		/** `createSolvingIndicator(...).slow`. */
 		slow?: boolean;
-		/** Live progress for the card. Without it the card's bar is indeterminate. */
+		/** Live progress: the card names the current step and its count. */
 		live?: LiveSolveState;
 		/** Without it the card has no Abort button; Esc still works where the host handles it. */
 		onabort?: () => void;
@@ -46,11 +46,6 @@
 
 	const progress = createLiveProgress(() => live ?? EMPTY_LIVE_SOLVE);
 	const head = $derived(progress.headline ?? progress.progress[0]);
-	const bar = $derived(
-		head?.fraction === undefined
-			? undefined
-			: (progress.bars[head.source ?? ''] ?? { width: head.fraction, ms: 150 })
-	);
 
 	let startedAt = 0;
 	let wasSolving = false;
@@ -134,7 +129,7 @@
 	<div
 		class="inset-x-0 bottom-0 backdrop-blur-md ease-out absolute z-10 overflow-hidden border border-border-strong transition-all duration-300 motion-reduce:transition-none {mode ===
 		'card'
-			? 'h-24 shadow-md rounded-lg bg-card/75'
+			? 'h-20 shadow-md rounded-lg bg-card/75'
 			: mode === 'idle'
 				? 'h-10 shadow-sm rounded-md bg-card/90'
 				: 'h-10 shadow-md rounded-md bg-card/75'}"
@@ -157,24 +152,6 @@
 						<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
 							{head.done} / {head.total}
 						</span>
-					{/if}
-				</div>
-				<div
-					class="h-1 overflow-hidden rounded-full bg-muted"
-					role="progressbar"
-					aria-label={head?.label ?? t.solving}
-					aria-valuemin={0}
-					aria-valuemax={100}
-					aria-valuenow={bar ? Math.round(bar.width * 100) : undefined}
-				>
-					{#if bar}
-						<div
-							class="h-full w-(--bar-width) rounded-full bg-primary transition-all duration-(--bar-ms) ease-linear"
-							style:--bar-width="{bar.width * 100}%"
-							style:--bar-ms="{bar.ms}ms"
-						></div>
-					{:else}
-						<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
 					{/if}
 				</div>
 				<div class="gap-2 flex items-center">

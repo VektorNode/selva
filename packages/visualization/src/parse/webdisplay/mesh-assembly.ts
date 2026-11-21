@@ -59,7 +59,9 @@ export interface AssembledGeometry {
 	colors: Uint8Array | null;
 }
 
-export interface FinishedGeometry extends CreasedGeometry {
+export interface FinishedGeometry extends Omit<CreasedGeometry, 'normals'> {
+	/** Unit normals as normalized int16: half the bytes of float32, on the GPU too, and no visible difference. */
+	normals: Int16Array;
 	/** See {@link isClosedSolid}. */
 	closed: boolean;
 	/** See {@link grainTangents}. Present exactly when `uvs` is. */
@@ -87,7 +89,14 @@ export function finishGeometry(
 	const tangents = creased.uvs
 		? grainTangents(creased.positions, creased.normals, creased.indices, creased.uvs)
 		: null;
-	return { ...creased, closed, tangents };
+	return { ...creased, normals: packNormals(creased.normals), closed, tangents };
+}
+
+/** Self-contained: stringified into the assembly worker. */
+export function packNormals(normals: Float32Array): Int16Array {
+	const packed = new Int16Array(normals.length);
+	for (let i = 0; i < normals.length; i++) packed[i] = Math.round(normals[i] * 32767);
+	return packed;
 }
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
@@ -295,6 +304,7 @@ export function meshAssemblyWorkerSource(): string {
 		`const isClosedSolid = ${isClosedSolid.toString()};`,
 		`const splitCreases = ${splitCreases.toString()};`,
 		`const grainTangents = ${grainTangents.toString()};`,
+		`const packNormals = ${packNormals.toString()};`,
 		`self.onmessage = (event) => {`,
 		`  const { id, input } = event.data;`,
 		`  try {`,
@@ -307,7 +317,7 @@ export function meshAssemblyWorkerSource(): string {
 		`        : isClosedSolid(g.positions, g.indices, windows.map((w) => w.indexCount));`,
 		`      const c = splitCreases(g.positions, g.indices, g.uvs, g.colors);`,
 		`      const tangents = c.uvs ? grainTangents(c.positions, c.normals, c.indices, c.uvs) : null;`,
-		`      return { ...c, closed, tangents };`,
+		`      return { ...c, normals: packNormals(c.normals), closed, tangents };`,
 		`    });`,
 		`    const transfer = [];`,
 		`    for (const g of geometries) {`,

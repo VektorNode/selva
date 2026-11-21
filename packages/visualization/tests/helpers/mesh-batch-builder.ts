@@ -35,7 +35,7 @@ export interface MeshBatchBuilderOptions {
 }
 
 export interface BuiltMeshBatch {
-	batch: DisplayBatch;
+	batch: DisplayBatch & { compressedData: string };
 	rawVertices: Float32Array;
 	rawFaces: Uint32Array;
 }

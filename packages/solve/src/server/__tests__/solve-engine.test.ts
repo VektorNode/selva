@@ -658,6 +658,7 @@ describe('SolveEngine.toWebResponse', () => {
 			kind: 'ok',
 			envelope: {
 				body: 'hi',
+				variant: 'identity',
 				headers: { 'Content-Type': 'text/plain' },
 				result: {} as never,
 				metrics: {} as never
@@ -676,7 +677,7 @@ describe('SolveEngine.toWebResponse', () => {
 			kind: 'ok',
 			envelope: {
 				body: new Uint8Array([1, 2, 3]),
-				encoding: 'gzip',
+				variant: 'gzip',
 				headers: {},
 				result: {} as never,
 				metrics: {} as never

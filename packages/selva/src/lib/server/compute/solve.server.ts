@@ -35,6 +35,8 @@ import { solveSessionId } from '#lib/server/compute/sessionId.server.js';
 import { computeErrorLogFields } from '#lib/server/compute/errorLogFields.js';
 import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
 import {
+	COMPUTE_PROFILE_HEADER,
+	computeProfileHeader,
 	postedServerSourcedIds,
 	solveInputsFromSchema,
 	type ByteCacheRef,
@@ -457,6 +459,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			inputs: solveInputs,
 			values,
 			signal,
+			accept: request.headers.get('accept') ?? '',
 			acceptEncoding: request.headers.get('accept-encoding') ?? '',
 			definitionGuid: guid ?? undefined,
 			loadStartMs: loadStart,
@@ -502,6 +505,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 					err: renderThrown(err)
 				})
 			);
+		}
+
+		// Component names describe the definition's insides: a share-link viewer only runs it.
+		const profile = outcome.envelope.metrics.rhino?.profile;
+		if (profile && access.kind === 'user') {
+			outcome.envelope.headers[COMPUTE_PROFILE_HEADER] = computeProfileHeader(profile);
 		}
 
 		if (COMPUTE_DEBUG) logDebugBreakdown(locals, request, outcome, defLoadMs, prepMarks);
@@ -600,10 +609,12 @@ function logDebugBreakdown(
 		serializeMs: Math.round(metrics.serializeMs),
 		gzipMs: Math.round(metrics.gzipMs),
 		serverTotalMs: Math.round(metrics.serverTotalMs),
-		serializedBytes: metrics.serializedBytes
+		serializedBytes: metrics.serializedBytes,
+		// Component names and times only: the profile carries no values.
+		slowestObjects: metrics.rhino?.profile?.map(({ name, nick, ms }) => `${name} "${nick}" ${ms}ms`)
 	});
 	if (metrics.compressedBytes !== null) {
-		locals.log.debug('Response gzipped', {
+		locals.log.debug(`Response encoded (${outcome.envelope.variant})`, {
 			component: 'Compute/server',
 			serializedBytes: metrics.serializedBytes,
 			compressedBytes: metrics.compressedBytes,

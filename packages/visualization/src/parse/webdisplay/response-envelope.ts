@@ -5,10 +5,13 @@
  * response type is a superset and stays assignable to this local contract.
  */
 
+import type { DisplayBatch } from './types.js';
+
 export interface DisplayDataItem {
 	/** Namespaced wire type token, e.g. `Selva.GH.Features.Display.Services.DisplayBatch`. */
 	type: string;
-	data: string;
+	/** A JSON string of the batch, or the batch itself once a binary response was decoded. */
+	data: string | DisplayBatch;
 }
 
 export interface GrasshopperResponseValue {

@@ -40,7 +40,7 @@ import {
 	type ByteCacheStats,
 	type DefinitionByteCache
 } from './definition-byte-cache.js';
-import { buildEnvelope } from './response-encoding.js';
+import { buildEnvelope, responseVariant } from './response-encoding.js';
 import { buildServerTiming, type PrepMark } from './server-timing.js';
 import {
 	createSolveCacheSingleFlight,
@@ -121,6 +121,8 @@ export interface SolveEngineSolveArgs {
 	boundValues?: Record<string, unknown>;
 	signal: AbortSignal;
 	acceptEncoding?: string;
+	/** The request's `Accept`. Only one naming the binary solve media type gets a binary body. */
+	accept?: string;
 	/** Sent as `X-Selva-Definition`, a key a router can keep one definition's solves together on. */
 	definitionGuid?: string;
 	loadStartMs?: number;
@@ -280,7 +282,9 @@ export class SolveEngine {
 
 		let encoded;
 		try {
-			encoded = await flight.encoder.encode(args.acceptEncoding ?? '');
+			encoded = await flight.encoder.encode(
+				responseVariant({ accept: args.accept, acceptEncoding: args.acceptEncoding })
+			);
 		} catch (error) {
 			return { kind: 'compute_error', durationMs: elapsed(), error };
 		}
@@ -307,7 +311,7 @@ export class SolveEngine {
 			envelope: buildEnvelope(encoded, response, serverTiming, {
 				...timing,
 				serializedBytes,
-				compressedBytes: encoded.encoding === 'gzip' ? (body as Uint8Array).byteLength : null
+				compressedBytes: encoded.variant === 'identity' ? null : (body as Uint8Array).byteLength
 			}),
 			solveMs,
 			errorCount: response.errors?.length ?? 0,

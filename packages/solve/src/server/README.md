@@ -34,8 +34,10 @@ This is what happens when a request comes in:
 1. The engine gets the warm client and builds the input tree.
 2. Single-flight joins an identical solve or starts one. Only the solve is shared.
 3. The scheduler solves the definition.
-4. Each caller gets the result serialized, size-checked and gzipped for its own `Accept-Encoding`,
-   with its own timing. The JSON is built once per flight, the gzip once per response.
+4. Each caller gets the result serialized, size-checked and encoded for its own `Accept` and
+   `Accept-Encoding`, with its own timing: binary frames for a client that asks for them (format in
+   `shared/binary-response.ts`), else gzip or plain JSON. The JSON is built once per flight, the
+   gzip and binary bodies once per response.
 
 A flight aborts when its last caller leaves, and frees its key then.
 
@@ -51,6 +53,7 @@ export async function POST(request: Request): Promise<Response> {
 		definitionSource: engine.definitionRef(version.id, (signal) => storage.get(version.fileKey)),
 		inputs: solveInputsFromSchema(version.schema),
 		values: body.values,
+		accept: request.headers.get('accept') ?? '',
 		acceptEncoding: request.headers.get('accept-encoding') ?? '',
 		signal: request.signal
 	});

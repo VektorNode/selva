@@ -117,9 +117,8 @@ export interface MaterialGroup {
 /**
  * One Display component's payload, ready for Three.js rendering.
  *
- * `compressedData` is the binary "SLVA" blob, base64-encoded for transit inside the values JSON
- * envelope; opaque to the outer JSON so a future binary WebSocket frame can drop the base64 step
- * without changing this shape.
+ * `compressedData` is the binary "SLVA" blob: base64 inside a JSON response, raw bytes when the
+ * response came as a binary frame.
  *
  * Named `DisplayBatch` rather than `MeshBatch` because it's the seam non-mesh display items
  * (curves, points, later labels/icons) also travel through — those ride as JSON alongside the mesh
@@ -128,7 +127,7 @@ export interface MaterialGroup {
 export interface DisplayBatch {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
-	compressedData: string;
+	compressedData: string | Uint8Array;
 	/** Non-mesh display items — see {@link DisplayItem}. Parsed by the separate `display-items`
 	 *  path, not the SLVA mesh parser. Omitted when there are none. */
 	items?: DisplayItem[];

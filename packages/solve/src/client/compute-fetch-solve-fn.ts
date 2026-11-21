@@ -16,7 +16,17 @@ import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
 import { KEEPALIVE_REQUEST_HEADERS, unwrapKeepalive } from './keepalive.js';
 import { ASYNC_REQUEST_HEADERS, followAsyncSolve } from './async-solve.js';
-import { describeServerTiming, parseServerTiming } from './server-timing.js';
+import {
+	describeComputeProfile,
+	describeServerTiming,
+	parseServerTiming
+} from './server-timing.js';
+import { COMPUTE_PROFILE_HEADER } from '../shared/compute-profile.js';
+import {
+	BINARY_ACCEPT_HEADER,
+	decodeBinarySolveResponse,
+	isBinarySolveResponse
+} from './binary-response.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -33,7 +43,11 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	streamId?: () => string | null | undefined;
 	/** Sent as `Authorization: Bearer …`, e.g. a share-link token. A header, not the URL, so it stays out of access logs. */
 	bearerToken?: () => string | null | undefined;
-	/** Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. */
+	/**
+	 * Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. Set, the solve
+	 * asks for a binary response: each display item's `data` in `source` is then the parsed batch
+	 * with its mesh as bytes, not a JSON string.
+	 */
 	meshes?: {
 		extract: (
 			response: GrasshopperComputeResponse,
@@ -60,6 +74,14 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	 * server without support ignores the ask. Sends a `Prefer` header. Default `false`.
 	 */
 	respondAsync?: boolean;
+}
+
+/** Said once a page: the same Compute server stays silent on every solve. */
+let warnedNoRhinoTiming = false;
+
+function formatBytes(bytes: number): string {
+	if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+	return `${(bytes / 1024).toFixed(0)} KB`;
 }
 
 /** Applied to a 429 that names no wait. */
@@ -202,6 +224,8 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
+					// Only a viewer reads the mesh blobs, and only it is handed them as bytes.
+					...(opts.meshes && BINARY_ACCEPT_HEADER ? { Accept: BINARY_ACCEPT_HEADER } : {}),
 					...auth,
 					...(prefer ? { Prefer: prefer } : {})
 				},
@@ -285,10 +309,11 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 
 		const ttfbMs = performance.now() - solveStart;
 
+		const binary = isBinarySolveResponse(res);
 		const downloadStart = performance.now();
-		let bodyText: string;
+		let body: string | Uint8Array;
 		try {
-			bodyText = await res.text();
+			body = binary ? new Uint8Array(await res.arrayBuffer()) : await res.text();
 		} catch (err) {
 			if (signal.aborted) {
 				log('[Compute] solve aborted mid-download — empty result discarded');
@@ -299,18 +324,24 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			});
 		}
 		const downloadMs = performance.now() - downloadStart;
-		const bodyChars = bodyText.length;
+		// What crossed the network: a binary body exactly, a gzip one only while its header survives.
+		const wireBytes =
+			typeof body === 'string'
+				? Number(res.headers.get('Content-Length')) || null
+				: body.byteLength;
 
 		const invalidResponse = (cause?: unknown) =>
 			new Error('Received an invalid response from the server. Reload the page and try again.', {
 				cause
 			});
+		const parseStart = performance.now();
 		let parsed: unknown;
 		try {
-			parsed = JSON.parse(bodyText);
+			parsed = typeof body === 'string' ? JSON.parse(body) : await decodeBinarySolveResponse(body);
 		} catch (err) {
 			throw invalidResponse(err);
 		}
+		const parseMs = performance.now() - parseStart;
 		if (!isPlainObject(parsed)) throw invalidResponse();
 		const solved = parsed as unknown as GrasshopperComputeResponse;
 		const processor = new GrasshopperResponseProcessor(solved);
@@ -324,10 +355,12 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		// geometry alone can be megabytes the client would only throw away.
 		const rejected = outcome.blocked || outcome.aborted;
 
+		const meshesStart = performance.now();
 		const meshes =
 			opts.meshes && !rejected && !call.skipMeshes
 				? await opts.meshes.extract(processor.response, { debug, signal })
 				: [];
+		const meshesMs = performance.now() - meshesStart;
 
 		const resultOutputs: Record<string, unknown> = {};
 		for (const o of rejected ? [] : outputs) {
@@ -345,20 +378,17 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			const serverTiming = parseServerTiming(timingHeader);
 			const serverTotal = serverTiming.total ?? 0;
 			const networkMs = Math.max(0, ttfbMs - serverTotal);
-			const sizeMB = bodyChars / (1024 * 1024);
-			const size = sizeMB >= 1 ? `${sizeMB.toFixed(2)} MB` : `${(bodyChars / 1024).toFixed(0)} KB`;
-			const mbps = downloadMs > 0 ? (sizeMB / (downloadMs / 1000)).toFixed(1) : '∞';
 			const heapBytes = (performance as Performance & { memory?: { usedJSHeapSize: number } })
 				.memory?.usedJSHeapSize;
-			const heap =
-				heapBytes !== undefined ? ` | heap=${(heapBytes / (1024 * 1024)).toFixed(0)} MB` : '';
+			const heap = heapBytes !== undefined ? ` | heap=${formatBytes(heapBytes)}` : '';
 			log(
-				`[Compute] req=${(payload.length / 1024).toFixed(0)}KB (values ${(valuesBytes / 1024).toFixed(0)}KB) | ` +
-					`ttfb=${ttfbMs.toFixed(0)}ms (network≈${networkMs.toFixed(0)} + server ${serverTotal.toFixed(0)}) | ` +
-					`download=${downloadMs.toFixed(0)}ms (${size} @ ${mbps} MB/s)${heap}`
+				`[Compute] req=${formatBytes(payload.length)} (values ${formatBytes(valuesBytes)}) | ` +
+					`ttfb=${ttfbMs.toFixed(0)}ms (network≈${networkMs.toFixed(0)} + server ${serverTotal.toFixed(0)})${heap}`
 			);
 			const breakdown = describeServerTiming(timingHeader);
 			if (breakdown) log(`[Compute]   └─ server: ${breakdown}`);
+			const slowest = describeComputeProfile(res.headers.get(COMPUTE_PROFILE_HEADER));
+			if (slowest) log(`[Compute]   └─ slowest components (ms): ${slowest}`);
 			if (serverTiming.selva_cache !== undefined) {
 				const cacheMsg = serverTiming.selva_cache
 					? 'HIT — served without calling compute'
@@ -367,6 +397,32 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 						: 'miss — solved on Rhino.Compute';
 				log(`[Compute]   └─ cache: ${cacheMsg}`);
 			}
+			if (
+				!serverTiming.selva_cache &&
+				(serverTiming.solve ?? 0) > 0 &&
+				serverTiming.rhino_solve === undefined &&
+				!warnedNoRhinoTiming
+			) {
+				warnedNoRhinoTiming = true;
+				log(
+					'[Compute]   └─ note: Rhino.Compute sent no timing of its own, so `compute` above ' +
+						'is Grasshopper, definition load and queue wait together. A recent VektorNode fork ' +
+						'sends it, with the slowest components.'
+				);
+			}
+			const bodyBytes =
+				typeof body === 'string' ? new TextEncoder().encode(body).byteLength : body.byteLength;
+			const wire =
+				wireBytes === null
+					? `${formatBytes(bodyBytes)} ${binary ? 'binary' : 'json'}`
+					: `${formatBytes(wireBytes)} ${binary ? 'binary' : 'json'} on the wire` +
+						(binary ? '' : `, ${formatBytes(bodyBytes)} unpacked`);
+			const rateBytes = wireBytes ?? bodyBytes;
+			const rate = downloadMs > 0 ? `${formatBytes(rateBytes / (downloadMs / 1000))}/s` : '∞';
+			log(
+				`[Compute]   └─ client: download ${downloadMs.toFixed(0)}ms (${wire} @ ${rate}) | ` +
+					`parse ${parseMs.toFixed(0)}ms | meshes ${meshesMs.toFixed(0)}ms (${meshes.length} objects)`
+			);
 		}
 
 		return finalizeResult({ outputs: resultOutputs, meshes, source: solved }, outcome);

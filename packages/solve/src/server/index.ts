@@ -39,11 +39,16 @@ export { solveInputsFromSchema, postedServerSourcedIds } from './transform-input
 
 export {
 	acceptsGzip,
+	responseVariant,
+	type ResponseVariant,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
 	type SolveEnvelope,
 	type SolvePhaseMetrics
 } from './response-encoding.js';
+
+export { COMPUTE_PROFILE_HEADER } from '../shared/compute-profile.js';
+export { computeProfileHeader } from './server-timing.js';
 
 export type { SolveCacheStats, CachedClient, ResolvedServer } from './client-cache.js';
 export {

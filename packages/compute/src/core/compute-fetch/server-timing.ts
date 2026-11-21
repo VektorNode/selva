@@ -25,6 +25,11 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
 			if (!Number.isFinite(dur)) continue;
 			timing[name] = dur;
 			sawMetric = true;
+		} else if (name === 'proxy_wait') {
+			const dur = Number(param(params, 'dur'));
+			if (!Number.isFinite(dur)) continue;
+			timing.wait = dur;
+			sawMetric = true;
 		} else if (name === 'recomputed') {
 			const [ran, total] = (param(params, 'desc') ?? '').split('/').map(Number);
 			if (!Number.isInteger(ran) || !Number.isInteger(total)) continue;

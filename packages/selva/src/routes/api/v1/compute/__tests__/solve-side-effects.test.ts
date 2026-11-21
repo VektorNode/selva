@@ -17,9 +17,16 @@ vi.mock('#lib/server/compute/engine.server.js', async (importOriginal) => ({
 			load: async () => new Uint8Array(),
 			outcome: { loaded: false, fromCache: false }
 		}),
-		toWebResponse: (outcome: { kind: string; error?: unknown }) => {
+		toWebResponse: (outcome: {
+			kind: string;
+			error?: unknown;
+			envelope?: { headers: Record<string, string> };
+		}) => {
 			if (outcome.kind === 'compute_error') throw outcome.error;
-			return new Response('{}', { status: outcome.kind === 'ok' ? 200 : 504 });
+			return new Response('{}', {
+				status: outcome.kind === 'ok' ? 200 : 504,
+				headers: outcome.envelope?.headers
+			});
 		}
 	}
 }));
@@ -91,7 +98,10 @@ describe('POST /api/v1/compute — solve metric', () => {
 		const { alice, acme, def, guid } = await setup();
 		solve.mockResolvedValue({
 			kind: 'ok',
-			envelope: {},
+			envelope: {
+				headers: {},
+				metrics: { rhino: { raw: '', profile: [{ name: 'Mesh Brep', nick: 'Fine', ms: 900 }] } }
+			},
 			solveMs: 42,
 			errorCount: 2,
 			warningCount: 1
@@ -100,6 +110,9 @@ describe('POST /api/v1/compute — solve metric', () => {
 		const res = await call(POST, { locals: await actAs(tp!, alice.id), body: body(guid) });
 
 		expect(res.status).toBe(200);
+		expect(JSON.parse(res.headers.get('X-Compute-Profile')!)).toEqual([
+			{ name: 'Mesh Brep', nick: 'Fine', ms: 900 }
+		]);
 		expect(metrics).toEqual([
 			{
 				definitionUrl: `local:${guid}`,
@@ -194,7 +207,10 @@ describe('POST /api/v1/compute — solve counts', () => {
 		});
 		solve.mockResolvedValue({
 			kind: 'ok',
-			envelope: {},
+			envelope: {
+				headers: {},
+				metrics: { rhino: { raw: '', profile: [{ name: 'Mesh Brep', nick: 'Fine', ms: 900 }] } }
+			},
 			solveMs: 1,
 			errorCount: 0,
 			warningCount: 0
@@ -207,6 +223,8 @@ describe('POST /api/v1/compute — solve counts', () => {
 		});
 
 		expect(res.status).toBe(200);
+		// Component names describe the definition's insides; a share link only runs it.
+		expect(res.headers.get('X-Compute-Profile')).toBeNull();
 		expect((await tp!.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id))?.solveCount).toBe(1);
 		await vi.waitFor(async () => expect(await solveCount(guid)).toBe(1));
 	});

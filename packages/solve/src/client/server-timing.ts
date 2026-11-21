@@ -17,7 +17,8 @@ export function parseServerTiming(header: string | null): Record<string, number>
  *
  * `compute` is the whole call to Rhino.Compute. A server that reports its own timing splits it
  * into `solve` (of which `grasshopper` is the definition running), `decode`, `encode`, and
- * `queue+link`: the rest, network plus the wait for a free worker. `prep` is what the app did
+ * `queue+link`: the rest, network plus the wait for a free worker, which the fork's proxy reports
+ * on its own. `prep` is what the app did
  * before the solve, slowest step first, steps under 1 ms left out.
  */
 export function describeServerTiming(header: string | null): string | null {
@@ -30,7 +31,8 @@ export function describeServerTiming(header: string | null): string | null {
 		const grasshopper = t.rhino_gh === undefined ? '' : ` (grasshopper ${ms(t.rhino_gh)})`;
 		compute +=
 			`: solve ${ms(t.rhino_solve)}${grasshopper}, decode ${ms(t.rhino_decode)}, ` +
-			`encode ${ms(t.rhino_encode)}, queue+link ${ms(t.compute_link)}`;
+			`encode ${ms(t.rhino_encode)}, queue+link ${ms(t.compute_link)}` +
+			(t.rhino_wait === undefined ? '' : ` (waiting for a free child ${ms(t.rhino_wait)})`);
 	}
 	const parts = [compute];
 
@@ -50,4 +52,31 @@ export function describeServerTiming(header: string | null): string | null {
 		parts.push(`${name.replace(/^rhino_/, '')} ${value}`);
 	}
 	return parts.join(' | ');
+}
+
+/**
+ * The `X-Compute-Profile` header as one log line, slowest first. Null without one. Entries that
+ * aren't `{ name, ms }` are dropped: a proxy can send anything, and a debug line must not fail a solve.
+ */
+export function describeComputeProfile(header: string | null): string | null {
+	if (!header) return null;
+	let entries: unknown;
+	try {
+		entries = JSON.parse(header);
+	} catch {
+		return null;
+	}
+	if (!Array.isArray(entries)) return null;
+	const valid = entries.filter(
+		(e): e is { name: string; nick?: unknown; ms: number } =>
+			typeof e === 'object' && e !== null && typeof e.name === 'string' && typeof e.ms === 'number'
+	);
+	if (valid.length === 0) return null;
+	return valid
+		.map((e) =>
+			typeof e.nick === 'string' && e.nick && e.nick !== e.name
+				? `${e.name} "${e.nick}" ${e.ms}`
+				: `${e.name} ${e.ms}`
+		)
+		.join(', ');
 }

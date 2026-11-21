@@ -5,7 +5,12 @@ import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 import { parseMeshBatchObject } from '../batch-parser';
 import { parseBinaryMeshBatchRaw } from '../binary-parser';
 import { splitGroupByLayer } from '../batch/merge';
-import { assembleGeometries, finishGeometry, meshAssemblyWorkerSource } from '../mesh-assembly';
+import {
+	assembleGeometries,
+	finishGeometry,
+	meshAssemblyWorkerSource,
+	packNormals
+} from '../mesh-assembly';
 
 import type { AssemblyInput, AssemblyJob } from '../mesh-assembly';
 import type { DisplayBatch } from '../types';
@@ -60,11 +65,10 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 			);
 			expect(Array.from(result.indices)).toEqual(Array.from(syncGeometry.index!.array));
 
-			const syncNormals = syncGeometry.getAttribute('normal').array as Float32Array;
-			expect(result.normals.length).toBe(syncNormals.length);
-			for (let n = 0; n < syncNormals.length; n++) {
-				expect(result.normals[n]).toBeCloseTo(syncNormals[n]!, 5);
-			}
+			const normal = syncGeometry.getAttribute('normal');
+			expect(normal.array).toBeInstanceOf(Int16Array);
+			expect(normal.normalized).toBe(true);
+			expect(Array.from(result.normals)).toEqual(Array.from(normal.array));
 		}
 	});
 
@@ -93,6 +97,18 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 		// Shrink the first job's vertex window so its indices point outside it.
 		input.jobs[0]!.windows[0]!.vertexCount = 2;
 		expect(() => assembleGeometries(input)).toThrow(/outside vertex window/);
+	});
+});
+
+describe('packNormals', () => {
+	it('keeps every component within one int16 step of the float, signs and extremes included', () => {
+		const normals = new Float32Array([1, 0, -1, 0.57735, -0.57735, 0.57735, 0.123456, -0.98765, 0]);
+		const packed = packNormals(normals);
+		for (let i = 0; i < normals.length; i++) {
+			expect(Math.abs(packed[i]! / 32767 - normals[i]!)).toBeLessThanOrEqual(1 / 32767);
+		}
+		expect(packed[0]).toBe(32767);
+		expect(packed[2]).toBe(-32767);
 	});
 });
 
