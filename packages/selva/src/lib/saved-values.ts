@@ -7,11 +7,16 @@ import { getDefaultValue, type UISchema } from '@selvajs/schemas';
 /** What the definition page's load `depends` on, and the page invalidates to repeat it. */
 export const SAVED_VALUES_DEPENDENCY = 'selva:saved-values';
 
+const RECHECK_MS = [2_000, 4_000, 8_000, 15_000, 30_000];
+
 /**
- * Waits between repeated loads, about two minutes in all: the server gives a Compute read that
- * long before dropping it.
+ * The wait before repeated load number `attempt`, which then stays at the longest. There is no
+ * last attempt: the page stops once the load says no Compute read is running, so the server's
+ * read timeout is what bounds it.
  */
-export const SAVED_VALUES_RECHECK_MS = [2_000, 4_000, 8_000, 15_000, 30_000, 30_000, 30_000];
+export function savedValuesRecheckMs(attempt: number): number {
+	return RECHECK_MS[Math.min(attempt, RECHECK_MS.length - 1)];
+}
 
 /**
  * The saved values to load into a form built from `before`, now that `after` carries them: each

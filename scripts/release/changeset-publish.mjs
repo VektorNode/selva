@@ -90,8 +90,10 @@ console.info('\n── changeset publish failed; verifying the registry ──\n
 
 // A version published seconds ago can still 404 for a while, so a missing package is re-checked
 // before it counts. Without this, every package of a partly failed run reads as missing.
+// A pnpm retry that hits E409 "previously staged version" means the first PUT landed, but the
+// version can take over a minute to become readable.
 // SELVA_VERIFY_WAIT_MS shortens the wait for tests.
-const WAIT_MS = Number(process.env.SELVA_VERIFY_WAIT_MS ?? 60_000);
+const WAIT_MS = Number(process.env.SELVA_VERIFY_WAIT_MS ?? 120_000);
 const POLL_MS = 10_000;
 
 const check = (pkgs) =>

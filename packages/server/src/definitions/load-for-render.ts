@@ -51,6 +51,11 @@ export interface LoadedDefinition {
 	 * yet. A later load carries them once the read behind this one lands.
 	 */
 	defaultsPending: boolean;
+	/**
+	 * While `defaultsPending`: a Compute read of the saved values is running, so a later load can
+	 * carry them. False means the last read failed and the next is not due yet.
+	 */
+	defaultsReading: boolean;
 }
 
 /**
@@ -406,13 +411,18 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 
 		const fresh = cachedSchemaFor(version);
 		if (options?.skipComputeDefaults && fresh)
-			return { ...loaded, schema: fresh, defaultsPending: false };
+			return { ...loaded, schema: fresh, defaultsPending: false, defaultsReading: false };
 
 		const values = version.savedValues
 			? savedValuesFromRecord(version.savedValues)
 			: savedValues.get(version.id);
 		if (fresh && values)
-			return { ...loaded, schema: applySavedValues(fresh, values), defaultsPending: false };
+			return {
+				...loaded,
+				schema: applySavedValues(fresh, values),
+				defaultsPending: false,
+				defaultsReading: false
+			};
 
 		// An older format past its recheck window still renders: serve it while Compute is asked.
 		const stored = fresh ?? servableStaleSchema(version);
@@ -421,7 +431,8 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 			return {
 				...loaded,
 				schema: values ? applySavedValues(stored, values) : stored,
-				defaultsPending: !values
+				defaultsPending: !values,
+				defaultsReading: !values && reads.has(version.id)
 			};
 		}
 
@@ -435,7 +446,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 					'Rhino.Compute is still reading this definition. Retry in a moment.'
 				)
 		);
-		return { ...loaded, schema, defaultsPending: false };
+		return { ...loaded, schema, defaultsPending: false, defaultsReading: false };
 	};
 }
 

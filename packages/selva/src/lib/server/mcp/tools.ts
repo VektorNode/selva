@@ -124,8 +124,6 @@ async function runSolve(
 	const res = (await api.call('postDefinitionsByGuidSolve', {
 		params: { guid },
 		body: {
-			// `inputs` is required: without it the server ignores `values` and solves the file's own.
-			inputs: schema.inputs,
 			values: resolved,
 			...(versionId && { versionId })
 		},

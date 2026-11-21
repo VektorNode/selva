@@ -298,6 +298,7 @@ describe('buildEnvelope', () => {
 			metrics
 		);
 		expect(envelope.variant).toBe('gzip');
+		expect(envelope.encoding).toBe('gzip');
 		expect(envelope.headers['Content-Encoding']).toBe('gzip');
 		expect(envelope.headers['Content-Length']).toBe('7');
 		expect(envelope.headers.Vary).toBe('Accept, Accept-Encoding');

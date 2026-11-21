@@ -214,17 +214,14 @@ describe('selva MCP tools', () => {
 		);
 	});
 
-	it('solves with values keyed by label, sending the schema inputs along', async () => {
+	it('solves with values keyed by label', async () => {
 		const { server, sent } = serve([SCHEMA, SOLVED]);
 		const { content } = await call(server, 'selva_solve', {
 			definition: GUID,
 			values: { Width: 20, Material: 'Oak' }
 		});
 		expect(sent[1].url).toBe(`https://selva.test/api/v1/definitions/${GUID}/solve`);
-		expect(sent[1].body).toEqual({
-			inputs: SCHEMA.inputs,
-			values: { 'in-w': 20, 'in-m': 'oak_v2' }
-		});
+		expect(sent[1].body).toEqual({ values: { 'in-w': 20, 'in-m': 'oak_v2' } });
 		const text = content[0].text;
 		expect(text).toContain('Weight: 12.4');
 		expect(text).toContain('Shape: 2 Mesh');

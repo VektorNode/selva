@@ -4,8 +4,8 @@
 	import { ComputeApp, toast } from '@selvajs/ui';
 	import {
 		SAVED_VALUES_DEPENDENCY,
-		SAVED_VALUES_RECHECK_MS,
-		lateSavedValues
+		lateSavedValues,
+		savedValuesRecheckMs
 	} from '#lib/saved-values.js';
 	import { createComputeFetchSolveFn, createSolveEventStream } from '@selvajs/solve/client';
 	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
@@ -50,7 +50,6 @@
 	const onSolve = createComputeFetchSolveFn({
 		endpoint: '/api/v1/compute',
 		definitionUrl: () => data.ghDefinition,
-		inputs: () => data.schema.inputs,
 		outputs: () => data.schema.outputs,
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
@@ -122,19 +121,19 @@
 			}
 
 			attempt += 1;
-			if (attempt >= SAVED_VALUES_RECHECK_MS.length) {
+			if (!data.defaultsReading) {
 				readingSavedValues = false;
 				toast.warning('Saved values not loaded', {
 					id: SAVED_VALUES_TOAST,
 					description:
-						'Rhino.Compute did not answer in time. The form shows stored defaults. Reload the page to try again.',
+						'Rhino.Compute could not read them. The form shows stored defaults. Reload the page in a minute to try again.',
 					duration: Infinity
 				});
 				return;
 			}
-			timer = setTimeout(recheck, SAVED_VALUES_RECHECK_MS[attempt]);
+			timer = setTimeout(recheck, savedValuesRecheckMs(attempt));
 		}
-		timer = setTimeout(recheck, SAVED_VALUES_RECHECK_MS[0]);
+		timer = setTimeout(recheck, savedValuesRecheckMs(0));
 
 		return () => {
 			stopped = true;

@@ -40,7 +40,6 @@ import {
 const solveFn = createComputeFetchSolveFn({
 	endpoint: '/api/v1/compute',
 	definitionUrl: () => `local:${definitionGuid}`,
-	inputs: () => schema.inputs,
 	outputs: () => schema.outputs
 });
 

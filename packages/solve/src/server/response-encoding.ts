@@ -70,6 +70,8 @@ export interface SolveEnvelope {
 	/** The JSON string for `identity`, else bytes. */
 	body: string | Uint8Array;
 	variant: ResponseVariant;
+	/** @deprecated Read `variant`. Set exactly when `variant` is `gzip`. */
+	encoding?: 'gzip';
 	headers: Record<string, string>;
 	result: GrasshopperComputeResponse;
 	metrics: SolvePhaseMetrics;
@@ -106,7 +108,14 @@ export function buildEnvelope(
 	headers['Content-Length'] = String(
 		typeof body === 'string' ? Buffer.byteLength(body) : body.byteLength
 	);
-	return { body, variant, headers, result, metrics };
+	return {
+		body,
+		variant,
+		...(variant === 'gzip' ? { encoding: 'gzip' } : {}),
+		headers,
+		result,
+		metrics
+	};
 }
 
 // ============================================================================

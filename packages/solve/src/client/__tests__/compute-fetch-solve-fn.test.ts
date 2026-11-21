@@ -71,6 +71,16 @@ describe('createComputeFetchSolveFn — happy path', () => {
 		expect(result.meshes).toEqual([]);
 	});
 
+	it('leaves inputs out of the body when none are given', async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ values: [] }));
+		const solve = createComputeFetchSolveFn(baseOpts({ inputs: undefined }));
+		await solve({ a: 1 }, new AbortController().signal);
+
+		const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+		expect(body).not.toHaveProperty('inputs');
+		expect(body.values).toEqual({ a: 1 });
+	});
+
 	it('sends a bearer token in the Authorization header, never the URL', async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ values: [] }));
 		const solve = createComputeFetchSolveFn(baseOpts({ bearerToken: () => 'share_abc' }));

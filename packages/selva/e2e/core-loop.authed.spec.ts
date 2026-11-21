@@ -44,8 +44,15 @@ test.afterAll(async () => {
 	fake = null;
 });
 
-function isSolveResponse(url: string, method: string): boolean {
-	return method === 'POST' && new URL(url).pathname === '/api/v1/compute';
+/**
+ * The response that carries the solve result. The web app solves with `Prefer: respond-async`:
+ * the POST answers 202 with a solve id, and a GET on `/api/v1/solves/{id}` returns the result.
+ */
+function isSolveResponse(response: Response): boolean {
+	const { pathname } = new URL(response.url());
+	const method = response.request().method();
+	if (method === 'POST' && pathname === '/api/v1/compute') return response.status() !== 202;
+	return method === 'GET' && pathname.startsWith('/api/v1/solves/') && response.status() !== 202;
 }
 
 /**
@@ -114,7 +121,7 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	// -- Open the app page; first solve is automatic under the fake
 	//    (bench-schema.json ships instanceSolve: true), manual against a live
 	//    server whose schema sets it false --------
-	const firstSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
+	const firstSolve = page.waitForResponse(isSolveResponse, {
 		timeout: 180_000
 	});
 	await page.goto(`/library/${guid}`);
@@ -123,6 +130,8 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 		page.getByRole('button', { name: /press to calculate/i })
 	);
 	expect(solved.status(), await solved.text().catch(() => '')).toBe(200);
+	// The viewer asks for the binary form, which carries the mesh as raw bytes.
+	expect(solved.headers()['content-type']).toBe('application/vnd.selva.solve+binary');
 
 	// -- Binary geometry rendered ----------------------------------------------
 	const canvas = page.getByTestId('viewer-canvas');
@@ -140,7 +149,7 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	// -- Slider change re-solves and geometry tracks the input ------------------
 	// `End` snaps the Count slider (min 50) to its max of 100; the commit is
 	// debounced 150ms, then the session throttles into a fresh POST /api/compute.
-	const nextSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
+	const nextSolve = page.waitForResponse(isSolveResponse, {
 		timeout: 180_000
 	});
 	const countSlider = page.getByRole('slider').first();
@@ -199,7 +208,7 @@ test('share link: a signed-out visitor opens the page and solves', async ({
 	});
 	try {
 		const page = await visitor.newPage();
-		const firstSolve = page.waitForResponse((r) => isSolveResponse(r.url(), r.request().method()), {
+		const firstSolve = page.waitForResponse(isSolveResponse, {
 			timeout: 180_000
 		});
 		await page.goto(`/library/${guid}?token=${token}`);
@@ -212,7 +221,7 @@ test('share link: a signed-out visitor opens the page and solves', async ({
 		expect(solved.status(), await solved.text().catch(() => '')).toBe(200);
 		// The token rides in a header, not the solve URL, so it stays out of access logs.
 		expect(solved.request().headers()['authorization']).toBe(`Bearer ${token}`);
-		expect(new URL(solved.url()).search).toBe('');
+		expect(solved.url()).not.toContain(token);
 
 		await expect(page.getByTestId('viewer-canvas')).not.toHaveAttribute('data-mesh-count', '0', {
 			timeout: 60_000

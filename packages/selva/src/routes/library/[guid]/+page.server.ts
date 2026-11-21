@@ -79,6 +79,7 @@ export const load = (async ({ params, locals, request, url, depends }) => {
 			schema: loaded.schema,
 			// The page repeats this load until the file's saved values are in `schema`.
 			defaultsPending: loaded.defaultsPending,
+			defaultsReading: loaded.defaultsReading,
 			ghDefinition: clientDefUrl,
 			currentDefinition: guid,
 			serverLabel: loaded.computeServer.label,

@@ -33,8 +33,11 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	endpoint: string;
 	/** Definition URL (or `local:<guid>`) to solve — read per-solve so it can track a route param. */
 	definitionUrl: () => string;
-	/** Schema input params, sent as the request body's `inputs`. A stored definition's server ignores them. */
-	inputs: () => Array<{ id: string }>;
+	/**
+	 * Schema input params, sent as the request body's `inputs`. Only a remote `definitionUrl` needs
+	 * them: a stored definition's server reads its own, so leave this out for `local:` and save the bytes.
+	 */
+	inputs?: () => Array<{ id: string }>;
 	/** Schema output params — drives byId/byName output extraction after a solve. */
 	outputs: () => Array<{ id: string; nickname?: string }>;
 	channel?: () => 'live' | 'draft' | undefined;
@@ -194,7 +197,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		if (remainingMs > 0) throw rateLimited(remainingMs / 1000);
 
 		const solveStart = performance.now();
-		const inputs = opts.inputs();
+		const inputs = opts.inputs?.();
 		const outputs = opts.outputs();
 		const channel = opts.channel?.();
 		const versionId = opts.versionId?.();
@@ -202,7 +205,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const bearerToken = opts.bearerToken?.();
 
 		const payload = JSON.stringify({
-			inputs,
+			...(inputs ? { inputs } : {}),
 			values,
 			definitionUrl: opts.definitionUrl(),
 			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {}),

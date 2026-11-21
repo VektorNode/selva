@@ -103,6 +103,7 @@ describe('schema cache staleness (ADR 0005)', () => {
 
 		expect(first.schema).toBe(cached);
 		expect(first.defaultsPending).toBe(true);
+		expect(first.defaultsReading).toBe(true);
 		expect(second.schema.inputs[0]).toMatchObject({ default: 42 });
 		expect(second.defaultsPending).toBe(false);
 		expect(getIO).toHaveBeenCalledTimes(1);
@@ -113,6 +114,24 @@ describe('schema cache staleness (ADR 0005)', () => {
 			'v-live',
 			expect.objectContaining({ inputs: [{ id: 'a', default: 42 }] })
 		);
+	});
+
+	it('says no read is running once the saved-values read has failed', async () => {
+		const { deps, mocks, getIO } = makeDeps();
+		getIO.mockRejectedValue(new Error('compute down'));
+		mocks.definitions.getVersion.mockResolvedValue(
+			version({ schema: uiSchema(UI_SCHEMA_VERSION, [{ id: 'a' }]) })
+		);
+		const load = createDefinitionLoader(deps);
+
+		const first = await load(ctx, record, 'live');
+		await flushMicrotasks();
+		const second = await load(ctx, record, 'live');
+
+		expect(first.defaultsReading).toBe(true);
+		expect(second.defaultsPending).toBe(true);
+		expect(second.defaultsReading).toBe(false);
+		expect(getIO).toHaveBeenCalledTimes(1);
 	});
 
 	it('renders the saved values stored on the version without asking Compute', async () => {

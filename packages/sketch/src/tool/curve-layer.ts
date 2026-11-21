@@ -197,6 +197,9 @@ export function createCurveLayer(options: CurveLayerOptions): CurveLayer {
 	let editing = false;
 
 	const renderLabels = () => {
+		// Removing a label that holds the edit field blurs it in Chrome, and the blur closes the edit
+		// and calls back here. After dispose, labels drawn now would never be removed.
+		if (disposed) return;
 		shown.forEach((label) => label.remove());
 		shown = wanted.map((label) => {
 			const handle = viewer.labelLayer.addLabel(label.text, toScene(label.at));
