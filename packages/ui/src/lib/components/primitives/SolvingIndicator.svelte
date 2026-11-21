@@ -133,42 +133,14 @@
 		data-testid="solve-status"
 		data-state={mode}
 	>
-		{#if mode === 'card'}
+		{#if mode === 'work' || mode === 'card'}
+			<!-- One block for both: swapping blocks at the slow threshold re-runs the fade and blinks. -->
 			<div
-				class="pl-3 pr-1.5 gap-2 @container/solve-card flex h-full items-center"
+				class="pl-3 gap-2 @container/solve-card flex h-full items-center {mode === 'card' && onabort
+					? 'pr-1.5'
+					: 'pr-3'}"
 				in:fade={{ duration: 150, delay: 80 }}
 			>
-				<LoaderCircle
-					class="size-4 animate-spin shrink-0 text-muted-foreground"
-					aria-hidden="true"
-				/>
-				<span class="text-sm font-medium min-w-0 truncate">{head?.label ?? t.solving}</span>
-				{#if head?.done !== undefined && head?.total !== undefined}
-					<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
-						{head.done} / {head.total}
-					</span>
-				{/if}
-				<span class="text-xs shrink-0 text-muted-foreground tabular-nums">{fmt(elapsed)}</span>
-				{#if onabort}
-					<Button
-						variant="outline"
-						size="xs"
-						class="ml-auto shrink-0"
-						onclick={onabort}
-						aria-keyshortcuts="Escape"
-						title={t.solveMessagesEscHint}
-					>
-						{t.solveMessagesAbort}
-						<kbd
-							class="px-1 @xs/solve-card:inline hidden rounded-sm border border-border font-sans text-2xs text-muted-foreground"
-						>
-							Esc
-						</kbd>
-					</Button>
-				{/if}
-			</div>
-		{:else if mode === 'work'}
-			<div class="px-3 gap-2 flex h-full items-center" in:fade={{ duration: 150, delay: 80 }}>
 				<LoaderCircle
 					class="size-4 animate-spin shrink-0 text-muted-foreground"
 					aria-hidden="true"
@@ -179,8 +151,32 @@
 						{t.solveMessagesEscHint}
 					</span>
 				{:else}
-					<span class="text-sm font-medium shrink-0">{t.solving}</span>
-					<span class="text-xs text-muted-foreground tabular-nums">{fmt(elapsed)}</span>
+					<span class="text-sm font-medium min-w-0 truncate">
+						{mode === 'card' ? (head?.label ?? t.solving) : t.solving}
+					</span>
+					{#if mode === 'card' && head?.done !== undefined && head?.total !== undefined}
+						<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
+							{head.done} / {head.total}
+						</span>
+					{/if}
+					<span class="text-xs shrink-0 text-muted-foreground tabular-nums">{fmt(elapsed)}</span>
+					{#if mode === 'card' && onabort}
+						<Button
+							variant="outline"
+							size="xs"
+							class="ml-auto shrink-0"
+							onclick={onabort}
+							aria-keyshortcuts="Escape"
+							title={t.solveMessagesEscHint}
+						>
+							{t.solveMessagesAbort}
+							<kbd
+								class="px-1 @xs/solve-card:inline hidden rounded-sm border border-border font-sans text-2xs text-muted-foreground"
+							>
+								Esc
+							</kbd>
+						</Button>
+					{/if}
 				{/if}
 			</div>
 		{:else if mode === 'done' && finished}

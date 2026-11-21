@@ -437,6 +437,30 @@ if [ -n "$OWNER" ] && [ -n "$HERE" ] && [ "\${OWNER_REAL:-$OWNER}" != "$HERE" ];
 fi
 
 # ---------------------------------------------------------------------------
+# 2c. The release must be downloadable — BEFORE any downtime.
+# ---------------------------------------------------------------------------
+# npm lists a fresh version, dist-tag included, minutes before it serves the
+# tarball, which 404s until then. Fetching both tarballs into the npm cache here
+# waits that out with the app still running, and the install below reuses them.
+if [ -n "$LATEST" ]; then
+  echo "[STEP] Waiting for npm to serve the '$TAG' release files"
+  FETCHED=
+  for i in $(seq 1 10); do
+    if npm cache add "@selvajs/cli@$TAG" "@selvajs/selva@$TAG" >/dev/null 2>&1; then
+      FETCHED=1
+      break
+    fi
+    sleep 30
+  done
+  if [ -z "$FETCHED" ]; then
+    echo "[FATAL] NOT_DOWNLOADABLE: npm lists @selvajs/selva@$LATEST but has not served its files after 5 minutes."
+    echo "[FATAL] A release just published can take a few minutes to become downloadable. Retry the update shortly."
+    echo "[FATAL] Aborting WITHOUT stopping the app — it is still running."
+    exit 13
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 3. Stop the app BEFORE npm rewrites build/.
 # ---------------------------------------------------------------------------
 # SvelteKit's node adapter lazy-imports chunks from build/server/chunks/ on

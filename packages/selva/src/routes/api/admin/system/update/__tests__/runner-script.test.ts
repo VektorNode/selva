@@ -207,6 +207,13 @@ describe('generated runner script', () => {
 		expect(warn).toBeLessThan(stop);
 	});
 
+	it('waits for the release files to download before stopping the app', () => {
+		const script = runner();
+		const fetch = script.indexOf('npm cache add "@selvajs/cli@$TAG" "@selvajs/selva@$TAG"');
+		expect(fetch).toBeGreaterThan(-1);
+		expect(fetch).toBeLessThan(script.indexOf('[STEP] Stopping'));
+	});
+
 	it('refuses a target that cannot read the stored data before stopping the app', () => {
 		const script = runner();
 		const refuse = script.indexOf('DATA_FORMAT:');
@@ -440,6 +447,12 @@ describe('exit-code contract', () => {
 			logs: "[FATAL] NOT_STOPPED: something still answers on port 3001 after 'pm2 stop selva-compute'.\n",
 			severity: 'warning',
 			why: 'the app outlived the stop, nothing installed'
+		},
+		{
+			code: 13,
+			logs: '[FATAL] NOT_DOWNLOADABLE: npm lists @selvajs/selva@4.21.0 but has not served its files after 5 minutes.\n',
+			severity: 'warning',
+			why: 'release not downloadable yet, app untouched'
 		}
 	];
 

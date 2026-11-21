@@ -174,6 +174,18 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 			to
 		};
 	}
+	// Aborted before the stop: npm listed the release but never served its tarball.
+	if (exitCode === 13 || has(logs, 'NOT_DOWNLOADABLE')) {
+		return {
+			severity: 'warning',
+			title: `Update cancelled — npm does not serve ${to ?? 'the new version'} yet. The app is untouched.`,
+			detail:
+				'A release just published is listed on npm a few minutes before its files can be ' +
+				'downloaded. Nothing was stopped or installed. Retry the update in a few minutes.',
+			from,
+			to
+		};
+	}
 	// Aborted after the stop, before npm ran: something still answered this
 	// install's port, so the update could not have replaced it.
 	if (exitCode === 12 || has(logs, 'NOT_STOPPED')) {
