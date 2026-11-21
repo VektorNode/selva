@@ -31,11 +31,11 @@
 
 		<!-- Rhino 8 loads its own 8.0; a 10.0.0.0 reference fails the whole .gha to load.
 		     Rhino 9 legs override via $(DrawingCommonRefVersion). -->
-		<PackageVersion Include="System.Drawing.Common" Version="10.0.14"/>
+		<PackageVersion Include="System.Drawing.Common" Version="11.0.0"/>
 
 		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4"/>
 		<PackageVersion Include="System.Memory" Version="4.6.3"/>
-		<PackageVersion Include="System.Resources.Extensions" Version="7.0.0"/>
+		<PackageVersion Include="System.Resources.Extensions" Version="11.0.0"/>
 		<PackageVersion Include="System.Windows.Forms" Version="4.0.0"/>
 
 		<!--
@@ -50,14 +50,14 @@
 		<PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0"/>
 		<!-- Not shipped: lifts PDFsharp's transitive 8.0.1 (two advisories) to a patched release.
 		     See the reference in Selva.Drawing.csproj. -->
-		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14"/>
+		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="11.0.0"/>
 		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
 
 		<!-- Selva.App only: the window the app shows its pages in. -->
-		<PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.2903.40"/>
+		<PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.4314.35"/>
 
-		<PackageVersion Include="coverlet.collector" Version="10.1.0"/>
-		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0"/>
+		<PackageVersion Include="coverlet.collector" Version="10.1.1"/>
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0"/>
 		<PackageVersion Include="xunit" Version="2.9.3"/>
 		<PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1"/>
 	</ItemGroup>
