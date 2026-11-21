@@ -173,17 +173,22 @@ describe('createComputeFetchSolveFn — binary responses', () => {
 		);
 
 		let received: unknown;
+		let receivedBytes: Uint8Array | undefined;
 		const extract = vi.fn((res: { values: unknown[] }) => {
 			received = (res.values[1] as { InnerTree: Record<string, { data: unknown }[]> }).InnerTree[
 				'{0}'
 			]![0]!.data;
+			receivedBytes = (received as { compressedData: Uint8Array }).compressedData.slice();
 			return [];
 		});
 		const result = await createComputeFetchSolveFn(baseOpts({ meshes: { extract } }))(
 			{},
 			new AbortController().signal
 		);
-		expect((received as { compressedData: Uint8Array }).compressedData).toEqual(blob);
+		expect(extract).toHaveBeenCalledTimes(1);
+		// Copied while `extract` ran; the retained result no longer pins the frame.
+		expect(receivedBytes).toEqual(blob);
+		expect((received as { compressedData: unknown }).compressedData).toBe('');
 		expect(result.outputs).toEqual({ 'out-1': 'five' });
 	});
 });

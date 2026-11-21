@@ -16,39 +16,55 @@ export function isBinarySolveResponse(res: Response): boolean {
 	return (res.headers.get('Content-Type') ?? '').startsWith(BINARY_SOLVE_MEDIA_TYPE);
 }
 
-/**
- * The response JSON with each display item's `data` parsed into its batch object, its
- * `compressedData` the blob's bytes. The blobs are views over `bytes`, so they keep it alive.
- */
-export async function decodeBinarySolveResponse(bytes: Uint8Array): Promise<unknown> {
+export interface DecodedBinaryResponse {
+	response: unknown;
+	/**
+	 * Drops every batch's bytes once the meshes are built. They are views over the whole frame, so
+	 * a retained result (the last one, the memo's) would otherwise pin every mesh it ever carried.
+	 */
+	releaseBlobs: () => void;
+}
+
+/** The response JSON with each display item's `data` parsed into its batch, the mesh as bytes. */
+export async function decodeBinarySolveResponse(bytes: Uint8Array): Promise<DecodedBinaryResponse> {
 	const { flags, json, blobs } = readFrame(bytes);
 	const jsonBytes = flags & BINARY_SOLVE_FLAG_GZIP_JSON ? await gunzip(json) : json;
-	const parsed: unknown = JSON.parse(new TextDecoder().decode(jsonBytes));
+	const response: unknown = JSON.parse(new TextDecoder().decode(jsonBytes));
+	const batches: { compressedData?: unknown }[] = [];
 
-	const values = (parsed as { values?: unknown } | null)?.values;
-	if (!Array.isArray(values)) return parsed;
-	for (const value of values as Record<string, unknown>[]) {
-		for (const tree of [value?.InnerTree, value?.innerTree]) {
-			if (!tree || typeof tree !== 'object') continue;
-			for (const branch of Object.values(tree)) {
-				if (Array.isArray(branch)) for (const item of branch) attachBlob(item, blobs);
+	const values = (response as { values?: unknown } | null)?.values;
+	if (Array.isArray(values)) {
+		for (const value of values as Record<string, unknown>[]) {
+			for (const tree of [value?.InnerTree, value?.innerTree]) {
+				if (!tree || typeof tree !== 'object') continue;
+				for (const branch of Object.values(tree)) {
+					if (!Array.isArray(branch)) continue;
+					for (const item of branch) {
+						const batch = attachBlob(item, blobs);
+						if (batch) batches.push(batch);
+					}
+				}
 			}
 		}
 	}
-	return parsed;
+	return {
+		response,
+		// An empty `compressedData` reads as a batch without meshes, never as a corrupt one.
+		releaseBlobs: () => batches.forEach((batch) => (batch.compressedData = ''))
+	};
 }
 
-function attachBlob(item: unknown, blobs: Uint8Array[]): void {
+function attachBlob(item: unknown, blobs: Uint8Array[]): { compressedData?: unknown } | null {
 	const display = item as { type?: unknown; data?: unknown } | null;
-	if (typeof display?.type !== 'string' || typeof display.data !== 'string') return;
-	if (!isDisplayItemType(display.type)) return;
+	if (typeof display?.type !== 'string' || typeof display.data !== 'string') return null;
+	if (!isDisplayItemType(display.type)) return null;
 	const batch = JSON.parse(display.data) as { compressedData?: unknown };
-	if (isBlobRef(batch.compressedData)) {
-		const blob = blobs[batch.compressedData.$blob];
-		if (!blob) throw new Error('Malformed binary solve response: a batch names a missing blob');
-		batch.compressedData = blob;
-	}
 	display.data = batch;
+	if (!isBlobRef(batch.compressedData)) return null;
+	const blob = blobs[batch.compressedData.$blob];
+	if (!blob) throw new Error('Malformed binary solve response: a batch names a missing blob');
+	batch.compressedData = blob;
+	return batch;
 }
 
 async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {

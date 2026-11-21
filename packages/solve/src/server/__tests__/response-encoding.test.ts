@@ -101,7 +101,8 @@ describe('binary encoding', () => {
 		expect(body.variant).toBe('binary');
 		const bytes = body.body as Uint8Array;
 
-		const decoded = (await decodeBinarySolveResponse(bytes)) as ReturnType<typeof response>;
+		const { response: decodedResponse, releaseBlobs } = await decodeBinarySolveResponse(bytes);
+		const decoded = decodedResponse as ReturnType<typeof response>;
 		const [first, text] = decoded.values[0]!.InnerTree!['{0}']!;
 		const batch = first!.data as unknown as { compressedData: Uint8Array; materials: unknown };
 		expect(batch.compressedData).toEqual(blobBytes);
@@ -113,6 +114,9 @@ describe('binary encoding', () => {
 		};
 		expect([...second.compressedData]).toEqual([9, 8, 7]);
 		expect(decoded.modelunits).toBe('Millimeters');
+		releaseBlobs();
+		expect(batch.compressedData).toBe('');
+		expect(batch.materials).toEqual([{ id: 0 }]);
 		// The cached response keeps its base64: JSON callers still read it.
 		expect(original.values[0]!.InnerTree!['{0}']![0]!.data).toContain('"compressedData":"');
 	});
@@ -140,7 +144,7 @@ describe('binary encoding', () => {
 			values: [{ ParamName: 'n', InnerTree: { '{0}': [{ type: 'System.Double', data: '1' }] } }]
 		};
 		const body = encoded(await encoder(plain).encode('binary'));
-		expect(await decodeBinarySolveResponse(body.body as Uint8Array)).toEqual(plain);
+		expect((await decodeBinarySolveResponse(body.body as Uint8Array)).response).toEqual(plain);
 	});
 
 	it('rejects a frame that is not one', async () => {

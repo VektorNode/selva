@@ -45,8 +45,8 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	bearerToken?: () => string | null | undefined;
 	/**
 	 * Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. Set, the solve
-	 * asks for a binary response: each display item's `data` in `source` is then the parsed batch
-	 * with its mesh as bytes, not a JSON string.
+	 * asks for a binary response: each display item's `data` in `source` is then the parsed batch,
+	 * not a JSON string, and its mesh bytes are dropped once `extract` returns.
 	 */
 	meshes?: {
 		extract: (
@@ -336,8 +336,10 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			});
 		const parseStart = performance.now();
 		let parsed: unknown;
+		let releaseBlobs = () => {};
 		try {
-			parsed = typeof body === 'string' ? JSON.parse(body) : await decodeBinarySolveResponse(body);
+			if (typeof body === 'string') parsed = JSON.parse(body);
+			else ({ response: parsed, releaseBlobs } = await decodeBinarySolveResponse(body));
 		} catch (err) {
 			throw invalidResponse(err);
 		}
@@ -361,6 +363,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 				? await opts.meshes.extract(processor.response, { debug, signal })
 				: [];
 		const meshesMs = performance.now() - meshesStart;
+		releaseBlobs();
 
 		const resultOutputs: Record<string, unknown> = {};
 		for (const o of rejected ? [] : outputs) {
