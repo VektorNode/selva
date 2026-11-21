@@ -1,5 +1,11 @@
 # @selvajs/sketch
 
+## 0.1.0-beta.1
+
+### Patch Changes
+
+- a8fa171: A sketch disposed while a length label was being edited no longer leaves its dimension labels stuck in the viewer.
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

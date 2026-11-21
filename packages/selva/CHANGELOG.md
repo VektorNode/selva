@@ -1,5 +1,12 @@
 # @selvajs/selva
 
+## 4.21.0-beta.27
+
+### Patch Changes
+
+- a8fa171: A definition page waiting for Rhino.Compute to read the file's saved values now keeps checking for as long as the read runs, instead of giving up after two minutes. A large definition could finish reading just after the page gave up, which left its inputs at 0 until a reload. `createDefinitionLoader`'s result gains `defaultsReading`: true while a Compute read of the saved values is running.
+- a8fa171: `createComputeFetchSolveFn` takes `inputs` as optional and leaves it out of the request body when it is not given. A stored (`local:`) definition's server reads its own inputs, so only a remote `definitionUrl` needs them. The library page and the MCP `selva_solve` tool no longer send their whole input schema with every solve.
+
 ## 4.21.0-beta.26
 
 ### Minor Changes

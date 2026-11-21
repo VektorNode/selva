@@ -1,5 +1,11 @@
 # @selvajs/server
 
+## 3.0.0-beta.16
+
+### Minor Changes
+
+- a8fa171: A definition page waiting for Rhino.Compute to read the file's saved values now keeps checking for as long as the read runs, instead of giving up after two minutes. A large definition could finish reading just after the page gave up, which left its inputs at 0 until a reload. `createDefinitionLoader`'s result gains `defaultsReading`: true while a Compute read of the saved values is running.
+
 ## 3.0.0-beta.15
 
 ### Minor Changes
