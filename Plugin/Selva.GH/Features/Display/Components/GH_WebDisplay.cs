@@ -105,6 +105,33 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
     };
+
+    // Default with GridAspectRatio 0. Rhino 9's mesher never returns on a long, thin face (a 2304 x 12 mm
+    // sheet-metal bend) under Default's ratio of 6, and the hung native call can't be aborted. Without the
+    // ratio that face meshes in milliseconds, and a sphere keeps Default's vertex count.
+    private static readonly MeshingParameters DefaultMeshing = CreateDefaultMeshing();
+
+    private static MeshingParameters CreateDefaultMeshing()
+    {
+        var d = MeshingParameters.Default;
+        return new MeshingParameters
+        {
+            Tolerance = d.Tolerance,
+            RelativeTolerance = d.RelativeTolerance,
+            MinimumEdgeLength = d.MinimumEdgeLength,
+            MaximumEdgeLength = d.MaximumEdgeLength,
+            GridAngle = d.GridAngle,
+            GridMinCount = d.GridMinCount,
+            GridMaxCount = d.GridMaxCount,
+            RefineGrid = d.RefineGrid,
+            RefineAngle = d.RefineAngle,
+            SimplePlanes = d.SimplePlanes,
+            JaggedSeams = d.JaggedSeams,
+            ComputeCurvature = d.ComputeCurvature,
+            ClosedObjectPostProcess = d.ClosedObjectPostProcess,
+            GridAspectRatio = 0
+        };
+    }
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
     private List<(Curve curve, Color color)> _previewCurves;
@@ -186,7 +213,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         // Not FastRenderMesh: on Rhino 9 it meshes a sphere to ~9,900 vertices against Default's ~560,
         // which costs ~18x the meshing time, wire bytes and MeshItemCache memory.
-        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.Default;
+        var meshSettings = ghMeshParams?.Value ?? DefaultMeshing;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
         var metersPerUnit = DisplayUnits.ActiveDocMetersPerUnit();

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UI schema 2.22.0: a Get Geometry, Get Point, Get Line or Get Plane input saves its `atMost`, and a Get Geometry its type filter as `geometryTypes`. Both follow the param on every save. Selva reads them to offer its drawing tools only on inputs that take curves or points, and to stop at the count the input takes. A schema saved at 2.21.0 loads unchanged and gains both on its next save.
 - UI schema 2.21.0: a number input can carry a `unit` (e.g. "mm"), set in the builder and shown after the value. A schema saved at 2.20.0 loads unchanged.
 
+### Fixed
+
+- Display no longer hangs a Rhino 9 solve on a long, thin face such as a sheet-metal bend. Rhino 9's mesher never returned on one under its default settings, holding a Compute worker until it was restarted. Without its own Meshing Settings, Display now meshes with Rhino's defaults minus the grid aspect ratio; ordinary geometry gets the same mesh as before.
+
 ### Security
 
 - On Rhino.Compute, Get File and Get Image refuse a file path that arrives in the solve request. A caller could name any file on the server's disk, or a UNC share that then received the server's credentials; share-link visitors could too. A request now names only data it sends or a URL. Paths wired into the component on the canvas, and files picked in Rhino, work as before.
