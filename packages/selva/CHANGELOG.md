@@ -1,5 +1,12 @@
 # @selvajs/selva
 
+## 4.21.0-beta.28
+
+### Patch Changes
+
+- e341b01: `createComputeFetchSolveFn` sends a detached solve once more when a poll finds the server no longer knows it, as after a restart or an update. Before, the page showed "Compute error (HTTP 404)".
+- e341b01: A slow solve's status stays one line in `AppLayout`'s action row: the step, count, elapsed time and Abort sit beside each other instead of growing into a two-row card over the fields. The Esc hint inside Abort hides when the row is narrow.
+
 ## 4.21.0-beta.27
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @selvajs/solve
 
+## 2.1.0-beta.15
+
+### Patch Changes
+
+- e341b01: `createComputeFetchSolveFn` sends a detached solve once more when a poll finds the server no longer knows it, as after a restart or an update. Before, the page showed "Compute error (HTTP 404)".
+
 ## 2.1.0-beta.14
 
 ### Minor Changes
