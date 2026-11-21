@@ -80,7 +80,7 @@ function taken(items: readonly SketchItem[], input: SketchInputRef): SketchItem[
 export function useSketchController(deps: SketchControllerDeps): SketchController {
 	let viewer = $state.raw<ThreeViewer | null>(null);
 	let gridStep = $state(0);
-	let showDimensions = $state(true);
+	let showDimensions = $state(false);
 	// Two steps: every solve hands over a new result, and deriving the scale straight from it would
 	// make a new object each time and rebuild the tools mid-drawing. The name only changes with the model.
 	const unitName = $derived(deps.modelUnits());

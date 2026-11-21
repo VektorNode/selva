@@ -28,6 +28,7 @@
 	import type { SketchParamType } from '../../features/sketch/item-values';
 	import { useSketchController } from '../../composables/useSketchController.svelte';
 	import { drawableKinds } from '../../schema/host-support';
+	import { visibleInputItems } from '../../schema/visibility-rules';
 	import { toast } from '../primitives/sonner/index.js';
 	import { formatMessage, type Locale, type ViewerMessages } from '../../i18n/messages';
 	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
@@ -229,11 +230,19 @@
 		cancel: () => session.cancelFiles()
 	});
 
+	// Only inputs the form shows draw in the viewer: a hidden or unplaced one is the author's own
+	// geometry, not something the visitor edits. A string, so the list below changes only when the
+	// set does: a new list rebuilds every draw tool, and drawing itself changes the values.
+	const shownInputIds = $derived(
+		visibleInputItems(schema, session.values)
+			.map((item) => item.paramId)
+			.join('\n')
+	);
 	// Drawn inputs live in the viewer, which mounts and unmounts under the layout while their
 	// curves and points have to outlive it.
 	const sketchInputs = $derived(
 		(schema?.inputs ?? []).flatMap((input) => {
-			const kinds = drawableKinds(input);
+			const kinds = shownInputIds.split('\n').includes(input.id) ? drawableKinds(input) : [];
 			return kinds.length > 0
 				? [
 						{

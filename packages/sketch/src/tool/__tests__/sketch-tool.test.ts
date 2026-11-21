@@ -328,9 +328,11 @@ describe('createSketchTool', () => {
 		expect(h.changes).toHaveLength(2);
 	});
 
-	it('labels each straight segment with its length', () => {
+	it('labels each straight segment with its length once dimensions are on', () => {
 		const h = harness();
 		h.tool.setItems([{ kind: 'line', from: [0, 0, 0], to: [1250, 0, 0] }]);
+		expect(h.labels).toEqual([]);
+		h.tool.configure({ showDimensions: true });
 		expect(h.labels.map((label) => label.text)).toEqual(['1250 mm']);
 		h.tool.configure({ showDimensions: false });
 		expect(h.labels).toEqual([]);

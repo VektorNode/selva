@@ -162,7 +162,7 @@ export function createSketchTool(options: SketchToolOptions): SketchTool {
 	const settings: SketchSettings = {
 		gridStep: 0,
 		planar: true,
-		showDimensions: true,
+		showDimensions: false,
 		...options.settings
 	};
 
