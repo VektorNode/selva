@@ -97,6 +97,8 @@ export interface SketchSettings {
 	planar: boolean;
 	/** Shows each straight segment's length; a click on one edits it. */
 	showDimensions: boolean;
+	/** Keeps the items out of the viewer while no mode is on. Drawing or moving shows them. */
+	hidden: boolean;
 }
 
 export interface SketchToolOptions {
@@ -163,6 +165,7 @@ export function createSketchTool(options: SketchToolOptions): SketchTool {
 		gridStep: 0,
 		planar: true,
 		showDimensions: false,
+		hidden: false,
 		...options.settings
 	};
 
@@ -239,6 +242,7 @@ export function createSketchTool(options: SketchToolOptions): SketchTool {
 
 	/** The items as they look right now: a vertex being moved follows the cursor. */
 	const shownItems = (): SketchItem[] => {
+		if (settings.hidden && mode === null) return [];
 		const grab = grabbed;
 		if (!grab || !cursor) return items;
 		const moved = withVertex(grab.original, grab.vertex, cursor.point);

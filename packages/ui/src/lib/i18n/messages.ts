@@ -213,6 +213,8 @@ export interface ViewerMessages {
 	curveGridOff: string;
 	/** Label of the checkbox that shows segment lengths in the viewer. */
 	curveDimensions: string;
+	/** Label of the checkbox that shows this input's curves in the viewer while nothing is being drawn. */
+	curveShowInViewer: string;
 	/** Before the first solve the model's units are unknown, so nothing can be drawn to scale. */
 	curveNeedsSolve: string;
 	/** In place of the count, while the input holds no curve. */
@@ -485,6 +487,7 @@ const en: ViewerMessages = {
 	curveGrid: 'Grid',
 	curveGridOff: 'Off',
 	curveDimensions: 'Dimensions',
+	curveShowInViewer: 'Show in viewer',
 	curveNeedsSolve: 'Available after the first solve.',
 	curveEmpty: 'Nothing drawn yet',
 	curveCountOne: '{count} curve',
@@ -741,6 +744,7 @@ const de: ViewerMessages = {
 	curveGrid: 'Raster',
 	curveGridOff: 'Aus',
 	curveDimensions: 'Bemassung',
+	curveShowInViewer: 'Im Viewer anzeigen',
 	curveNeedsSolve: 'Nach der ersten Berechnung verfügbar.',
 	curveEmpty: 'Noch nichts gezeichnet',
 	curveCountOne: '{count} Kurve',

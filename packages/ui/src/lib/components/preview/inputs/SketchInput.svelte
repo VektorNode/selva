@@ -200,5 +200,15 @@
 				</Button>
 			{/if}
 		</div>
+		{#if summary}
+			<div class="gap-2 flex items-center">
+				<Checkbox
+					id="{inputId}-shown"
+					checked={!view.hidden}
+					onCheckedChange={(state) => sketch.setHidden(paramId, state !== true)}
+				/>
+				<Label for="{inputId}-shown">{t.curveShowInViewer}</Label>
+			</div>
+		{/if}
 	{/if}
 </div>

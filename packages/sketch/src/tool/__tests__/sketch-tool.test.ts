@@ -338,6 +338,23 @@ describe('createSketchTool', () => {
 		expect(h.labels).toEqual([]);
 	});
 
+	it('keeps hidden items out of the scene until a mode shows them', () => {
+		const h = harness();
+		const drawn = () => h.sceneObjects();
+		h.tool.setItems([{ kind: 'line', from: [0, 0, 0], to: [1250, 0, 0] }]);
+		h.tool.configure({ showDimensions: true });
+		expect(drawn()).toBeGreaterThan(0);
+
+		h.tool.configure({ hidden: true });
+		expect(drawn()).toBe(0);
+		expect(h.labels).toEqual([]);
+
+		h.tool.move();
+		expect(drawn()).toBeGreaterThan(0);
+		h.tool.finish();
+		expect(drawn()).toBe(0);
+	});
+
 	it('stops drawing when another tool takes the canvas', () => {
 		const h = harness();
 		h.tool.draw('polyline');

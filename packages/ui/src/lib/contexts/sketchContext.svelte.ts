@@ -12,6 +12,8 @@ import type { DrawableKind } from '#lib/schema/host-support.js';
 export interface SketchInputView {
 	readonly items: readonly SketchItem[];
 	readonly state: SketchState;
+	/** The items stay out of the viewer while nothing is being drawn or moved. */
+	readonly hidden: boolean;
 }
 
 export interface SketchController {
@@ -51,6 +53,8 @@ export interface SketchController {
 	redo(paramId: string): void;
 	/** Back to the definition's own value. */
 	reset(paramId: string): void;
+	/** Shows or hides the input's items in the viewer. Drawing or moving shows them regardless. */
+	setHidden(paramId: string, hidden: boolean): void;
 	/**
 	 * Replaces the input's items with the file's. `overLimit` counts what was left out because the
 	 * input takes fewer. @throws {SketchImportError}

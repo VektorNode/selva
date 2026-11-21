@@ -59,6 +59,7 @@ const IDLE: SketchState = {
 class Entry {
 	items = $state.raw<readonly SketchItem[]>([]);
 	state = $state.raw<SketchState>(IDLE);
+	hidden = $state(false);
 	tool: SketchTool | null = null;
 	/** The session value the items match. Any other value there was put by someone else. */
 	synced: unknown = undefined;
@@ -173,7 +174,7 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 				unitSuffix: units.suffix,
 				name: input.name,
 				maxItems: input.atMost,
-				settings: { gridStep, showDimensions },
+				settings: { gridStep, showDimensions, hidden: target.hidden },
 				onChange: (items) => {
 					target.items = items;
 					write(input, target);
@@ -198,7 +199,9 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 
 	$effect(() => {
 		const settings = { gridStep, showDimensions };
-		for (const target of entries.values()) target.tool?.configure(settings);
+		for (const target of entries.values()) {
+			target.tool?.configure({ ...settings, hidden: target.hidden });
+		}
 	});
 
 	$effect(() => {
@@ -257,6 +260,11 @@ export function useSketchController(deps: SketchControllerDeps): SketchControlle
 		finish: (paramId) => entry(paramId).tool?.finish(),
 		undo: (paramId) => entry(paramId).tool?.undo(),
 		redo: (paramId) => entry(paramId).tool?.redo(),
+		setHidden: (paramId, hidden) => {
+			const target = entry(paramId);
+			target.hidden = hidden;
+			target.tool?.configure({ hidden });
+		},
 		reset: (paramId) => {
 			entry(paramId).tool?.cancel();
 			deps.setValue(paramId, deps.getDefault(paramId) ?? null);
