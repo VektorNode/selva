@@ -29,7 +29,7 @@
 		"@tailwindcss/vite": "catalog:",
 		"firebase-tools": "^15.34.2",
 		"hast-util-to-html": "^9.0.6",
-		"mdsvex": "^0.12.8",
+		"mdsvex": "^1.0.1",
 		"playwright": "^1.64.1",
 		"rehype-autolink-headings": "^7.1.0",
 		"rehype-mermaid": "^3.0.0",
