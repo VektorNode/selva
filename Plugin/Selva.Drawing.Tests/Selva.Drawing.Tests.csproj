@@ -18,6 +18,7 @@
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector"/>
 		<PackageReference Include="Microsoft.NET.Test.Sdk"/>
+		<PackageReference Include="System.Drawing.Common" VersionOverride="11.0.0" />
 		<PackageReference Include="xunit"/>
 		<PackageReference Include="xunit.runner.visualstudio"/>
 		<!-- No PDFsharp reference: in Debug it flows from Selva.Drawing; in Release it is
