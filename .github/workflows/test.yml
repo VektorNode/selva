@@ -56,7 +56,7 @@ jobs:
       # version bump in a package.json alone does not.
       - id: filter
         if: github.event_name != 'schedule'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           base: ${{ steps.base.outputs.sha }}
           predicate-quantifier: every
