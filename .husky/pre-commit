@@ -22,3 +22,10 @@ if git diff --cached --name-only --diff-filter=d \
 		exit 1
 	fi
 fi
+
+# Secrets: gitleaks on the staged changes (.gitleaks.toml; vektornode-infra/docs/env.md).
+if command -v gitleaks >/dev/null 2>&1; then
+	gitleaks git --pre-commit --staged --redact --no-banner . || { echo "✗ gitleaks found a secret: commit aborted." >&2; exit 1; }
+else
+	echo "⚠ gitleaks is not installed (winget install Gitleaks.Gitleaks / brew install gitleaks): secret check skipped." >&2
+fi
