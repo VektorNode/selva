@@ -3,8 +3,9 @@
 //
 //   pnpm compute:local [up|status|logs|down] [--no-build] [--fresh] [--branch <name>] [--local]
 //
-// Settings come from infra/compute/.env (SERVER_<NAME> over <NAME>, as deploy-server.sh reads
-// them), else its .env.example. The image is built from compute.rhino3d's pushed branch on
+// Settings come from vektornode-infra/servers/selva-gcp/.env (SERVER_<NAME> over <NAME>, as
+// deploy-server.sh reads them), else its .env.example; its relative paths are relative to that
+// folder. vektornode-infra sits next to this repo (override with VEKTORNODE_INFRA). The image is built from compute.rhino3d's pushed branch on
 // GitHub, as on the server; `--local` rebuilds Compute over it from the checkout's working tree.
 
 import { spawnSync } from 'node:child_process';
@@ -17,6 +18,12 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..',
 const workDir = path.join(rootDir, '.selva-data', 'compute-local');
 const setupDir = path.join(workDir, 'setup');
 const computeRepo = path.resolve(rootDir, process.env.COMPUTE_REPO ?? '../compute.rhino3d');
+const serverDir = path.resolve(
+	rootDir,
+	process.env.VEKTORNODE_INFRA ?? '../vektornode-infra',
+	'servers',
+	'selva-gcp'
+);
 
 // Its own name and port, so it never replaces another local Compute (rhino-compute-x9 on 6500).
 const CONTAINER = 'selva-compute-local';
@@ -67,11 +74,25 @@ function readEnvFile(file) {
 	return values;
 }
 
+/** `{{ op://... }}` (a 1Password reference in server.env) → its value, read with the 1Password CLI. */
+function resolveRef(value) {
+	const ref = /^\{\{\s*(op:\/\/[^}]+?)\s*\}\}$/.exec(value)?.[1];
+	if (!ref) return value;
+	const r = spawnSync('op', ['read', '--no-newline', ref], { encoding: 'utf8' });
+	if (r.status !== 0) {
+		console.error(`Couldn't read ${ref} from 1Password: ${r.stderr.trim()}`);
+		process.exit(1);
+	}
+	return r.stdout;
+}
+
+// server.env is committed with secrets as 1Password references; .env is the older plain form.
 function serverSettings() {
-	const real = path.join(rootDir, 'infra', 'compute', '.env');
-	const file = fs.existsSync(real) ? real : `${real}.example`;
+	const file = ['server.env', '.env', '.env.example']
+		.map((f) => path.join(serverDir, f))
+		.find((f) => fs.existsSync(f));
 	const env = readEnvFile(file);
-	const value = (name) => env[`SERVER_${name}`] || env[name] || '';
+	const value = (name) => resolveRef(env[`SERVER_${name}`] || env[name] || '');
 	return { file, env, value };
 }
 
@@ -142,7 +163,7 @@ function stagePlugins(settings) {
 	const build = settings.value('DEPLOY_BUILD');
 	if (build && !flag('no-build')) {
 		console.log(`==> ${build}`);
-		must(build, [], { shell: true });
+		must(build, [], { shell: true, cwd: serverDir });
 	}
 
 	const pluginDirs = (settings.value('DEPLOY_PLUGINS') || '')
@@ -152,7 +173,7 @@ function stagePlugins(settings) {
 	const staged = [];
 	fs.rmSync(path.join(workDir, 'plugins'), { recursive: true, force: true });
 	for (const dir of pluginDirs) {
-		const source = path.resolve(rootDir, dir);
+		const source = path.resolve(serverDir, dir);
 		if (!fs.existsSync(source)) {
 			console.error(`Plugin build not found: ${source}`);
 			process.exit(1);
@@ -231,7 +252,7 @@ function up() {
 	const token = rhinoToken(settings);
 	if (!token) {
 		console.error(
-			'No RHINO_TOKEN: set it in the shell, infra/compute/.env or compute.rhino3d/setup/.env.'
+			`No RHINO_TOKEN: set it in the shell, ${path.join(serverDir, '.env')} or compute.rhino3d/setup/.env.`
 		);
 		process.exit(1);
 	}

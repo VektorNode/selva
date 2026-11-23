@@ -76,7 +76,7 @@ Compute from the container: `http://host.docker.internal:6510`. Open it as `loca
 ## Compute
 
 Same image as the server (pushed `9.x.selva`), your Release Selva build, limits from
-`infra/compute/.env`. Local: 2 cores, children exit after 60 s idle. Key in
+`vektornode-infra/servers/selva-gcp/.env`. Local: 2 cores, children exit after 60 s idle. Key in
 `.selva-data/compute-local/compute-key`.
 
 ```bash

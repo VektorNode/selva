@@ -2,33 +2,23 @@
 //
 //   pnpm run compute:deploy [status|logs|ssh]
 //
-// Settings come from infra/compute/.env (template: infra/compute/.env.example), never from the
-// app's .env; COMPUTE_ENV=infra/compute/azure/.env deploys another server. The deploy tooling is
-// compute.rhino3d, checked out next to this repo (override with COMPUTE_REPO=/path).
+// Runs vektornode-infra's deploy.sh for selva-gcp; COMPUTE_SERVER=selva-azure deploys the Azure one.
+// vektornode-infra sits next to this repo (override with VEKTORNODE_INFRA=/path).
 
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const envFile = resolve(process.env.COMPUTE_ENV ?? 'infra/compute/.env');
-const repo = resolve(process.env.COMPUTE_REPO ?? '../compute.rhino3d');
-const script = resolve(repo, 'setup/deploy-server.sh');
-
-if (!existsSync(envFile)) {
-	console.error(`${envFile} missing — copy the .env.example beside it and fill it in.`);
-	process.exit(1);
-}
+const script = resolve(process.env.VEKTORNODE_INFRA ?? '../vektornode-infra', 'deploy.sh');
 if (!existsSync(script)) {
 	console.error(
-		`${script} not found — check out compute.rhino3d next to this repo or set COMPUTE_REPO.`
+		`${script} not found — check out vektornode-infra next to this repo or set VEKTORNODE_INFRA.`
 	);
 	process.exit(1);
 }
 
 // Through bash: Windows can't execute a .sh directly (Git Bash provides bash there).
-const result = spawnSync('bash', [script, ...process.argv.slice(2)], {
-	stdio: 'inherit',
-	env: { ...process.env, ENV_FILE: envFile }
-});
+const server = process.env.COMPUTE_SERVER ?? 'selva-gcp';
+const result = spawnSync('bash', [script, server, ...process.argv.slice(2)], { stdio: 'inherit' });
 if (result.error) console.error(`Couldn't run ${script}: ${result.error.message}`);
 process.exit(result.status ?? 1);
