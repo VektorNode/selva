@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0-beta.1] - 2026-11-24
+
 ### Added
 
 - On Rhino.Compute, the plugin reads what a definition holds beyond its form, for Selva's version history: the plugins it was saved with and which the server loaded, its components and whether they are obsolete, values set on the canvas, script fingerprints and wiring. It also reads a script's code on request for a code diff. Scripts and panels that look like they hold a credential are flagged by rule name; the matched text never leaves the file.
