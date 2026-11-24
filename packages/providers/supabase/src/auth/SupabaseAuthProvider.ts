@@ -450,7 +450,9 @@ class SupabasePasswordAuth implements IPasswordAuth {
 	async registerUser(email: string, password: string): Promise<AuthUser | null> {
 		if (!this.enableSelfSignup) return null;
 		const { data, error } = await this.anon.auth.signUp({ email, password });
-		if (error || !data.user) return null;
+		// With confirmations on, GoTrue answers a taken email with a fake user (random id, no
+		// identities) instead of an error, so it can't be probed. That id exists nowhere.
+		if (error || !data.user || data.user.identities?.length === 0) return null;
 		return this.hydrate(data.user);
 	}
 }
