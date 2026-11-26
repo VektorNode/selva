@@ -5,6 +5,7 @@ import { cachedSourceOf, computeCombinedBoundingBox, disposeObjectTree } from '.
 import { isHostOwned } from './scene-ownership.js';
 import { applyReflectionEnvironment } from './scene-setup/reflection-environment.js';
 import { SUN_TARGET_ID } from './scene-setup/setup-lighting.js';
+import { fitDistance } from './fit';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -20,8 +21,7 @@ const CAMERA_CONFIG = {
 		HUGE: 100,
 		LARGE: 50,
 		NORMAL: 20
-	},
-	INITIAL_DISTANCE_MULTIPLIER: 4
+	}
 };
 
 /** Replaces scene content with `meshes`, rescales the camera frustum to fit, and (first call only) positions the camera/controls. */
@@ -67,11 +67,12 @@ export function updateScene(
 	// deliberately NOT touched here: they're owned by the host via setupControls, and overwriting
 	// them per solve would silently discard user-supplied configuration after the first update.
 	if (!initialPositionSet) {
-		const distance = maxDim * CAMERA_CONFIG.INITIAL_DISTANCE_MULTIPLIER;
-
 		// camera.up is already the configured sceneUp (initThree sets it before this runs), so the
-		// iso offset stays consistent with whatever up-axis the viewer opened at.
-		camera.position.copy(center).add(isoOffset(camera.up, distance));
+		// iso offset stays consistent with whatever up-axis the viewer opened at. The same fit as the
+		// camera controller's presets, so opening and "fit to view" frame alike.
+		const direction = isoOffset(camera.up, 1).normalize();
+		const distance = fitDistance(unionBoundingBox, direction, camera.up, camera.fov, camera.aspect);
+		camera.position.copy(center).addScaledVector(direction, distance);
 		controls.target.copy(center);
 
 		controls.update();

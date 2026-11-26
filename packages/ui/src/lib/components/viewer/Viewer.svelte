@@ -17,6 +17,7 @@
 		type ThreeViewer
 	} from '@selvajs/visualization/render';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { Box3 } from 'three';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
@@ -397,9 +398,18 @@
 				viewerInitialized = true;
 				const saved = untrack(() => config.camera);
 				if (saved) cameraController?.setCameraView(saved);
+				// The same fit again through the controller, which redoes it when the canvas changes
+				// shape before anyone moves the camera (a dialog still opening).
+				else cameraController?.frameBounds(boundsOf(meshes), false);
 			}
 		}
 	});
+
+	function boundsOf(objects: THREE.Object3D[]): THREE.Box3 {
+		const box = new Box3();
+		for (const object of objects) box.expandByObject(object);
+		return box;
+	}
 
 	function closeMetadata() {
 		selectedMeshMetadata = null;

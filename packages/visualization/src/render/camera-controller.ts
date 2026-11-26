@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+import { fitDistance } from './fit';
 import { computeContentBounds } from './three-helpers';
 import { buildUpBasis } from './up-axis';
 
@@ -163,19 +164,23 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		onActiveCameraChange(active());
 	};
 
-	// Positions the active camera along `direction` at the distance fitting `maxDim`, retargeting
-	// controls at `center`. Ortho zoom resets and the frustum re-derives via syncOrthoFrustum —
-	// position alone wouldn't change an orthographic view's apparent size.
-	const frame = (
-		center: THREE.Vector3,
-		maxDim: number,
-		direction: THREE.Vector3,
-		animate: boolean
-	) => {
-		const fov = perspective.fov * (Math.PI / 180);
-		const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.5;
+	// The last automatic fit (a preset, fit-to-view, frameBounds), redone when the view changes
+	// shape until the user moves the camera. A viewer that opens inside an animating dialog sizes
+	// its canvas after the first fit, which then framed the model for the wrong aspect.
+	let lastFit: { box: THREE.Box3; direction: THREE.Vector3 } | null = null;
+	const forgetFit = () => {
+		lastFit = null;
+	};
+	controls.addEventListener?.('start', forgetFit);
 
-		const dir = nudgeOffPole(direction, up);
+	// Positions the active camera along `direction` at the distance fitting `box` (`fitDistance`),
+	// retargeting controls at its center. Ortho zoom resets and the frustum re-derives via
+	// syncOrthoFrustum: position alone wouldn't change an orthographic view's apparent size.
+	const frame = (box: THREE.Box3, direction: THREE.Vector3, animate: boolean) => {
+		const center = box.getCenter(new THREE.Vector3());
+		const dir = nudgeOffPole(direction, up).clone().normalize();
+		const distance = fitDistance(box, dir, up, perspective.fov, aspect);
+		lastFit = { box: box.clone(), direction: dir.clone() };
 		const toPosition = center.clone().add(dir.clone().multiplyScalar(distance));
 
 		const cam = active();
@@ -196,22 +201,19 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 	};
 
 	const setViewDirection = (direction: THREE.Vector3, animate = true) => {
-		const box = computeContentBounds(scene);
-		const center = box.isEmpty() ? controls.target.clone() : box.getCenter(new THREE.Vector3());
-		const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
-		const maxDim = Math.max(size.x, size.y, size.z) || 1;
-		frame(center, maxDim, direction, animate);
+		const content = computeContentBounds(scene);
+		const box = content.isEmpty()
+			? new THREE.Box3().setFromCenterAndSize(controls.target.clone(), new THREE.Vector3(1, 1, 1))
+			: content;
+		frame(box, direction, animate);
 	};
 
 	const frameBounds = (box: THREE.Box3, animate = true) => {
 		if (box.isEmpty()) return;
-		const center = box.getCenter(new THREE.Vector3());
-		const size = box.getSize(new THREE.Vector3());
-		const maxDim = Math.max(size.x, size.y, size.z) || 1;
 		// Keep the user's current viewing direction; only the distance/target change.
 		const direction = active().position.clone().sub(controls.target);
 		if (direction.lengthSq() < 1e-12) direction.copy(VIEW_DIRECTIONS.iso);
-		frame(center, maxDim, direction.normalize(), animate);
+		frame(box, direction.normalize(), animate);
 	};
 
 	const setView = (preset: ViewPreset, animate = true) => {
@@ -237,6 +239,8 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		const target = toVector(view.target);
 		if (position && target && position.distanceToSquared(target) > 1e-12) {
 			cancelTween();
+			// An exact view is the caller's, not a fit: a resize keeps it.
+			forgetFit();
 			const cam = active();
 			if (projection === 'orthographic') ortho.zoom = 1;
 			if (animate) {
@@ -261,7 +265,14 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 	};
 
 	const updateAspect = (width: number, height: number) => {
-		aspect = height === 0 ? aspect : width / height;
+		const next = height === 0 ? aspect : width / height;
+		const changed = Math.abs(next - aspect) > 1e-6;
+		aspect = next;
+		if (changed && lastFit) {
+			const { box, direction } = lastFit;
+			frame(box, direction, false);
+			return;
+		}
 		if (projection === 'orthographic') syncOrthoFrustum();
 	};
 
@@ -281,7 +292,10 @@ export function createCameraController(deps: CameraControllerDeps): CameraContro
 		setRotateEnabled,
 		isRotateEnabled: () => controls.enableRotate,
 		updateAspect,
-		dispose: cancelTween
+		dispose: () => {
+			cancelTween();
+			controls.removeEventListener?.('start', forgetFit);
+		}
 	};
 }
 

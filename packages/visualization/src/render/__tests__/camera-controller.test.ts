@@ -38,9 +38,12 @@ function makeController(up: THREE.Vector3) {
 const halfHeightAt = (fovDegrees: number, distance: number) =>
 	distance * Math.tan((fovDegrees * Math.PI) / 360);
 
-/** The controller's fit distance for content of size maxDim (mirrors its framing formula). */
-const fitDistance = (fovDegrees: number, maxDim: number) =>
-	(maxDim / (2 * Math.tan((fovDegrees * Math.PI) / 360))) * 1.5;
+/**
+ * The controller's fit distance for a cube of side `size` seen straight along an axis, at aspect 1:
+ * its near face's half-width fills the half-angle, from the face's own depth, plus the 10% margin.
+ */
+const fitDistance = (fovDegrees: number, size: number) =>
+	(size / 2 / Math.tan((fovDegrees * Math.PI) / 360) + size / 2) * 1.1;
 
 describe('camera-controller presets are up-aware', () => {
 	it('Z-up: "top" places the camera along +Z above the target', () => {
@@ -264,8 +267,9 @@ describe('ortho/perspective round-trips (issues 10/11)', () => {
 		scene.add(new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), new THREE.MeshStandardMaterial()));
 		controller.setView('top', false);
 
+		// Within 2%: the top view is tilted ~0.5° off the pole (nudgeOffPole), off the axis-aligned fit.
 		const expected = halfHeightAt(camera.fov, fitDistance(camera.fov, 5));
-		expect(ortho.top).toBeCloseTo(expected, 6);
+		expect(Math.abs(ortho.top / expected - 1)).toBeLessThan(0.02);
 		expect(ortho.top).not.toBeCloseTo(halfHeightAt(camera.fov, staleDistance), 2);
 	});
 
@@ -331,6 +335,57 @@ describe('frameBounds (issue 9 support)', () => {
 		const before = camera.position.clone();
 
 		controller.frameBounds(new THREE.Box3(), false);
+
+		expect(camera.position.distanceTo(before)).toBeLessThan(1e-9);
+	});
+});
+
+describe('refit on resize', () => {
+	const up = new THREE.Vector3(0, 0, 1);
+	const box = new THREE.Box3(new THREE.Vector3(-5, -0.2, -0.1), new THREE.Vector3(5, 0.2, 0.1));
+
+	it('redoes the last fit for the new aspect while the camera is untouched', () => {
+		const { camera, controls, controller } = makeController(up);
+		controller.setView('front', false);
+		controller.frameBounds(box, false);
+		const square = camera.position.distanceTo(controls.target);
+
+		controller.updateAspect(250, 100);
+
+		expect(camera.position.distanceTo(controls.target)).toBeLessThan(square / 2);
+	});
+
+	it('leaves a view the caller set exactly', () => {
+		const { camera, controller } = makeController(up);
+		controller.frameBounds(box, false);
+		controller.setCameraView({ direction: [0, -1, 0], position: [0, -50, 0], target: [0, 0, 0] });
+
+		controller.updateAspect(250, 100);
+
+		expect(camera.position.toArray()).toEqual([0, -50, 0]);
+	});
+
+	it('leaves the view once the user has moved the camera', () => {
+		// The shared stub has no event target: a dispatcher stands in for OrbitControls' 'start'.
+		const controls = Object.assign(new THREE.EventDispatcher<{ start: object }>(), {
+			target: new THREE.Vector3(),
+			enableRotate: true,
+			update: () => {}
+		});
+		const camera = new THREE.PerspectiveCamera(20, 1, 0.1, 2000);
+		camera.up.copy(up);
+		const controller = createCameraController({
+			scene: new THREE.Scene(),
+			perspective: camera,
+			controls: Object.assign(controls, { object: camera }) as unknown as OrbitControls,
+			onActiveCameraChange: () => {},
+			up
+		});
+		controller.frameBounds(box, false);
+		controls.dispatchEvent({ type: 'start' });
+		const before = camera.position.clone();
+
+		controller.updateAspect(250, 100);
 
 		expect(camera.position.distanceTo(before)).toBeLessThan(1e-9);
 	});
